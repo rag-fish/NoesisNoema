@@ -335,3 +335,31 @@ fabric.properties
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
 
+## Misc
+*.mlpackage
+*.mlmodelc
+CompiledModel/
+Resources/*.mlpackage/
+./.gitignore.swp
+.idea/
+.DS_Store
+
+*.mlpackage
+*.mlmodelc
+CompiledModel/
+*.csv
+*.npy
+Resources/*.json
+Resources/*.npy
+
+# Xcode
+DerivedData/
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+*.xcuserstate
+*.puml
+
