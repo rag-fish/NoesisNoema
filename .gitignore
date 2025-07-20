@@ -338,15 +338,12 @@ fabric.properties
 ## Misc
 *.mlpackage
 *.mlmodelc
-CompiledModel/
 Resources/*.mlpackage/
-./.gitignore.swp
+Resources/*.mlmodelc
 .idea/
 .DS_Store
-
 *.mlpackage
 *.mlmodelc
-CompiledModel/
 *.csv
 *.npy
 Resources/*.json
@@ -362,4 +359,3 @@ build/
 xcuserdata/
 *.xcuserstate
 *.puml
-
