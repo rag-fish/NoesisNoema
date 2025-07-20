@@ -342,12 +342,12 @@ Resources/*.mlpackage/
 Resources/*.mlmodelc
 .idea/
 .DS_Store
-*.mlpackage
-*.mlmodelc
 *.csv
 *.npy
-Resources/*.json
-Resources/*.npy
+NoesisNoema/Resources/Models/*.mlmodel
+NoesisNoema/Resources/Models/*.mlmodelc
+NoesisNoema/Resources/Models/*.mlpackage
+NoesisNoema/Resources/Models/*.onnx
 
 # Xcode
 DerivedData/
@@ -359,3 +359,22 @@ build/
 xcuserdata/
 *.xcuserstate
 *.puml
+*.xcscmblueprint
+*.xccheckout
+*.xcworkspace
+*.xcuserdatad
+*.xcassets
+*.xcuserstate
+*.xcplayground
+*.xcplaygroundpage
+*.xcplaygroundtimeline
+*.xcplaygroundbook
+*.xcplaygroundbookpage
+*.xcplaygroundbooktimeline
+*.xcplaygroundbooksettings
+*.xcplaygroundbooksettingspage
+*.xcplaygroundbooksettingstimeline
+*.xcplaygroundbooksettingsdata
+*.xcplaygroundbooksettingsdatapage
+*.xcplaygroundbooksettingsdatatimeline
+*.xcplaygroundbooksettingsdatauser
