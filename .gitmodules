@@ -1,0 +1,3 @@
+[submodule "NoesisNoema/externals/llama.cpp"]
+	path = NoesisNoema/externals/llama.cpp
+	url = https://github.com/ggerganov/llama.cpp.git

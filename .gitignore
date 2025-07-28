@@ -378,3 +378,33 @@ xcuserdata/
 *.xcplaygroundbooksettingsdatapage
 *.xcplaygroundbooksettingsdatatimeline
 *.xcplaygroundbooksettingsdatauser
+
+## Misc
+
+# LLM model weights and frameworks
+*.gguf
+llama.xcframework/
+llama.xcframework/*
+llama_macos.xcframework/
+llama_macos.xcframework/*
+
+# General large files (add more as needed)
+*.bin
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.zip
+
+# iOS Simulator logs and temp files (optional)
+*.xcresult
+*.xctrace
+
+# Test/benchmark artifacts
+*.log
+*.tmp
+*.test
+
+# Jupyter and notebook checkpoints
+.ipynb_checkpoints/
+
