@@ -53,8 +53,10 @@ for path in checkedPaths {
             let llama = await LlamaState()
             do {
                 try await llama.loadModel(modelUrl: URL(fileURLWithPath: path))
-                let prompt = "Who are you?"
-                let response = try await llama.complete(text: prompt)
+//                let prompt = "Who are you?"
+//                let prompt = "<|user|>\nWho are you?\n<|assistant|>\n"
+                let prompt = "Q: Who are you?\nA:"
+                let response: String = await llama.complete(text: prompt)
                 print("Model completion: \(response)")
             } catch {
                 print("Error running inference: \(error)")

@@ -119,41 +119,36 @@ class LlamaState: ObservableObject {
     }
 
 
-    func complete(text: String) async {
-        guard let llamaContext else {
-            return
-        }
+    func complete(text: String) async -> String {
+        guard let llamaContext else { return "" }
 
         let t_start = DispatchTime.now().uptimeNanoseconds
         await llamaContext.completion_init(text: text)
         let t_heat_end = DispatchTime.now().uptimeNanoseconds
         let t_heat = Double(t_heat_end - t_start) / NS_PER_S
 
-        messageLog += "\(text)"
-
-        Task.detached {
-            while await !llamaContext.is_done {
-                let result = await llamaContext.completion_loop()
-                await MainActor.run {
-                    self.messageLog += "\(result)"
-                }
-            }
-
-            let t_end = DispatchTime.now().uptimeNanoseconds
-            let t_generation = Double(t_end - t_heat_end) / self.NS_PER_S
-            let tokens_per_second = Double(await llamaContext.n_len) / t_generation
-
-            await llamaContext.clear()
-
-            await MainActor.run {
-                self.messageLog += """
-                    \n
-                    Done
-                    Heat up took \(t_heat)s
-                    Generated \(tokens_per_second) t/s\n
-                    """
-            }
+        await MainActor.run {
+            self.messageLog += "USER: \(text)\n"
         }
+
+        var assistantResponse = ""
+
+        while await !llamaContext.is_done {
+            let result = await llamaContext.completion_loop()
+            assistantResponse += result
+        }
+
+        let t_end = DispatchTime.now().uptimeNanoseconds
+        let t_generation = Double(t_end - t_heat_end) / self.NS_PER_S
+        let tokens_per_second = Double(await llamaContext.n_len) / t_generation
+
+        await llamaContext.clear()
+
+        await MainActor.run {
+            self.messageLog += "ASSISTANT: \(assistantResponse)\n"
+            self.messageLog += "\nDone\nHeat up took \(t_heat)s\nGenerated \(tokens_per_second) t/s\n"
+        }
+        return assistantResponse
     }
 
     func bench() async {

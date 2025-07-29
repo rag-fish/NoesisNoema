@@ -52,6 +52,11 @@
 				LlamaState.swift,
 				Resources/Models/distilgpt2.gguf,
 				"Resources/Models/llama3-8b.gguf",
+				Resources/Tokenizers/distilgpt2/merges.txt,
+				Resources/Tokenizers/distilgpt2/special_tokens_map.json,
+				Resources/Tokenizers/distilgpt2/tokenizer_config.json,
+				Resources/Tokenizers/distilgpt2/tokenizer.json,
+				Resources/Tokenizers/distilgpt2/vocab.json,
 			);
 			target = F46088482E2CD45000D4C555 /* LlamaBridgeTest */;
 		};

@@ -46,7 +46,11 @@ actor LlamaContext {
         self.temporary_invalid_cchars = []
         let sparams = llama_sampler_chain_default_params()
         self.sampling = llama_sampler_chain_init(sparams)
-        llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(0.4))
+        // サンプリングパラメータを今後の拡張性も考慮して柔軟に
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(0.8))
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_p(0.9, 1))
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_k(40))
+        // llama_sampler_chain_add(self.sampling, llama_sampler_init_repeat_penalty(1.1)) // repeat_penaltyは未サポートのためコメントアウト
         llama_sampler_chain_add(self.sampling, llama_sampler_init_dist(1234))
         vocab = llama_model_get_vocab(model)
     }
@@ -146,38 +150,48 @@ actor LlamaContext {
         }
 
         n_cur = batch.n_tokens
+        is_done = false // 追加: 推論開始時にis_doneをリセット
     }
 
     func completion_loop() -> String {
         var new_token_id: llama_token = 0
 
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
+        print("[DEBUG] new_token_id: \(new_token_id)")
+        print("[DEBUG] is_eog: \(llama_vocab_is_eog(vocab, new_token_id)) n_cur: \(n_cur) n_len: \(n_len)")
 
         if llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len {
-            print("\n")
+            print("[DEBUG] EOG or max length reached. Returning: \(String(cString: temporary_invalid_cchars + [0]))")
             is_done = true
-            let new_token_str = String(cString: temporary_invalid_cchars + [0])
-            temporary_invalid_cchars.removeAll()
-            return new_token_str
+            // 直前のトークンがflushされていない場合は返す
+            if !temporary_invalid_cchars.isEmpty {
+                let new_token_str = String(cString: temporary_invalid_cchars + [0])
+                temporary_invalid_cchars.removeAll()
+                return new_token_str
+            }
+            // 直前のnew_token_ccharsを返す（max length時のflush漏れ対策）
+            let last_token_cchars = token_to_piece(token: new_token_id)
+            if last_token_cchars.count > 0 {
+                return String(cString: last_token_cchars + [0])
+            }
+            return ""
         }
 
         let new_token_cchars = token_to_piece(token: new_token_id)
+        print("[DEBUG] new_token_cchars: \(new_token_cchars)")
         temporary_invalid_cchars.append(contentsOf: new_token_cchars)
         let new_token_str: String
         if let string = String(validatingUTF8: temporary_invalid_cchars + [0]) {
             temporary_invalid_cchars.removeAll()
             new_token_str = string
         } else if (0 ..< temporary_invalid_cchars.count).contains(where: {$0 != 0 && String(validatingUTF8: Array(temporary_invalid_cchars.suffix($0)) + [0]) != nil}) {
-            // in this case, at least the suffix of the temporary_invalid_cchars can be interpreted as UTF8 string
             let string = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()
             new_token_str = string
         } else {
             new_token_str = ""
         }
-        print(new_token_str)
-        // tokens_list.append(new_token_id)
-
+        print("[DEBUG] new_token_str: \(new_token_str)")
         llama_batch_clear(&batch)
         llama_batch_add(&batch, new_token_id, n_cur, [0], true)
 

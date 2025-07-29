@@ -407,4 +407,6 @@ llama_macos.xcframework/*
 
 # Jupyter and notebook checkpoints
 .ipynb_checkpoints/
+NoesisNoema/Resources/Tokenizers/
+NoesisNoema/Resources/Tokenizers/distilgpt2/
 
