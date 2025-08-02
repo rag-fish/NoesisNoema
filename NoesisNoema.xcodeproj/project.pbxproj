@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
 		F4ED32C22E37A15E00CCE0DE /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4F0C2192E36184B006E2361 /* llama_macos.xcframework */; };
 		F4F0C21B2E361858006E2361 /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4F0C2192E36184B006E2361 /* llama_macos.xcframework */; };
 		F4F0C21C2E361858006E2361 /* llama_macos.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4F0C2192E36184B006E2361 /* llama_macos.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -52,11 +53,6 @@
 				LlamaState.swift,
 				Resources/Models/distilgpt2.gguf,
 				"Resources/Models/llama3-8b.gguf",
-				Resources/Tokenizers/distilgpt2/merges.txt,
-				Resources/Tokenizers/distilgpt2/special_tokens_map.json,
-				Resources/Tokenizers/distilgpt2/tokenizer_config.json,
-				Resources/Tokenizers/distilgpt2/tokenizer.json,
-				Resources/Tokenizers/distilgpt2/vocab.json,
 			);
 			target = F46088482E2CD45000D4C555 /* LlamaBridgeTest */;
 		};
@@ -96,6 +92,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F4F0C21B2E361858006E2361 /* llama_macos.xcframework in Frameworks */,
+				F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,6 +176,7 @@
 			);
 			name = NoesisNoema;
 			packageProductDependencies = (
+				F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */,
 			);
 			productName = NoesisNoema;
 			productReference = F41FD01B2E2A466F00909132 /* NoesisNoema.app */;
@@ -235,6 +233,9 @@
 			);
 			mainGroup = F41FD0122E2A466F00909132;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F41FD01C2E2A466F00909132 /* Products */;
 			projectDirPath = "";
@@ -558,6 +559,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F41FD0132E2A466F00909132 /* Project object */;
 }

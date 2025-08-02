@@ -1,7 +1,7 @@
 // Created by NoesisNoema on 2024/01/01.
 // License: MIT License
 // Project: NoesisNoema
-// Description: Defines the AnswerGenerator class for generating answers from chunks and queries.
+// Description: Defines the AnswerGenerator class for generating answers from queries.
 //
 
 import Foundation
@@ -16,27 +16,49 @@ class AnswerGenerator {
         self.vectorStore = vectorStore
         self.llmModel = llmModel
     }
+    
     /**
-     * Generates an answer based on the provided chunks and query.
+     * Generates an answer based on the provided query.
      * - Parameters:
-     *   - chunks: An array of Chunk objects representing the data to be processed.
      *   - query: A string representing the user's query.
+     *   - topK: The number of top relevant chunks to consider. Default is 3.
      * - Returns: An Answer object containing the generated answer.
      */
-    func generate(chunks: [Chunk], query: String) -> Answer {
-        // 1. クエリをベクトル化
-        let queryEmbedding = embeddingModel.embed(text: query)
-        // 2. 類似Chunk検索
-        let relevantChunks = vectorStore.findRelevant(queryEmbedding: queryEmbedding)
-        // 3. 関連Chunkの内容をまとめる
-        let context = relevantChunks.map { $0.content }.joined(separator: "\n")
-        // 4. LLMにプロンプトとして渡す
-        let prompt = "質問: \(query)\n文脈:\n\(context)"
+    func generateAnswer(query: String, topK: Int = 3) -> Answer {
+        let queryEmbedding = embedQuery(query)
+        let relevantChunks = findRelevantChunks(queryEmbedding: queryEmbedding, topK: topK)
+        let prompt = buildPrompt(query: query, chunks: relevantChunks)
         let response = llmModel.generate(prompt: prompt)
-        // 5. スコア計算（例: 最初のChunkとの類似度を使う）
-        let score: Float = relevantChunks.first?.embedding.enumerated().reduce(0) { $0 + Float(queryEmbedding[$1.offset]) * $1.element } ?? 0.0
-        // 6. Answer生成
+        // embeddingがないため、スコアは0.0固定
+        let score: Float = 0.0
         let metadata: [String: Any] = ["chunks": relevantChunks.map { $0.content }]
         return Answer(text: response, score: score, metadata: metadata)
+    }
+    
+    /// Embeds the query text into a vector representation.
+    private func embedQuery(_ query: String) -> [Float] {
+        return embeddingModel.embed(text: query)
+    }
+    
+    /// Finds the most relevant chunks from the vector store based on the query embedding.
+    private func findRelevantChunks(queryEmbedding: [Float], topK: Int) -> [Chunk] {
+        return vectorStore.findRelevant(queryEmbedding: queryEmbedding, topK: topK)
+    }
+    
+    /// Builds the prompt string to be sent to the language model.
+    private func buildPrompt(query: String, chunks: [Chunk]) -> String {
+        let context = chunks.map { $0.content }.joined(separator: "\n")
+        return "Question: \(query)\nContext:\n\(context)"
+    }
+    
+    /// Calculates a similarity score between the query embedding and a chunk embedding using dot product.
+    private func scoreAnswer(queryEmbedding: [Float], chunkEmbedding: [Float]?) -> Float {
+        // embeddingがないため常に0.0を返す
+        return 0.0
+    }
+    
+    /// Computes the dot product of two vectors.
+    private func dotProduct(_ vectorA: [Float], _ vectorB: [Float]) -> Float {
+        return zip(vectorA, vectorB).reduce(0) { $0 + $1.0 * $1.1 }
     }
 }

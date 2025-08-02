@@ -5,58 +5,86 @@
 // License: MIT License
 
 
+import Foundation
+
+/**
+    * SystemLog provides file-based logging of system events.
+    * - Features:
+    *   - Logs events with timestamps to a persistent file in the user's Documents directory.
+    *   - Prints an error to the console if file writing fails.
+    *   - Allows retrieval of the current log file contents for auditing or review.
+    */
 class SystemLog {
-    
+    /// The URL of the persistent log file (in the user's Documents directory, named "NoesisNoema_system.log")
+    let logFileURL: URL
+
+    /// ログファイルの最大サイズ（例: 10MB）
+    private let maxLogFileSize: UInt64 = 10 * 1024 * 1024
+
     /**
-        * Represents a system log for logging events.
-        * - Methods:
-        *   - logEvent(event: String): Logs an event with the specified message.
-        *     This method takes a string input representing the event message and logs it.
-        *     It can be used for debugging, monitoring, or auditing purposes.
-        *     - Note: The implementation of this method should handle the actual logging mechanism,
-        *       such as writing to a file, console, or remote logging service.
-        */
-    /**
-        * Logs an event with the specified message.
-        * - Parameter event: The event message to be logged.
-        * - Note: The implementation of this method should handle the actual logging mechanism,
-        *   such as writing to a file, console, or remote logging service.
+        * Initializes the SystemLog and sets up the log file path.
+        * The log file is stored in the user's Documents directory as "NoesisNoema_system.log".
         */
     @discardableResult
-    init() {}
-    
-    /**
-        * Logs an event with the specified message.
-        * - Parameter event: The event message to be logged.
-        * - Note: The implementation of this method should handle the actual logging mechanism,
-        *   such as writing to a file, console, or remote logging service.
-        */
-    func logEvent(event: String) -> Void {
-        // TODO: implement
-        print("Event logged: \(event)")
-        // Placeholder for actual logging logic
-        // This could be writing to a file, console, or remote logging service
-        // Example: Writing to a file
-        // let logFilePath = "/path/to/logfile.txt"
-        // if let fileHandle = FileHandle(forWritingAtPath: logFilePath) {
-        //     fileHandle.seekToEndOfFile()
-        //     if let data = "\(event)\n".data(using: .utf8) {
-        //         fileHandle.write(data)
-        //     }
-        //     fileHandle.closeFile()
-        // } else {
-        //     print("Could not open log file for writing.")
-        // }
-        // Alternatively, you could use a logging framework or library for better logging capabilities
-        // For example, using os.log for iOS/macOS:
-        // import os.log
-        // os_log("%{public}@", log: OSLog.default, type: .info, event)
-        // This would log the event message to the system log
-        // and can be viewed in the Console app on macOS or through the device logs on iOS.
-        // For now, we will just print the event to the console.
-        
+    init() {
+        // Determine the user's Documents directory and set the log file URL
+        let fileManager = FileManager.default
+        if let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            self.logFileURL = docs.appendingPathComponent("NoesisNoema_system.log")
+        } else {
+            // Fallback: use temporary directory if Documents not found
+            self.logFileURL = fileManager.temporaryDirectory.appendingPathComponent("NoesisNoema_system.log")
+        }
     }
-    
-    
-    
+
+    /**
+        * Logs an event message with a timestamp to the persistent log file.
+        * If file writing fails, prints an error message to the console.
+        * - Parameter event: The event message to be logged.
+        */
+    func logEvent(event: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let logLine = "[\(timestamp)] \(event)\n"
+        let data = logLine.data(using: .utf8)!
+        let fileManager = FileManager.default
+        do {
+            // ログファイルサイズが最大値を超えたらローテート
+            if fileManager.fileExists(atPath: logFileURL.path) {
+                let attrs = try fileManager.attributesOfItem(atPath: logFileURL.path)
+                if let fileSize = attrs[.size] as? UInt64, fileSize > maxLogFileSize {
+                    let backupURL = logFileURL.deletingPathExtension().appendingPathExtension("bak")
+                    try? fileManager.removeItem(at: backupURL)
+                    try fileManager.moveItem(at: logFileURL, to: backupURL)
+                }
+            }
+            // 追記 or 新規作成
+            if fileManager.fileExists(atPath: logFileURL.path) {
+                if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
+                    defer { fileHandle.closeFile() }
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                } else {
+                    print("SystemLog ERROR: Could not open log file for writing at \(logFileURL.path)")
+                }
+            } else {
+                try data.write(to: logFileURL, options: .atomic)
+            }
+        } catch {
+            print("SystemLog ERROR: Failed to write event to log file (\(error))")
+        }
+    }
+
+    /**
+        * Retrieves the contents of the log file as a string.
+        * - Returns: The contents of the log file, or nil if reading fails.
+        */
+    func getLogContents() -> String? {
+        do {
+            let contents = try String(contentsOf: logFileURL, encoding: .utf8)
+            return contents
+        } catch {
+            print("SystemLog ERROR: Failed to read log file (\(error))")
+            return nil
+        }
+    }
 }

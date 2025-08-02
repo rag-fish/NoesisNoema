@@ -55,7 +55,7 @@ for path in checkedPaths {
                 try await llama.loadModel(modelUrl: URL(fileURLWithPath: path))
 //                let prompt = "Who are you?"
 //                let prompt = "<|user|>\nWho are you?\n<|assistant|>\n"
-                let prompt = "Q: Who are you?\nA:"
+                let prompt = "Q: Summarize the contents of Spinoza's Ethic\nA:"
                 let response: String = await llama.complete(text: prompt)
                 print("Model completion: \(response)")
             } catch {

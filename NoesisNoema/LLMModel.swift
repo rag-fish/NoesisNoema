@@ -15,7 +15,6 @@ class LLMModel {
         *   - name: The name of the model.
         *   - modelFile: The file containing the model.
         *   - version: The version of the model.
-        *   - tokenizer: The tokenizer used by the model.
         *   - isEmbedded: A boolean indicating if the model is embedded.
         */
     var name: String
@@ -28,15 +27,9 @@ class LLMModel {
     
     /**
         * The version of the model.
-        * This is used to ensure compatibility with the tokenizer and other components.
+        * This is used to ensure compatibility with other components.
         */
     var version: String
-    
-    /**
-        * The tokenizer used by the model.
-        * This is essential for converting text into tokens that the model can process.
-        */
-    var tokenizer: Tokenizer
     
     /**
         * Indicates whether the model is embedded.
@@ -49,15 +42,13 @@ class LLMModel {
         * - Parameter name: The name of the model.
         * - Parameter modelFile: The file containing the model.
         * - Parameter version: The version of the model.
-        * - Parameter tokenizer: The tokenizer used by the model.
         * - Parameter isEmbedded: A boolean indicating if the model is embedded.
      
      */
-    init(name: String, modelFile: String, version: String, tokenizer: Tokenizer, isEmbedded: Bool = false) {
+    init(name: String, modelFile: String, version: String, isEmbedded: Bool = false) {
         self.name = name
         self.modelFile = modelFile
         self.version = version
-        self.tokenizer = tokenizer
         self.isEmbedded = isEmbedded
     }
     
@@ -67,11 +58,41 @@ class LLMModel {
         * - Returns: A string containing the generated response.
         */
     func generate(prompt: String) -> String {
-        // 実際はLLM推論を呼び出すが、ここではダミー実装
-        print("Generating response for prompt: \(prompt)")
-        // 例: プロンプトの文脈部分を要約して返す
-        let context = prompt.components(separatedBy: "文脈:").last ?? ""
-        return "回答: \(context.prefix(100))..." // 100文字まで抜粋
+        // LibLlama/LlamaStateを使ったモデルファイル探索・推論
+        let fileName = self.modelFile.isEmpty ? "llama3-8b.gguf" : self.modelFile
+        let fm = FileManager.default
+        let cwd = fm.currentDirectoryPath
+        var checkedPaths: [String] = []
+        let pathCWD = "\(cwd)/\(fileName)"
+        checkedPaths.append(pathCWD)
+        let exePath = CommandLine.arguments[0]
+        let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
+        let pathExeDir = "\(exeDir)/\(fileName)"
+        if pathExeDir != pathCWD { checkedPaths.append(pathExeDir) }
+        if let bundleResourceURL = Bundle.main.resourceURL {
+            let pathBundle = bundleResourceURL.appendingPathComponent(fileName).path
+            if pathBundle != pathCWD && pathBundle != pathExeDir { checkedPaths.append(pathBundle) }
+        }
+        for path in checkedPaths {
+            if fm.fileExists(atPath: path) {
+                let semaphore = DispatchSemaphore(value: 0)
+                var result = ""
+                Task {
+                    let llamaState = await LlamaState()
+                    do {
+                        try await llamaState.loadModel(modelUrl: URL(fileURLWithPath: path))
+                        let response: String = await llamaState.complete(text: prompt)
+                        result = response
+                    } catch {
+                        result = "[LLMModel] 推論エラー: \(error)"
+                    }
+                    semaphore.signal()
+                }
+                semaphore.wait()
+                return result
+            }
+        }
+        return "[LLMModel] モデルファイルが見つかりません: \(fileName)"
     }
 
     /**
