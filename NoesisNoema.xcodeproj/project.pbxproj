@@ -46,6 +46,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F48B571E2E3F64ED00A765CA /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				QAPair.swift,
+			);
+			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
+		};
 		F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -73,6 +80,7 @@
 		F41FD01D2E2A466F00909132 /* NoesisNoema */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				F48B571E2E3F64ED00A765CA /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
 				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
 				F45872F32E37D51200F781F0 /* Exceptions for "NoesisNoema" folder in "Copy Files" phase from "LlamaBridgeTest" target */,
 			);
