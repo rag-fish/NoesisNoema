@@ -20,6 +20,11 @@ import ZIPFoundation
  *   - loadFromGoogleDrive(file: Any): Loads a RAGpack document from Google Drive (RAGpack-based architecture).
  *   - importTokenizerArchive(file: Any): (DEPRECATED) Tokenizer archives are no longer used; RAGpack .zip files are now standard.
  *   - importModelResource(file: Any): Imports a model resource (architecture now expects RAGpack files).
+ *   - QA History Management:
+ *       - addQAPair(question:answer:): Adds a new QA pair to history and selects it.
+ *       - selectQAPair(_:): Selects a given QA pair.
+ *       - deleteQAPair(at:): Deletes QA pairs at specified offsets.
+ *       - clearQAHistroy(): Clears all QA history and selection.
  */
 
 class DocumentManager: ObservableObject {
@@ -38,15 +43,29 @@ class DocumentManager: ObservableObject {
     @Published var ragpackChunks: [String: [Chunk]] = [:]
     let historyKey = "RAGpackUploadHistory"
     let ragpackChunksKey = "RAGpackChunks"
+    
+    /// Represents a question-answer pair for QA history management.
+    struct QAPair: Codable, Identifiable, Equatable {
+        let id = UUID()
+        let question: String
+        let answer: String
+    }
+    /// Stores all question-answer pairs (QA history).
+    @Published var qaHistory: [QAPair] = []
+    /// Tracks the currently selected question-answer pair.
+    @Published var selectedQAPair: QAPair? = nil
+    let qaHistoryKey = "QAHistory"
 
     /**
      * Initializes a DocumentManager with an empty array of LLMRagFiles.
      * This is the default initializer that sets up the document manager for use.
+     * Also loads upload history, RAGpack chunks, and QA history from persistent storage.
      */
     init() {
         self.llmragFiles = []
         loadHistory()
         loadRAGpackChunks()
+        loadQAHistory()
     }
 
     func saveHistory() {
@@ -240,5 +259,61 @@ class DocumentManager: ObservableObject {
         }
         print("[Llama] NOT FOUND in any attempted path!")
         completion("[Llama] Model file not found.")
+    }
+    
+    // MARK: - QA History Management
+    
+    /// Adds a new question-answer pair to the QA history and sets it as the selected pair.
+    /// - Parameters:
+    ///   - question: The question string.
+    ///   - answer: The answer string.
+    func addQAPair(question: String, answer: String) {
+        let newPair = QAPair(question: question, answer: answer)
+        qaHistory.append(newPair)
+        selectedQAPair = newPair
+        saveQAHistory()
+    }
+    
+    /// Selects the specified QA pair.
+    /// - Parameter pair: The QA pair to select.
+    func selectQAPair(_ pair: QAPair) {
+        selectedQAPair = pair
+    }
+    
+    /// Deletes QA pairs at the specified offsets. If the deleted pair was selected, clears the selection.
+    /// - Parameter offsets: The index set of QA pairs to delete.
+    func deleteQAPair(at offsets: IndexSet) {
+        for index in offsets {
+            let pair = qaHistory[index]
+            if pair == selectedQAPair {
+                selectedQAPair = nil
+            }
+        }
+        qaHistory.remove(atOffsets: offsets)
+        saveQAHistory()
+    }
+    
+    /// Clears all QA history and selection.
+    func clearQAHistroy() {
+        qaHistory.removeAll()
+        selectedQAPair = nil
+        saveQAHistory()
+    }
+    
+    /// Saves the QA history to UserDefaults.
+    private func saveQAHistory() {
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(qaHistory) {
+            UserDefaults.standard.set(data, forKey: qaHistoryKey)
+        }
+    }
+    
+    /// Loads the QA history from UserDefaults.
+    private func loadQAHistory() {
+        let decoder = JSONDecoder()
+        if let data = UserDefaults.standard.data(forKey: qaHistoryKey),
+           let history = try? decoder.decode([QAPair].self, from: data) {
+            qaHistory = history
+        }
     }
 }
