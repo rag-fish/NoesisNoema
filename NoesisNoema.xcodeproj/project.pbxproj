@@ -37,6 +37,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
@@ -46,14 +47,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F48B571E2E3F64ED00A765CA /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */ = {
+		F48B571E2E3F64ED00A765CA /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				QAPair.swift,
 			);
 			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
 		};
-		F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */ = {
+		F4ED32C42E37A18400CCE0DE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				LibLlama.swift,
@@ -66,7 +67,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		F45872F32E37D51200F781F0 /* Exceptions for "NoesisNoema" folder in "Copy Files" phase from "LlamaBridgeTest" target */ = {
+		F45872F32E37D51200F781F0 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = F46088472E2CD45000D4C555 /* CopyFiles */;
 			membershipExceptions = (
@@ -77,17 +78,17 @@
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F41FD01D2E2A466F00909132 /* NoesisNoema */ = {
+		F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F48B571E2E3F64ED00A765CA /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
-				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
-				F45872F32E37D51200F781F0 /* Exceptions for "NoesisNoema" folder in "Copy Files" phase from "LlamaBridgeTest" target */,
+				F48B571E2E3F64ED00A765CA /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				F4ED32C42E37A18400CCE0DE /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				F45872F32E37D51200F781F0 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */,
 			);
 			path = NoesisNoema;
 			sourceTree = "<group>";
 		};
-		F460884A2E2CD45000D4C555 /* LlamaBridgeTest */ = {
+		F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = LlamaBridgeTest;
 			sourceTree = "<group>";
@@ -133,10 +134,11 @@
 		F41FD0122E2A466F00909132 = {
 			isa = PBXGroup;
 			children = (
-				F41FD01D2E2A466F00909132 /* NoesisNoema */,
-				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
+				F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */,
+				F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */,
 				F41FD01C2E2A466F00909132 /* Products */,
 				F408F3402E35C1C700F621C5 /* Frameworks */,
+				AACE160730FAA9CB4526C2D7 /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -180,7 +182,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F41FD01D2E2A466F00909132 /* NoesisNoema */,
+				F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */,
 			);
 			name = NoesisNoema;
 			packageProductDependencies = (
@@ -204,7 +206,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
+				F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */,
 			);
 			name = LlamaBridgeTest;
 			packageProductDependencies = (
