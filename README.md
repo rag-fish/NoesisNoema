@@ -30,7 +30,14 @@ Here’s an example of NoesisNoema answering a question by combining knowledge f
 - Threaded QA history with modern 2-pane UI  
 - Works fully offline, on Apple Silicon (optimized) 🍏  
 - Privacy-first, OSS-first 🔒  
-- More coming: iOS universal app, advanced right-pane, p2p sync, plugin API 💫
+- More coming: iOS universal app, advanced right-pane, p2p sync, plugin API 💫  
+- High-performance local inference via llama.cpp and gguf models (see below)
+
+## Requirements
+
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) (required for local LLM inference)
+- Models in gguf format (see [noesisnoema-pipeline](https://github.com/raskolnikoff/noesisnoema-pipeline) for generation/conversion)
+- macOS 13+ (Apple Silicon recommended)
 
 ## Why Start with macOS? 💻
 
