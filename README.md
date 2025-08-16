@@ -4,6 +4,7 @@ Private, offline, multi‑RAGpack LLM RAG for macOS and iOS.
 Empower your own AGI — no cloud, no SaaS, just your device and your knowledge. 🚀
 
 ![Main UI](docs/assets/rag-main.png)
+![iOS UI](docs/assets/noesisnoema_ios.png)
 
 ---
 
@@ -12,6 +13,7 @@ Empower your own AGI — no cloud, no SaaS, just your device and your knowledge.
 The on‑device experience leveled up across macOS and iOS:
 
 - iOS Universal App (WIP → usable today)
+  - Fresh iOS screenshot available in `docs/assets/noesisnoema_ios.png` (see above)
   - Always‑visible History, QADetail overlays on top (swipe‑down or ✖︎ to close)
   - Multiline input with placeholder, larger tap targets, equal‑width action buttons
   - Global loading lock to prevent duplicate queries; answer only appended once
@@ -110,6 +112,7 @@ Importer safeguards:
 ## UX Details that Matter 💅
 
 - iOS
+  - Interface preview: see screenshot [noesisnoema_ios.png](docs/assets/noesisnoema_ios.png)
   - Multiline input with placeholder; Return adds a newline (does not send)
   - Only the Ask button can start inference (no accidental double sends)
   - During generation: global overlay lock; all inputs disabled (no duplicate queries)
@@ -159,6 +162,14 @@ Importer safeguards:
 
 We welcome Designers, Swift/AI/UX developers, and documentation writers.
 Open an issue or PR, or join our discussions. See also [RAGfish](https://github.com/raskolnikoff/RAGfish) for the pack spec.
+
+---
+
+## From the Maintainers 💬
+
+This project is not just code — it’s our exploration of private AGI, blending philosophy and engineering.  
+Each commit is a step toward tools that respect autonomy, curiosity, and the joy of building.  
+Stay curious, and contribute if it resonates with you.
 
 🌟
 > Your knowledge. Your device. Your rules.
