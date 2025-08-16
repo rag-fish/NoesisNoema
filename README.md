@@ -3,6 +3,8 @@
 Private, offline, multi‑RAGpack LLM RAG for macOS and iOS. 
 Empower your own AGI — no cloud, no SaaS, just your device and your knowledge. 🚀
 
+[![YouTube Demo](https://img.youtube.com/vi/VzCrfXZyfss/0.jpg)](https://youtube.com/shorts/VzCrfXZyfss?feature=share)
+
 ![Main UI](docs/assets/rag-main.png)
 ![iOS UI](docs/assets/noesisnoema_ios.png)
 
