@@ -1,12 +1,16 @@
 # NoesisNoema 🧠✨
 
+[![GitHub release](https://img.shields.io/github/v/release/raskolnikoff/NoesisNoema)](https://github.com/raskolnikoff/NoesisNoema/releases)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20iOS-blue)](#)
+[![Swift](https://img.shields.io/badge/swift-5.9-orange)](#)
+
 Private, offline, multi‑RAGpack LLM RAG for macOS and iOS. 
 Empower your own AGI — no cloud, no SaaS, just your device and your knowledge. 🚀
 
 [![YouTube Demo](https://img.youtube.com/vi/VzCrfXZyfss/0.jpg)](https://youtube.com/shorts/VzCrfXZyfss?feature=share)
 
-![Main UI](docs/assets/rag-main.png)
-![iOS UI](docs/assets/noesisnoema_ios.png)
+<img src="docs/assets/rag-main.png" alt="Main UI" height="400" />
+<img src="docs/assets/noesisnoema_ios.png" alt="iOS UI" height="400" />
 
 ---
 
