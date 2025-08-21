@@ -92,6 +92,7 @@ NoesisNoema/Resources/Models/*.mlmodelc
 NoesisNoema/Resources/Models/*.mlpackage
 NoesisNoema/Resources/Models/*.onnx
 NoesisNoema/Resources/Models/*.gguf
+NoesisNoema/Resources/Models/**/*.gguf
 
 NoesisNoema/Resources/Chunks/
 NoesisNoema/Resources/Embeddings/
