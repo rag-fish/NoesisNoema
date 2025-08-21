@@ -1,8 +1,16 @@
 {
   "colors" : [
     {
-      "filename" : "Exported PNG image.png",
-      "idiom" : "universal"
+      "idiom" : "universal",
+      "color" : {
+        "color-space" : "srgb",
+        "components" : {
+          "red" : "0.0",
+          "green" : "0.478",
+          "blue" : "1.0",
+          "alpha" : "1.0"
+        }
+      }
     }
   ],
   "info" : {

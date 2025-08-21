@@ -6,7 +6,7 @@
 
 import Foundation
 
-class LLMModel {
+class LLMModel: @unchecked Sendable {
     
     /**
         * Represents a large language model (LLM) with its properties and methods.
@@ -58,6 +58,16 @@ class LLMModel {
         * - Returns: A string containing the generated response.
         */
     func generate(prompt: String) -> String {
+        return generate(prompt: prompt, context: nil)
+    }
+
+    /// 文脈（RAGなど）を注入して生成する
+    func generate(prompt: String, context: String?) -> String {
+        return runInference(userText: prompt, context: context)
+    }
+
+    // 生成本体（共通）
+    private func runInference(userText: String, context: String?) -> String {
         // Jan 向けテンプレート/クリーニングを適用
         func buildJanPrompt(_ question: String, context: String? = nil) -> String {
             let sys = """
@@ -127,25 +137,17 @@ class LLMModel {
         let pathExeDir = "\(exeDir)/\(fileName)"
         if pathExeDir != pathCWD { checkedPaths.append(pathExeDir) }
 
-        // 3) App Bundle 直下
+        // 3) App Bundle 内
         if let bundleResourceURL = Bundle.main.resourceURL {
             let pathBundle = bundleResourceURL.appendingPathComponent(fileName).path
             if pathBundle != pathCWD && pathBundle != pathExeDir { checkedPaths.append(pathBundle) }
-
-            // 4) App Bundle 内の慣例的なサブディレクトリも探索
-            let subdirs = [
-                "Models",
-                "Resources/Models",
-                "Resources",
-                "NoesisNoema/Resources/Models" // 開発時の相対配置に備える
-            ]
+            let subdirs = ["Models", "Resources/Models", "Resources", "NoesisNoema/Resources/Models"]
             for sub in subdirs {
                 let p = bundleResourceURL.appendingPathComponent(sub).appendingPathComponent(fileName).path
                 if !checkedPaths.contains(p) { checkedPaths.append(p) }
             }
         }
-
-        // 5) name/ext から Bundle の API で検索
+        // 4) リソース検索
         let nameNoExt = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
         let bundleLookups: [String?] = [
@@ -166,16 +168,26 @@ class LLMModel {
                     let llamaState = await LlamaState()
                     do {
                         try await llamaState.loadModel(modelUrl: URL(fileURLWithPath: path))
-                        // Jan の場合はテンプレートを使用し、汚染時はプレーンに自動フォールバック
-                        let userText = prompt
+                        // 自動/手動プリセットの決定と適用
+                        let userPreset = ModelManager.shared.currentLLMPreset
+                        if userPreset != "auto" {
+                            await llamaState.setPreset(userPreset)
+                        } else {
+                            var intentText = "Question: \(userText)"
+                            if let ctx = context, !ctx.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                intentText += "\nContext:\n\(ctx)"
+                            }
+                            let preset = await llamaState.autoSelectPreset(modelFileName: fileName, prompt: intentText)
+                            await llamaState.setPreset(preset.rawValue)
+                        }
+
                         let isJan = self.name.lowercased().contains("jan") || fileName.lowercased().contains("jan")
-                        let primaryPrompt = isJan ? buildJanPrompt(userText) : buildPlainPrompt(userText)
+                        let primaryPrompt = isJan ? buildJanPrompt(userText, context: context) : buildPlainPrompt(userText, context: context)
                         var response: String = await llamaState.complete(text: primaryPrompt)
                         var cleaned = cleanOutput(response)
-                        // フォールバック条件: 空、または<think>/制御タグが残存
                         let needsFallback = cleaned.isEmpty || cleaned.contains("<think>") || cleaned.contains("<|im_") || cleaned.lowercased().hasPrefix("assistant")
                         if needsFallback {
-                            response = await llamaState.complete(text: buildPlainPrompt(userText))
+                            response = await llamaState.complete(text: buildPlainPrompt(userText, context: context))
                             cleaned = cleanOutput(response)
                         }
                         result = cleaned.isEmpty ? response : cleaned

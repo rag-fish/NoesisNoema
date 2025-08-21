@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var isLoading: Bool = false
     @State private var selectedEmbeddingModel: String = "default-embedding"
     @State private var selectedLLMModel: String = "Jan-V1-4B"
+    // 新規: LLMプリセット選択（iOS）
+    @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
 
     @State private var showImporter = false
     @State private var showSplash = true
@@ -23,6 +25,8 @@ struct ContentView: View {
 
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
+    // 新規: プリセット候補（iOS）
+    var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
 
     var body: some View {
         NavigationView {
@@ -46,25 +50,44 @@ struct ContentView: View {
                         .pickerStyle(MenuPickerStyle())
                         .onChange(of: selectedLLMModel) { oldValue, newValue in
                             ModelManager.shared.switchLLMModel(name: newValue)
+                            // モデル変更時はプリセットを auto に戻す
+                            selectedLLMPreset = "auto"
+                            ModelManager.shared.setLLMPreset(name: "auto")
                         }
                     }
+
+                    // 新規: LLM Preset ピッカー（プルダウン）
+                    Picker("LLM Preset", selection: $selectedLLMPreset) {
+                        ForEach(availableLLMPresets, id: \.self) { p in
+                            Text(p)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .onChange(of: selectedLLMPreset) { oldValue, newValue in
+                        ModelManager.shared.setLLMPreset(name: newValue)
+                    }
+                    .disabled(isLoading)
 
                     // 複数行入力: TextEditor + プレースホルダ + Rounded枠
                     ZStack(alignment: .topLeading) {
                         TextEditor(text: $question)
-                            .frame(height: 88)
-                            .padding(8)
+                            .frame(height: 100)
+                            .padding(10)
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.secondary.opacity(0.3))
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.regularMaterial)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.secondary.opacity(0.15))
                             )
                             .disabled(isLoading)
                             .focused($questionFocused)
                         if question.isEmpty {
                             Text("Enter your question")
                                 .foregroundColor(.secondary)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 14)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 16)
                         }
                     }
 
@@ -126,6 +149,9 @@ struct ContentView: View {
                                 if !isLoading { documentManager.deleteQAPair(at: offsets) }
                             }
                         }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .background(.clear)
                         .scrollDismissesKeyboard(.immediately)
                         .disabled(documentManager.selectedQAPair != nil || isLoading)
 
@@ -144,6 +170,10 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
             .disabled(isLoading)
+            .navigationTitle("Noesis Noema")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.regularMaterial, for: .navigationBar)
             .overlay(
                 Group {
                     if isLoading {
@@ -159,7 +189,7 @@ struct ContentView: View {
                         .allowsHitTesting(true)
                         .zIndex(2)
                     }
-                    // 起動時仮置きスプラッシュ
+                    // 起動時スプラッシュ（簡易）
                     if showSplash {
                         ZStack {
                             Color.clear.ignoresSafeArea()
