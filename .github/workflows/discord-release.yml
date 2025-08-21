@@ -16,52 +16,43 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Compose release payload
-        id: compose
-        run: |
-          # Extract fields from the GitHub event payload using jq
-          EVENT='${{ toJson(github.event) }}'
-          REPO="${{ github.repository }}"
-          TAG=$(jq -r '.release.tag_name' <<< "$EVENT")
-          NAME=$(jq -r '.release.name // ""' <<< "$EVENT")
-          HTML_URL=$(jq -r '.release.html_url' <<< "$EVENT")
-          AUTHOR=$(jq -r '.release.author.login // ""' <<< "$EVENT")
-          BODY=$(jq -r '.release.body // ""' <<< "$EVENT")
-
-          # Fallback title if name is empty
-          [ -z "$NAME" ] && NAME="$TAG"
-
-          # Trim body to keep Discord embed compact (Discord embed description limit is 2048 chars)
-          BODY_TRIM=$(echo "$BODY" | head -c 900)
-
-          TITLE="New release in ${REPO}: ${NAME}"
-
-          # Build Discord embed JSON
-          jq -n \
-            --arg title "$TITLE" \
-            --arg url "$HTML_URL" \
-            --arg desc "$BODY_TRIM" \
-            --arg tag "$TAG" \
-            --arg author "$AUTHOR" \
-            '{
-              embeds: [{
-                title: $title,
-                url: $url,
-                description: ( ($desc | length) > 0 ? $desc : ("Tag: " + $tag) ),
-                color: 15844367,
-                footer: { text: ("by " + ($author // "")) }
-              }]
-            }' > payload.json
-
-          echo "Payload preview:"
-          cat payload.json
-
-      - name: Send to Discord
+      - name: Send Release to Discord
+        uses: actions/github-script@v7
         env:
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          curl -sS -H "Content-Type: application/json" \
-               -X POST \
-               -d @payload.json \
-               "$WEBHOOK"
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          script: |
+            const { release, repository } = context.payload;
+            if (!release) {
+              core.setFailed("No release payload found.");
+              return;
+            }
+
+            const owner = repository?.owner?.login || context.repo.owner;
+            const repo = repository?.name || context.repo.repo;
+            const title = `New release in ${owner}/${repo}: ${release.name || release.tag_name}`;
+            const body = (release.body && release.body.length > 0) ? release.body : `Tag: ${release.tag_name}`;
+
+            const payload = {
+              embeds: [{
+                title,
+                url: release.html_url,
+                description: body.substring(0, 900),
+                color: 0xFFD700,
+                footer: { text: release.author?.login ? `by ${release.author.login}` : "" }
+              }]
+            };
+
+            const res = await fetch(process.env.DISCORD_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+              const text = await res.text();
+              core.setFailed(`Discord webhook failed: ${res.status} ${res.statusText} - ${text}`);
+            } else {
+              core.info(`Sent release ${release.tag_name} to Discord`);
+            }
 
