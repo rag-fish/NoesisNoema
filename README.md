@@ -24,6 +24,7 @@ The on‑device experience leveled up across macOS and iOS:
   - Multiline input with placeholder, larger tap targets, equal‑width action buttons
   - Global loading lock to prevent duplicate queries; answer only appended once
   - Keyboard UX: tap outside or scroll to dismiss
+  - Startup splash overlay: temporary "Noesis Noema" title on launch
 - Output hygiene & stability
   - Streaming filter removes `<think>…</think>` and control tokens; stop at `<|im_end|>`
   - Final normalization unifies model differences for clean, copy‑ready answers
@@ -54,6 +55,14 @@ macOS keeps its “workstation feel”; iOS now brings the same private RAG, in 
 
 ---
 
+## Privacy & Diagnostics 🔒
+
+- 100% offline by default. No network calls for inference or retrieval.
+- No analytics SDKs. No telemetry is sent.
+- SystemLog is local‑only and minimal (device/OS, model name, params, pack hits, latency, failure reasons). You can opt‑in to share diagnostics.
+
+---
+
 ## Requirements ✅
 
 - macOS 13+ (Apple Silicon recommended) or iOS 17+ (A15/Apple Silicon recommended)
@@ -78,6 +87,7 @@ macOS keeps its “workstation feel”; iOS now brings the same private RAG, in 
 2. Run on a real device (recommended).
 3. Import RAGpack(s) from Files and Ask.
    - History stays visible; QADetail appears as an overlay (swipe down or ✖︎ to close).
+   - Return adds a newline in the input; only the Ask button starts inference.
 
 ### CLI harness (LlamaBridgeTest) 🧪
 A tiny runner to verify local inference.
@@ -113,6 +123,15 @@ Importer safeguards:
   - Streaming‑time `<think>` filtering and `<|im_end|>` early‑stop
   - Final normalization to erase residual control tokens and self‑labels
 
+### Device‑optimal presets ⚙️
+
+- A17/M‑series: `n_threads = 6–8`, `n_gpu_layers = 999`
+- A15–A16: `n_threads = 4–6`, `n_gpu_layers = 40–80`
+- Generation length: `max_tokens` 128–256 (short answers), 400–600 (summaries)
+- Temperature: 0.2–0.4, Top‑K: 40–80 for stability
+
+> These are sensible defaults; you can tune per device/pack.
+
 ---
 
 ## UX Details that Matter 💅
@@ -124,15 +143,31 @@ Importer safeguards:
   - During generation: global overlay lock; all inputs disabled (no duplicate queries)
   - Tap outside or scroll to dismiss the keyboard
   - QADetail overlays History; close with swipe‑down or ✖︎; answers are text‑selectable and copyable
+  - Scroll indicators visible in answers to clarify vertical scroll
 - macOS
   - Two‑pane layout with History and Detail; same output cleaning; quick import
 
 ---
 
-## Ecosystem & Related Projects 🌍
+## Engineering Policy & Vendor Guardrails 🛡️
 
-- [RAGfish](https://github.com/raskolnikoff/RAGfish): Core RAGpack specification and toolkit 📚
-- [noesisnoema-pipeline](https://github.com/raskolnikoff/noesisnoema-pipeline): Generate your own RAGpacks from PDF/text 💡
+- Vendor code (llama.cpp) is not modified. xcframeworks are prebuilt and checked in.
+- Thin shim only: adapt upstream C API in `LibLlama.swift` / `LlamaState.swift`. Other files must not call `llama_*` directly.
+- Runtime check: verify `llama.framework` load + symbol presence on startup and log `llama_print_system_info()`.
+- If upstream bumps break builds, fix the shim layer and add a unit test before merging.
+
+---
+
+## QA Checklist (release‑ready) ✅
+
+- Accuracy: run same question ×3; verify gist stability at low temperature (0.2–0.4)
+- Latency: measure p50/p90 for short/long prompts and multi‑pack queries; split warm vs warm+1
+- Memory/Thermals: 10‑question loop; consider thread scaling when throttled
+- Failure modes: empty/huge/broken packs; missing model path; user‑facing messages
+- Output hygiene: ensure `<think>`/control tokens are absent; newlines preserved
+- History durability: ~100 items; startup time and scroll smoothness
+- Battery: 15‑minute session; confirm best params per device
+- Privacy: verify network off; no analytics; README/UI clearly state offline
 
 ---
 
@@ -153,6 +188,16 @@ Importer safeguards:
 
 ---
 
+## Known Issues & FAQ ❓
+
+- iOS Simulator is slower and may not reflect real thermals. Prefer running on device.
+- Very large RAGpacks can increase memory usage. Prefer chunking and MMR re‑ranking.
+- If you still see `<think>` in answers, capture logs and open an issue (model‑specific templates can slip through).
+- Where is `scripts/build_xcframework.sh`?
+  - Not included yet. Prebuilt `llama_*.xcframework` are provided in this repo. If you need to rebuild, use upstream llama.cpp build instructions and replace the frameworks under `Frameworks/`.
+
+---
+
 ## Roadmap 🗺️
 
 - iOS universal polishing (iPad layouts, sharing/export)
@@ -164,10 +209,22 @@ Importer safeguards:
 
 ---
 
+## Ecosystem & Related Projects 🌍
+
+- [RAGfish](https://github.com/raskolnikoff/RAGfish): Core RAGpack specification and toolkit 📚
+- [noesisnoema-pipeline](https://github.com/raskolnikoff/noesisnoema-pipeline): Generate your own RAGpacks from PDF/text 💡
+
+---
+
 ## Contributing 🤗
 
 We welcome Designers, Swift/AI/UX developers, and documentation writers.
 Open an issue or PR, or join our discussions. See also [RAGfish](https://github.com/raskolnikoff/RAGfish) for the pack spec.
+
+PR Checklist (policy):
+- [ ] llama.cpp vendor frameworks unchanged
+- [ ] Changes limited to `LibLlama.swift` / `LlamaState.swift` for core llama integration
+- [ ] Smoke/Golden/RAG tests passed locally
 
 ---
 
