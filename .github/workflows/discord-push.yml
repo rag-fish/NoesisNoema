@@ -1,0 +1,44 @@
+name: Notify Discord on Push
+
+on:
+  push:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare message
+        id: prep
+        run: |
+          REPO="${{ github.repository }}"
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          COMMITS=$(jq -r '.commits[] | "- " + .message + " ([" + .id[0:7] + "](" + .url + ")) by " + .author.username' <<< '${{ toJson(github.event) }}')
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+          echo "url=${{ github.event.compare }}" >> $GITHUB_OUTPUT
+
+      - name: Send to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ steps.prep.outputs.repo }}
+          BRANCH: ${{ steps.prep.outputs.branch }}
+          COMMITS: ${{ steps.prep.outputs.commits }}
+          URL: ${{ steps.prep.outputs.url }}
+        run: |
+          jq -n \
+            --arg title "Push to $REPO [$BRANCH]" \
+            --arg desc "$COMMITS" \
+            --arg url "$URL" \
+            '{
+              embeds: [{
+                title: $title,
+                description: $desc,
+                url: $url,
+                color: 3066993
+              }]
+            }' > payload.json
+
+          curl -sS -H "Content-Type: application/json" \
+            -d @payload.json \
+            "$WEBHOOK"
