@@ -6,144 +6,174 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct ContentView: View {
     @State private var question: String = ""
     @State private var answer: String = ""
     @State private var isLoading: Bool = false
-    @State private var selectedEmbeddingModel: String = "MiniLM-L6-v2"
-    @State private var selectedLLMModel: String = "Jan-V1-4B"
+    @State private var selectedEmbeddingModel: String = ModelManager.shared.currentEmbeddingModel.name
+    @State private var selectedLLMModel: String = ModelManager.shared.currentLLMModel.name
+    // 新規: LLMプリセット選択
+    @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
     @State private var showRAGpackManager: Bool = false
-    @State private var documentManager = DocumentManager()
+    @StateObject private var documentManager = DocumentManager()
     
     @State private var qaHistory: [QAPair] = []
     @State private var selectedQAPair: QAPair? = nil
 
-    let availableEmbeddingModels = ["MiniLM-L6-v2", "All-MiniLM-L12-v2"]
-    let availableLLMModels = ["Jan-V1-4B", "Phi-3-mini", "Llama-3", "Gemma-2B"]
+    let availableEmbeddingModels = ModelManager.shared.availableEmbeddingModels
+    let availableLLMModels = ModelManager.shared.availableLLMModels
+    // 新規: プリセット候補
+    let availableLLMPresets = ModelManager.shared.availableLLMPresets
 
     var body: some View {
-        NavigationView {
-            HStack(spacing: 0) {
-                VStack {
-                    HStack {
-                        Button("New Question") {
-                            selectedQAPair = nil
-                            question = ""
-                            answer = ""
-                        }
+        NavigationSplitView {
+            // Sidebar — 自動で Liquid Glass 外観
+            VStack(spacing: 0) {
+                HStack {
+                    Button("New Question") {
+                        selectedQAPair = nil
+                        question = ""
+                        answer = ""
+                    }
+                    .disabled(isLoading)
+                    Spacer()
+                    Button("Manage RAGpack") { showRAGpackManager.toggle() }
                         .disabled(isLoading)
-                        Spacer()
-                        Button("Manage RAGpack") { showRAGpackManager.toggle() }
-                            .disabled(isLoading)
-                    }
-                    .padding()
-
-                    List(selection: $selectedQAPair) {
-                        ForEach(qaHistory, id: \.id) { qa in
-                            // 型推論エラー回避のため、VStackを分割
-                            QAHistoryRow(qa: qa, isSelected: selectedQAPair?.id == qa.id)
-                                .contentShape(Rectangle())
-                                .onTapGesture { if !isLoading { selectedQAPair = qa } }
-                        }
-                        .onDelete { indexSet in
-                            if !isLoading { qaHistory.remove(atOffsets: indexSet) }
-                            if let selected = selectedQAPair, !qaHistory.contains(where: { $0.id == selected.id }) {
-                                selectedQAPair = nil
-                            }
-                        }
-                    }
-                    .listStyle(SidebarListStyle())
                 }
-                .frame(minWidth: 300, maxWidth: 350)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.regularMaterial) // 強度アップ
 
-                Divider()
-
-                VStack(spacing: 16) {
-                    if let selected = selectedQAPair {
-                        QADetailView(qapair: selected, onClose: { if !isLoading { selectedQAPair = nil } })
-                    } else {
-                        Picker("Embedding Model", selection: $selectedEmbeddingModel) {
-                            ForEach(availableEmbeddingModels, id: \.self) { model in
-                                Text(model)
-                            }
+                List(selection: $selectedQAPair) {
+                    ForEach(qaHistory, id: \.id) { qa in
+                        QAHistoryRow(qa: qa, isSelected: selectedQAPair?.id == qa.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { if !isLoading { selectedQAPair = qa } }
+                    }
+                    .onDelete { indexSet in
+                        if !isLoading { qaHistory.remove(atOffsets: indexSet) }
+                        if let selected = selectedQAPair, !qaHistory.contains(where: { $0.id == selected.id }) {
+                            selectedQAPair = nil
                         }
-                        .pickerStyle(MenuPickerStyle())
-                        .padding(.horizontal)
-                        .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
-                            ModelManager.shared.switchEmbeddingModel(name: newValue)
-                        }
-                        .disabled(isLoading)
-
-                        Picker("LLM Model", selection: $selectedLLMModel) {
-                            ForEach(availableLLMModels, id: \.self) { model in
-                                Text(model)
-                            }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                        .padding(.horizontal)
-                        .onChange(of: selectedLLMModel) { oldValue, newValue in
-                            ModelManager.shared.switchLLMModel(name: newValue)
-                        }
-                        .disabled(isLoading)
-
-                        // RAGpack(.zip) upload UI — moved up and enlarged
-                        HStack {
-                            Text("RAGpack(.zip) Upload:")
-                                .font(.title3)
-                                .bold()
-                            Spacer()
-                            Button(action: {
-                                let panel = NSOpenPanel()
-                                panel.allowedContentTypes = [UTType.zip]
-                                panel.allowsMultipleSelection = false
-                                panel.canChooseDirectories = false
-                                if panel.runModal() == .OK {
-                                    documentManager.importDocument(file: panel.url!)
+                    }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden) // 背景拡張
+            }
+            .background(.regularMaterial) // サイドバー全面ガラス
+            .navigationTitle("Noesis Noema")
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
+        } detail: {
+            // Detail — エッジトゥエッジ + Material
+            Group {
+                if let selected = selectedQAPair {
+                    QADetailView(qapair: selected, onClose: { if !isLoading { selectedQAPair = nil } })
+                        .padding()
+                } else {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            Picker("Embedding Model", selection: $selectedEmbeddingModel) {
+                                ForEach(availableEmbeddingModels, id: \.self) { model in
+                                    Text(model)
                                 }
-                            }) {
-                                Text("Choose File")
-                                    .font(.title3)
                             }
-                            .disabled(isLoading)
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                        }
-                        .padding(.horizontal)
-
-                        TextField("Enter your question", text: $question)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .pickerStyle(.menu)
                             .padding(.horizontal)
-                            .onSubmit {
-                                Task { await askRAG() }
+                            .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
+                                ModelManager.shared.switchEmbeddingModel(name: newValue)
                             }
                             .disabled(isLoading)
 
-                        Button(action: {
-                            Task { await askRAG() }
-                        }) {
-                            Text("Ask")
-                        }
-                        .disabled(question.isEmpty || isLoading)
-                        .padding(.horizontal)
+                            Picker("LLM Model", selection: $selectedLLMModel) {
+                                ForEach(availableLLMModels, id: \.self) { model in
+                                    Text(model)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(.horizontal)
+                            .onChange(of: selectedLLMModel) { oldValue, newValue in
+                                ModelManager.shared.switchLLMModel(name: newValue)
+                                // モデル連動: プリセットはautoへ戻す
+                                selectedLLMPreset = "auto"
+                                ModelManager.shared.setLLMPreset(name: "auto")
+                            }
+                            .disabled(isLoading)
 
-                        if isLoading {
-                            ProgressView().padding()
-                        }
+                            // 新規: LLM Preset
+                            Picker("LLM Preset", selection: $selectedLLMPreset) {
+                                ForEach(availableLLMPresets, id: \.self) { p in
+                                    Text(p)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(.horizontal)
+                            .onChange(of: selectedLLMPreset) { oldValue, newValue in
+                                ModelManager.shared.setLLMPreset(name: newValue)
+                            }
+                            .disabled(isLoading)
 
-                        ScrollView {
+                            // RAGpack(.zip) upload UI
+                            HStack {
+                                Text("RAGpack(.zip) Upload:")
+                                    .font(.title3)
+                                    .bold()
+                                Spacer()
+                                Button(action: {
+                                    let panel = NSOpenPanel()
+                                    panel.allowedContentTypes = [UTType.zip]
+                                    panel.allowsMultipleSelection = false
+                                    panel.canChooseDirectories = false
+                                    if panel.runModal() == .OK {
+                                        documentManager.importDocument(file: panel.url!)
+                                    }
+                                }) {
+                                    Text("Choose File")
+                                        .font(.title3)
+                                }
+                                .disabled(isLoading)
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.large)
+                            }
+                            .padding(.horizontal)
+
+                            TextField("Enter your question", text: $question)
+                                .textFieldStyle(.roundedBorder)
+                                .padding(.horizontal)
+                                .onSubmit {
+                                    Task { await askRAG() }
+                                }
+                                .disabled(isLoading)
+
+                            Button(action: { Task { await askRAG() } }) {
+                                Text("Ask")
+                            }
+                            .disabled(question.isEmpty || isLoading)
+                            .padding(.horizontal)
+
+                            if isLoading {
+                                ProgressView().padding()
+                            }
+
+                            // Answer
                             Text(answer)
                                 .padding()
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .padding(.horizontal)
                         }
+                        .padding(.vertical)
                     }
+                    .background(.clear)
                 }
-                .frame(minWidth: 500)
             }
-            .sheet(isPresented: $showRAGpackManager) {
-                RAGpackManagerView(documentManager: documentManager)
-            }
-            // .navigationTitle("RAGfish × NoesisNoema") を削除
+            .background(.ultraThinMaterial) // ディテール面に広域でガラス
+            .toolbarBackground(.visible, for: .windowToolbar)
+            .toolbarBackground(.regularMaterial, for: .windowToolbar) // 強度アップ
+        }
+        .sheet(isPresented: $showRAGpackManager) {
+            RAGpackManagerView(documentManager: documentManager)
         }
         .disabled(isLoading)
         .overlay(
@@ -216,7 +246,7 @@ struct RAGpackManagerView: View {
     }
 }
 
-// 新規Viewを追加
+// 既存: 履歴行
 struct QAHistoryRow: View {
     let qa: QAPair
     let isSelected: Bool

@@ -9,6 +9,9 @@ class ModelManager {
     /// The currently selected LLM model.
     var currentLLMModel: LLMModel
 
+    /// LLM generation preset (auto or specific). Exposed to UI.
+    private(set) var currentLLMPreset: String = "auto" // auto|factual|balanced|creative|json|code
+
     /// The list of available embedding model names.
     /// Intended for use in UI dropdowns for embedding model selection in ContentView.
     let availableEmbeddingModels: [String] = [
@@ -26,6 +29,8 @@ class ModelManager {
         "Llama-3",
         "Phi-3-mini",
         "Gemma-2B",
+        // Add new OSS GPT model
+        "GPT-OSS-20B",
         // legacy/other options can remain available if needed
         "default-llm",
         "llama3-8b",
@@ -36,6 +41,9 @@ class ModelManager {
         "phi-2",
         "tinyllama"
     ]
+
+    /// The list of available LLM presets for UI selection.
+    let availableLLMPresets: [String] = ["auto", "factual", "balanced", "creative", "json", "code"]
 
     /// Initializes a ModelManager with default models.
     init() {
@@ -48,11 +56,11 @@ class ModelManager {
     /// Switches the current embedding model to the specified name, if available.
     /// - Parameter name: The name of the embedding model to switch to.
     func switchEmbeddingModel(name: String) {
-        // If the requested model name exists in the available embedding models, switch to it.
         if availableEmbeddingModels.contains(name) {
             self.currentEmbeddingModel = EmbeddingModel(name: name)
+            // VectorStore の検索用モデルも同期
+            VectorStore.shared.embeddingModel = self.currentEmbeddingModel
         }
-        // Optionally, else: ignore or handle error (not found)
     }
 
     /// Switches the current LLM model to the specified name, if available.
@@ -73,6 +81,9 @@ class ModelManager {
         case "Gemma-2B":
             modelFile = "gemma-2b.gguf"
             version = "2B"
+        case "GPT-OSS-20B":
+            modelFile = "gpt-oss-20b-Q4_K_S.gguf"
+            version = "20B"
         default:
             modelFile = ""
             version = ""
@@ -81,6 +92,15 @@ class ModelManager {
             self.currentLLMModel = LLMModel(name: name, modelFile: modelFile, version: version)
         }
         // Optionally, else: ignore or handle error (not found)
+    }
+
+    /// Set the current LLM preset (UI-driven). Unknown values fallback to 'auto'.
+    func setLLMPreset(name: String) {
+        if availableLLMPresets.contains(name.lowercased()) {
+            self.currentLLMPreset = name.lowercased()
+        } else {
+            self.currentLLMPreset = "auto"
+        }
     }
 
     /// Stub for importing a new model resource.
@@ -108,10 +128,20 @@ class ModelManager {
 
     /// Generates an answer to a question using the LLM model (asynchronous)
     func generateAsyncAnswer(question: String) async -> String {
-        // Wrap LLMModel's generate in async
+        // RAG文脈を構築
+        let embedding = self.currentEmbeddingModel.embed(text: question)
+        let topChunks = VectorStore.shared.findRelevant(queryEmbedding: embedding, topK: 6)
+        var context = topChunks.map { $0.content }.joined(separator: "\n---\n")
+        if context.isEmpty { context = "" }
+        // コンテキストの安全上限（簡易）
+        if context.count > 2000 { context = String(context.prefix(2000)) }
+
+        // @Sendable 回避: モデルをローカルへ
+        let model = self.currentLLMModel
+        let ctx = context.isEmpty ? nil : context
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
-                let result = self.currentLLMModel.generate(prompt: question)
+                let result = model.generate(prompt: question, context: ctx)
                 continuation.resume(returning: result)
             }
         }

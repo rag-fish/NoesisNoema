@@ -22,6 +22,14 @@ struct CLI {
     var modelPath: String?
     var prompt: String?
     var usePlainTemplate: Bool = false
+    // sampling / runtime
+    var temp: Float = 0.7
+    var topK: Int32 = 60
+    var topP: Float = 0.9
+    var seed: UInt64 = 1234
+    var nLen: Int32 = 512
+    var verbose: Bool = false
+    var preset: String? = nil
 }
 
 func parseArgs() -> CLI {
@@ -37,11 +45,100 @@ func parseArgs() -> CLI {
             cli.prompt = "Say a short hello in one sentence."
         case "--plain":
             cli.usePlainTemplate = true
+        case "--preset":
+            cli.preset = it.next()?.lowercased()
+        case "--temp":
+            if let v = it.next(), let f = Float(v) { cli.temp = f }
+        case "--top-k":
+            if let v = it.next(), let i = Int32(v) { cli.topK = i }
+        case "--top-p":
+            if let v = it.next(), let f = Float(v) { cli.topP = f }
+        case "--seed":
+            if let v = it.next(), let u = UInt64(v) { cli.seed = u }
+        case "-n", "--n-len":
+            if let v = it.next(), let i = Int32(v) { cli.nLen = i }
+        case "-v", "--verbose":
+            cli.verbose = true
         default:
             continue
         }
     }
     return cli
+}
+
+// プリセット適用
+func applyPreset(_ cli: inout CLI) {
+    guard let name = cli.preset else { return }
+    switch name {
+    case "factual":
+        // 事実系・RAG向け（低温度・やや狭い探索）
+        cli.temp = 0.2
+        cli.topK = 40
+        cli.topP = 0.85
+        cli.nLen = 384
+    case "balanced":
+        cli.temp = 0.5
+        cli.topK = 60
+        cli.topP = 0.9
+        cli.nLen = 512
+    case "creative":
+        cli.temp = 0.9
+        cli.topK = 100
+        cli.topP = 0.95
+        cli.nLen = 768
+    case "json":
+        // 構造化出力想定。温度低め＋プレーンテンプレート
+        cli.temp = 0.2
+        cli.topK = 40
+        cli.topP = 0.9
+        cli.nLen = 512
+        cli.usePlainTemplate = true
+    case "code":
+        // コード/手順。やや低温度、探索は標準
+        cli.temp = 0.3
+        cli.topK = 50
+        cli.topP = 0.9
+        cli.nLen = 640
+    default:
+        fputs("Unknown preset: \(name). Available: factual, balanced, creative, json, code\n", stderr)
+    }
+}
+
+// 簡易インテント検出（RAG/JSON/コード/創造/汎用）
+func detectIntent(prompt: String) -> String {
+    let p = prompt.lowercased()
+    // RAG/コンテキスト
+    if p.contains("context:") || p.contains("reference:") || p.contains("資料:") { return "factual" }
+    // JSON出力
+    if p.contains("json") || p.contains("return json") || p.contains("出力はjson") || p.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") { return "json" }
+    // コード気配
+    if p.contains("```") || p.contains("code") || p.contains("swift") || p.contains("python") || p.contains("関数") || p.contains("コード") { return "code" }
+    // 創造的タスク
+    if p.contains("story") || p.contains("poem") || p.contains("creative") || p.contains("アイデア") { return "creative" }
+    return "balanced"
+}
+
+// モデル名＋インテントで自動プリセット選択
+func autoPresetAdjust(_ cli: inout CLI, modelPath: String, prompt: String) {
+    // 明示指定があるなら何もしない
+    if let preset = cli.preset, preset != "auto" { return }
+
+    let fn = URL(fileURLWithPath: modelPath).lastPathComponent.lowercased()
+    var intent = detectIntent(prompt: prompt)
+
+    // モデル特性で微調整
+    if fn.contains("jan") || fn.contains("qwen") {
+        // Janは事実/JSONに向く傾向
+        if intent == "balanced" { intent = "factual" }
+    } else if fn.contains("llama3") {
+        // Llama3は汎用 → balanced 既定
+        if intent == "factual" { intent = "balanced" }
+    } else if fn.contains("mistral") || fn.contains("phi") || fn.contains("tinyllama") {
+        // 小型モデルは温度低めが安定
+        if intent == "creative" { intent = "balanced" }
+    }
+
+    cli.preset = intent
 }
 
 // MARK: - Paths
@@ -134,7 +231,8 @@ func cleanOutput(_ s: String) -> String {
 }
 
 // MARK: - Main
-let cli = parseArgs()
+let cli0 = parseArgs()
+var cli = cli0
 let fm = FileManager.default
 
 // Resolve model path
@@ -158,27 +256,73 @@ guard let modelPath else {
 print("USING MODEL: \(modelPath)")
 
 // Default prompt if none provided
-let promptText = cli.prompt ?? "What is Retrieval-Augmented Generation (RAG)? Answer in 2 sentences."
+let promptText = cli.prompt ?? "What is Retrieval-Augmented Generation (RAG)? Answer in 2 sentences. If unknown, say 'I don't know.'"
 let fullPrompt = cli.usePlainTemplate ? buildPlainPrompt(question: promptText) : buildPrompt(question: promptText)
+
+// 自動プリセット決定（未指定 or auto の場合）
+autoPresetAdjust(&cli, modelPath: modelPath, prompt: promptText)
+applyPreset(&cli)
+print("PRESET: \(cli.preset ?? "(none)") temp=\(cli.temp) topK=\(cli.topK) topP=\(cli.topP) nLen=\(cli.nLen)")
 
 // === LlamaState integration ===
 Task {
-    // Replace with your actual wrapper init if it needs configuration
-    let llama = await LlamaState()
     do {
-        try await llama.loadModel(modelUrl: URL(fileURLWithPath: modelPath))
+        // 直接 LlamaContext を使用してモデル読み込みと推論を実施（shim 経由・llama_* 直接呼び出しはしない）
+        let ctx = try LlamaContext.create_context(path: modelPath)
+        await ctx.set_verbose(cli.verbose)
+        await ctx.configure_sampling(temp: cli.temp, top_k: cli.topK, top_p: cli.topP, seed: cli.seed)
+        await ctx.set_n_len(cli.nLen)
 
-        // Recommended runtime knobs (enable if your wrapper supports them):
-        // llama.ngl = 999                    // Prefer full Metal offload on Apple devices
-        // llama.threads = 6                  // Tune to CPU cores
-        // llama.contextLength = 4096
-        // llama.stop = ["<|im_end|>", "<think>", "</think>"]
-
-        // Small helper to run one completion and apply cleaning/fallback
         func infer(_ prompt: String) async -> String {
-            let raw: String = await llama.complete(text: prompt)
-            let cleaned = cleanOutput(raw)
-            let fallback = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            await ctx.completion_init(text: prompt)
+            var acc = ""
+            var buffer = ""
+            var inThink = false
+            while await !ctx.is_done {
+                let chunk = await ctx.completion_loop()
+                if chunk.isEmpty { continue }
+                buffer += chunk
+
+                // streaming processing
+                processing: while true {
+                    if inThink {
+                        if let rng = buffer.range(of: "</think>") {
+                            // drop until end tag
+                            buffer = String(buffer[rng.upperBound...])
+                            inThink = false
+                            continue processing
+                        } else {
+                            // wait for more
+                            break processing
+                        }
+                    } else {
+                        // stop at assistant end token
+                        if let end = buffer.range(of: "<|im_end|>") {
+                            let prefix = String(buffer[..<end.lowerBound])
+                            if !prefix.isEmpty { acc += prefix }
+                            await ctx.request_stop()
+                            buffer.removeAll(keepingCapacity: true)
+                            break processing
+                        }
+                        if let rng = buffer.range(of: "<think>") {
+                            let prefix = String(buffer[..<rng.lowerBound])
+                            if !prefix.isEmpty { acc += prefix }
+                            buffer = String(buffer[rng.upperBound...])
+                            inThink = true
+                            continue processing
+                        } else {
+                            acc += buffer
+                            buffer.removeAll(keepingCapacity: true)
+                            break processing
+                        }
+                    }
+                }
+            }
+            // flush any non-think residue
+            if !buffer.isEmpty && !inThink { acc += buffer }
+
+            let cleaned = cleanOutput(acc)
+            let fallback = acc.trimmingCharacters(in: .whitespacesAndNewlines)
             return cleaned.isEmpty ? fallback : cleaned
         }
 

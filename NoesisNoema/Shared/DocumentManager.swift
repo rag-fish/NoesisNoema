@@ -77,8 +77,11 @@ class DocumentManager: ObservableObject {
     }
     func saveRAGpackChunks() {
         let encoder = JSONEncoder()
-        let dict = ragpackChunks.mapValues { chunks in
-            try? encoder.encode(chunks)
+        var dict: [String: Data] = [:]
+        for (key, chunks) in ragpackChunks {
+            if let data = try? encoder.encode(chunks) {
+                dict[key] = data
+            }
         }
         UserDefaults.standard.set(dict, forKey: ragpackChunksKey)
     }

@@ -58,6 +58,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Assets.xcassets,
+				"Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
 				Shared/ContentView.swift,
 				Shared/NoesisNoemaApp.swift,
 			);
@@ -66,9 +67,12 @@
 		F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
 				"Resources/Models/Jan-v1-4B-Q4_K_M.gguf",
 				Shared/LibLlama.swift,
+				Shared/LlamaRuntimeCheck.swift,
 				Shared/LlamaState.swift,
+				Shared/SystemLog.swift,
 			);
 			target = F46088482E2CD45000D4C555 /* LlamaBridgeTest */;
 		};
@@ -584,6 +588,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG BRIDGE_TEST";
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -618,6 +623,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BRIDGE_TEST;
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 6;

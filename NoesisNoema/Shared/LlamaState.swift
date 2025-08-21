@@ -43,6 +43,17 @@ class LlamaState: ObservableObject {
         return Bundle.main.url(forResource: "ggml-model", withExtension: "gguf", subdirectory: "models")
     }
 
+    struct SamplingConfig {
+        var temp: Float
+        var topK: Int32
+        var topP: Float
+        var seed: UInt64
+        var nLen: Int32
+    }
+    enum Preset: String { case factual, balanced, creative, json, code }
+
+    private var pendingConfig: SamplingConfig = SamplingConfig(temp: 0.5, topK: 60, topP: 0.9, seed: 1234, nLen: 512)
+
     init() {
         // ランタイムガード（壊れたFWを早期検知）
         if let err = LlamaRuntimeCheck.ensureLoadable() {
@@ -52,6 +63,79 @@ class LlamaState: ObservableObject {
         }
         loadModelsFromDisk()
         loadDefaultModels()
+    }
+
+    // プリセット→SamplingConfig 変換
+    private func config(for preset: Preset) -> SamplingConfig {
+        switch preset {
+        case .factual:
+            return SamplingConfig(temp: 0.2, topK: 40, topP: 0.85, seed: 1234, nLen: 384)
+        case .balanced:
+            return SamplingConfig(temp: 0.5, topK: 60, topP: 0.9, seed: 1234, nLen: 512)
+        case .creative:
+            return SamplingConfig(temp: 0.9, topK: 100, topP: 0.95, seed: 1234, nLen: 768)
+        case .json:
+            return SamplingConfig(temp: 0.2, topK: 40, topP: 0.9, seed: 1234, nLen: 512)
+        case .code:
+            return SamplingConfig(temp: 0.3, topK: 50, topP: 0.9, seed: 1234, nLen: 640)
+        }
+    }
+
+    // インテント検出（簡易）
+    private func detectIntent(prompt: String) -> Preset {
+        let p = prompt.lowercased()
+        if p.contains("context:") || p.contains("reference:") || p.contains("資料:") { return .factual }
+        if p.contains("json") || p.contains("return json") || p.contains("出力はjson") || p.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") { return .json }
+        if p.contains("```") || p.contains("code") || p.contains("swift") || p.contains("python") || p.contains("関数") || p.contains("コード") { return .code }
+        if p.contains("story") || p.contains("poem") || p.contains("creative") || p.contains("アイデア") { return .creative }
+        return .balanced
+    }
+
+    // モデル名＋インテントで自動プリセット選択
+    func autoSelectPreset(modelFileName: String, prompt: String) -> Preset {
+        var intent = detectIntent(prompt: prompt)
+        let fn = modelFileName.lowercased()
+        if fn.contains("jan") || fn.contains("qwen") {
+            if intent == .balanced { intent = .factual }
+        } else if fn.contains("llama3") {
+            if intent == .factual { intent = .balanced }
+        } else if fn.contains("mistral") || fn.contains("phi") || fn.contains("tinyllama") {
+            if intent == .creative { intent = .balanced }
+        }
+        return intent
+    }
+
+    // 設定の反映（LlamaContextへ）
+    private func applyConfigToContext() async {
+        guard let llamaContext else { return }
+        await llamaContext.configure_sampling(temp: pendingConfig.temp, top_k: pendingConfig.topK, top_p: pendingConfig.topP, seed: pendingConfig.seed)
+        await llamaContext.set_n_len(pendingConfig.nLen)
+    }
+
+    // 外部公開: プリセット適用
+    func setPreset(_ name: String) async {
+        if let p = Preset(rawValue: name) {
+            pendingConfig = config(for: p)
+            await applyConfigToContext()
+        }
+    }
+
+    // 外部公開: 直接設定
+    func configure(temp: Float? = nil, topK: Int32? = nil, topP: Float? = nil, seed: UInt64? = nil, nLen: Int32? = nil) async {
+        pendingConfig = SamplingConfig(
+            temp: temp ?? pendingConfig.temp,
+            topK: topK ?? pendingConfig.topK,
+            topP: topP ?? pendingConfig.topP,
+            seed: seed ?? pendingConfig.seed,
+            nLen: nLen ?? pendingConfig.nLen
+        )
+        await applyConfigToContext()
+    }
+
+    // 外部公開: verbose ブリッジ
+    func setVerbose(_ on: Bool) async {
+        guard let llamaContext else { return }
+        await llamaContext.set_verbose(on)
     }
 
     private func loadModelsFromDisk() {
@@ -142,6 +226,11 @@ class LlamaState: ObservableObject {
                 }
             }
 
+            // プリセット設定を反映
+            Task { [weak self] in
+                await self?.applyConfigToContext()
+            }
+
             // Assuming that the model is successfully loaded, update the downloaded models
             updateDownloadedModels(modelName: modelUrl.lastPathComponent, status: "downloaded")
         } else {
@@ -177,6 +266,9 @@ class LlamaState: ObservableObject {
     func complete(text: String) async -> String {
         guard let llamaContext else { return "" }
 
+        // 設定を念のため反映（直前に変更がある場合）
+        await applyConfigToContext()
+
         let t_start = DispatchTime.now().uptimeNanoseconds
         await llamaContext.completion_init(text: text)
         let t_heat_end = DispatchTime.now().uptimeNanoseconds
@@ -194,15 +286,24 @@ class LlamaState: ObservableObject {
         var thinkStartNS: UInt64? = nil
         let THINK_TIMEOUT_S: Double = 3.0 // iOSでのスタック防止
         let THINK_CHAR_LIMIT = 4000       // 長すぎる思考は打ち切る
+        // 全体ウォッチドッグ
+        let GENERATION_TIMEOUT_S: Double = 20.0
+        let genStartNS = DispatchTime.now().uptimeNanoseconds
 
         while await !llamaContext.is_done {
+            // 全体タイムアウト
+            let genElapsed = Double(DispatchTime.now().uptimeNanoseconds - genStartNS) / NS_PER_S
+            if genElapsed > GENERATION_TIMEOUT_S {
+                await llamaContext.request_stop()
+                break
+            }
+
             let chunk = await llamaContext.completion_loop()
             if chunk.isEmpty { continue }
             buffer += chunk
 
             // Stopトークン: <|im_end|> で即終了
             if let endIdx = buffer.range(of: "<|im_end|>") {
-                // 終了タグ以前のテキストを取り出し
                 let prefix = String(buffer[..<endIdx.lowerBound])
                 if !prefix.isEmpty { assistantResponse += prefix }
                 await llamaContext.request_stop()
@@ -213,52 +314,39 @@ class LlamaState: ObservableObject {
             processing: while true {
                 if inThink {
                     if let rng = buffer.range(of: "</think>") {
-                        // </think> までスキップ
                         let after = buffer[rng.upperBound...]
                         buffer = String(after)
                         inThink = false
                         thinkChars = 0
                         thinkStartNS = nil
-                        // ループを続行して外側テキストの抽出へ
                         continue processing
                     } else {
-                        // 終了タグがまだ来ない -> しきい値監視しつつ次チャンクを待つ
                         thinkChars += buffer.count
                         if thinkStartNS == nil { thinkStartNS = DispatchTime.now().uptimeNanoseconds }
                         let elapsed = (Double((DispatchTime.now().uptimeNanoseconds) - (thinkStartNS ?? 0)) / NS_PER_S)
-                        if (elapsed > THINK_TIMEOUT_S || thinkChars > THINK_CHAR_LIMIT) && assistantResponse.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            // 早期終了: これ以上待たない
+                        if (elapsed > THINK_TIMEOUT_S || thinkChars > THINK_CHAR_LIMIT) {
+                            // 思考ブロックが閉じない -> 強制停止
+                            await llamaContext.request_stop()
+                            buffer.removeAll(keepingCapacity: true)
                             break
                         }
-                        // バッファは保持（タグ跨ぎ対応）
+                        // 継続待ち
                         break processing
                     }
                 } else {
                     if let rng = buffer.range(of: "<think>") {
-                        // think開始までを出力
                         let prefix = String(buffer[..<rng.lowerBound])
                         if !prefix.isEmpty { assistantResponse += prefix }
-                        // think状態へ
                         buffer = String(buffer[rng.upperBound...])
                         inThink = true
                         thinkChars = 0
                         thinkStartNS = DispatchTime.now().uptimeNanoseconds
-                        // 継続して</think>探索
                         continue processing
                     } else {
-                        // thinkが無ければ全て出力してバッファクリア
                         assistantResponse += buffer
                         buffer.removeAll(keepingCapacity: true)
                         break processing
                     }
-                }
-            }
-
-            // もし早期終了条件でbreakした場合、外のwhileも抜ける
-            if inThink {
-                let elapsed = thinkStartNS.map { Double(DispatchTime.now().uptimeNanoseconds - $0) / NS_PER_S } ?? 0
-                if (elapsed > THINK_TIMEOUT_S || thinkChars > THINK_CHAR_LIMIT) && assistantResponse.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    break
                 }
             }
         }

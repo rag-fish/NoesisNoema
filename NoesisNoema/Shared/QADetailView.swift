@@ -83,13 +83,11 @@ struct QADetailView: View {
                 }
             }
             .padding()
-            #if os(iOS)
-            .background(Color(UIColor.systemBackground))
-            #else
-            .background(Color(NSColor.windowBackgroundColor))
-            #endif
-            .cornerRadius(12)
-            .shadow(radius: 2)
+            .background(
+                .thinMaterial,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
 
             // 右上のクローズボタン
             if onClose != nil {
