@@ -1,0 +1,67 @@
+# GitHub Actions: Notify Discord on GitHub Releases
+# Place this file at .github/workflows/discord-release.yml
+# Requirements:
+#   - Create a GitHub Actions secret named DISCORD_WEBHOOK_URL containing your Discord channel webhook URL
+# Behavior:
+#   - Triggers on published and prereleased GitHub Releases
+#   - Sends an embedded message to Discord with tag/name, link, author, and a trimmed body
+
+name: Notify Discord on Release
+
+on:
+  release:
+    types: [published, prereleased]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compose release payload
+        id: compose
+        run: |
+          # Extract fields from the GitHub event payload using jq
+          EVENT='${{ toJson(github.event) }}'
+          REPO="${{ github.repository }}"
+          TAG=$(jq -r '.release.tag_name' <<< "$EVENT")
+          NAME=$(jq -r '.release.name // ""' <<< "$EVENT")
+          HTML_URL=$(jq -r '.release.html_url' <<< "$EVENT")
+          AUTHOR=$(jq -r '.release.author.login // ""' <<< "$EVENT")
+          BODY=$(jq -r '.release.body // ""' <<< "$EVENT")
+
+          # Fallback title if name is empty
+          [ -z "$NAME" ] && NAME="$TAG"
+
+          # Trim body to keep Discord embed compact (Discord embed description limit is 2048 chars)
+          BODY_TRIM=$(echo "$BODY" | head -c 900)
+
+          TITLE="New release in ${REPO}: ${NAME}"
+
+          # Build Discord embed JSON
+          jq -n \
+            --arg title "$TITLE" \
+            --arg url "$HTML_URL" \
+            --arg desc "$BODY_TRIM" \
+            --arg tag "$TAG" \
+            --arg author "$AUTHOR" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: ( ($desc | length) > 0 ? $desc : ("Tag: " + $tag) ),
+                color: 15844367,
+                footer: { text: ("by " + ($author // "")) }
+              }]
+            }' > payload.json
+
+          echo "Payload preview:"
+          cat payload.json
+
+      - name: Send to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -sS -H "Content-Type: application/json" \
+               -X POST \
+               -d @payload.json \
+               "$WEBHOOK"
+
