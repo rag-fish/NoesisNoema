@@ -22,6 +22,11 @@ struct ContentView: View {
     @State private var qaHistory: [QAPair] = []
     @State private var selectedQAPair: QAPair? = nil
 
+    // 新規: オートチューン状態
+    @State private var isAutotuningModel: Bool = false
+    @State private var recommendedReady: Bool = false
+    @State private var autotuneWarning: String? = nil
+
     // これらは計算型プロパティにして初期化時の隔離制約を回避
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
@@ -87,19 +92,51 @@ struct ContentView: View {
                             }
                             .disabled(isLoading)
 
-                            Picker("LLM Model", selection: $selectedLLMModel) {
-                                ForEach(availableLLMModels, id: \.self) { model in
-                                    Text(model)
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Picker("LLM Model", selection: $selectedLLMModel) {
+                                        ForEach(availableLLMModels, id: \.self) { model in
+                                            Text(model)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .onChange(of: selectedLLMModel) { oldValue, newValue in
+                                        // UI: リセットしてから非同期オートチューン
+                                        recommendedReady = false
+                                        autotuneWarning = nil
+                                        isAutotuningModel = true
+                                        ModelManager.shared.switchLLMModel(name: newValue)
+                                        selectedLLMPreset = "auto"
+                                        ModelManager.shared.setLLMPreset(name: "auto")
+                                        ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
+                                            isAutotuningModel = false
+                                            recommendedReady = true
+                                            if let w = outcome.warning { autotuneWarning = w }
+                                        }
+                                    }
+                                    // インラインスピナー/バッジ
+                                    if isAutotuningModel {
+                                        ProgressView().scaleEffect(0.7).padding(.leading, 8)
+                                    } else if recommendedReady {
+                                        Text("Recommended")
+                                            .font(.caption2)
+                                            .foregroundStyle(.green)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.green.opacity(0.12), in: Capsule())
+                                    }
+                                }
+                                // 警告（非ブロッキング）
+                                if let warn = autotuneWarning {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                                        Text(warn)
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
                             }
-                            .pickerStyle(.menu)
                             .padding(.horizontal)
-                            .onChange(of: selectedLLMModel) { oldValue, newValue in
-                                ModelManager.shared.switchLLMModel(name: newValue)
-                                // モデル連動: プリセットはautoへ戻す
-                                selectedLLMPreset = "auto"
-                                ModelManager.shared.setLLMPreset(name: "auto")
-                            }
                             .disabled(isLoading)
 
                             // 新規: LLM Preset
