@@ -129,6 +129,13 @@ actor ModelRegistry {
         modelSpecs[spec.id] = spec
     }
     
+    /// Update runtime params for a given model id (if exists)
+    func updateRuntimeParams(for id: String, params: RuntimeParams) {
+        guard var spec = modelSpecs[id] else { return }
+        spec.runtimeParams = params
+        modelSpecs[id] = spec
+    }
+    
     /// Get a model specification by ID
     func getModelSpec(id: String) -> ModelSpec? {
         return modelSpecs[id]

@@ -45,21 +45,36 @@ struct ModelCLI {
     
     /// Handle 'nn model info <id>' command
     private static func handleInfoCommand(_ args: [String]) async -> Int {
-        guard args.count >= 1 else {
+        guard !args.isEmpty else {
             print("Error: Model ID required")
-            print("Usage: nn model info <model-id>")
+            print("Usage: nn model info <model-id> [--trace]")
             return 1
         }
         
-        let modelId = args[0].lowercased()
+        // Parse args: first non-flag = id, flags: --trace
+        var modelId: String?
+        var trace = false
+        for a in args {
+            if a.hasPrefix("-") {
+                if a == "--trace" { trace = true }
+            } else if modelId == nil {
+                modelId = a
+            }
+        }
+        guard let modelId else {
+            print("Error: Model ID required")
+            return 1
+        }
+        
+        let id = modelId.lowercased()
         let registry = ModelRegistry.shared
         
         // First scan for models to ensure we have the latest information
         await registry.scanForModels()
         await registry.updateModelAvailability()
         
-        guard let modelInfo = await registry.getModelInfo(id: modelId) else {
-            print("Error: Model '\(modelId)' not found")
+        guard var spec = await registry.getModelSpec(id: id) else {
+            print("Error: Model '\(id)' not found")
             print("\nAvailable models:")
             let allSpecs = await registry.getAllModelSpecs()
             for spec in allSpecs {
@@ -68,8 +83,23 @@ struct ModelCLI {
             return 1
         }
         
-        print(modelInfo)
-        return 0
+        // Run autotune with optional tracing (non-blocking for UI, but CLI waits)
+        let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: 3.0, trace: trace)
+        if let warn = outcome.warning { print("⚠️  \(warn)") }
+        
+        // Persist updated params back to registry for this session
+        await registry.updateRuntimeParams(for: spec.id, params: params)
+        
+        // Re-read composed info for printing
+        if let modelInfo = await registry.getModelInfo(id: id) {
+            print(modelInfo)
+            return 0
+        } else {
+            // Fallback print if registry info fails unexpectedly
+            spec.runtimeParams = params
+            print("Model ID: \(spec.id)\nName: \(spec.name)\nVersion: \(spec.version)")
+            return 0
+        }
     }
     
     /// Handle 'nn model list' command

@@ -47,6 +47,18 @@ class TestRunner {
         // Test 8: M1 Max Autotune Case
         print("\n🔬 Test 8: M1 Max Autotune Case")
         allTestsPassed = testM1MaxAutotune() && allTestsPassed
+
+        // Test 9: Autotune cache hit speed
+        print("\n🔬 Test 9: Autotune Cache Hit")
+        allTestsPassed = await testAutotuneCacheHit() && allTestsPassed
+
+        // Test 10: Autotune timeout fallback
+        print("\n🔬 Test 10: Autotune Timeout Fallback")
+        allTestsPassed = await testAutotuneTimeoutFallback() && allTestsPassed
+
+        // Test 11: Unknown quantization fallback
+        print("\n🔬 Test 11: Unknown Quantization Fallback")
+        allTestsPassed = await testUnknownQuantFallback() && allTestsPassed
         
         // Summary
         print("\n" + String(repeating: "=", count: 50))
@@ -363,6 +375,97 @@ class TestRunner {
             return false
         }
         print("✅ M1 Max autotune behaves as expected (nGpuLayers=\(tuned.nGpuLayers))")
+        return true
+    }
+
+    /// Test 9: Autotune cache hit should return quickly (<100ms)
+    private static func testAutotuneCacheHit() async -> Bool {
+        let base = RuntimeParams.oomSafeDefaults()
+        var spec = ModelSpec(
+            id: "cache-test",
+            name: "Cache Test",
+            modelFile: "dummy.gguf",
+            version: "X",
+            metadata: GGUFMetadata(architecture: "llama", parameterCount: 8.0, contextLength: 4096, modelSizeBytes: 1_000_000_000, quantization: "Q4_K_M"),
+            runtimeParams: base,
+            isAvailable: true,
+            filePath: "/tmp/dummy.gguf",
+            tags: [],
+            description: ""
+        )
+
+        // First run: populate the cache with injected deterministic key
+        let injectedHasher: () async throws -> String = { return "hash123" }
+        let injectedDevice: () -> String = { return "arm64-mem64.0-vram64.0" }
+        let (p1, out1) = await AutotuneService.shared.recommendForTest(spec: spec, base: base, timeoutSeconds: 3.0, trace: false, injectedHasher: injectedHasher, injectedDeviceId: injectedDevice)
+        spec.runtimeParams = p1
+        guard out1.cacheHit == false else {
+            print("❌ First run should not be a cache hit")
+            return false
+        }
+
+        // Second run: same key => cache hit, measure time
+        let start = Date()
+        let (_, out2) = await AutotuneService.shared.recommendForTest(spec: spec, base: base, timeoutSeconds: 3.0, trace: false, injectedHasher: injectedHasher, injectedDeviceId: injectedDevice)
+        let elapsed = Date().timeIntervalSince(start)
+        guard out2.cacheHit else {
+            print("❌ Second run should be a cache hit")
+            return false
+        }
+        guard elapsed < 0.1 else {
+            print(String(format: "❌ Cache hit too slow: %.0f ms", elapsed * 1000))
+            return false
+        }
+        print(String(format: "✅ Cache hit in %.0f ms", elapsed * 1000))
+        return true
+    }
+
+    /// Test 10: Autotune timeout fallback
+    private static func testAutotuneTimeoutFallback() async -> Bool {
+        let base = RuntimeParams.oomSafeDefaults()
+        let spec = ModelSpec(
+            id: "timeout-test",
+            name: "Timeout Test",
+            modelFile: "dummy.gguf",
+            version: "X",
+            metadata: GGUFMetadata(architecture: "llama", parameterCount: 8.0, contextLength: 4096, modelSizeBytes: 1_000_000_000, quantization: "Q4_K_M"),
+            runtimeParams: base,
+            isAvailable: false,
+            filePath: nil,
+            tags: [],
+            description: ""
+        )
+        // Inject a slow hasher to force timeout
+        let slowHasher: () async throws -> String = {
+            try await Task.sleep(nanoseconds: 500_000_000) // 500ms
+            return "slowhash"
+        }
+        let dev: () -> String = { return "arm64-mem64.0-vram64.0" }
+        let (_, out) = await AutotuneService.shared.recommendForTest(spec: spec, base: base, timeoutSeconds: 0.2, trace: false, injectedHasher: slowHasher, injectedDeviceId: dev)
+        guard out.timedOut && out.usedFallback else {
+            print("❌ Expected timeout fallback (timedOut && usedFallback)")
+            return false
+        }
+        print("✅ Timeout produced conservative fallback as expected")
+        return true
+    }
+
+    /// Test 11: Unknown quantization should trigger conservative fallback
+    private static func testUnknownQuantFallback() async -> Bool {
+        let base = RuntimeParams.oomSafeDefaults()
+        let meta = GGUFMetadata(architecture: "llama", parameterCount: 8.0, contextLength: 4096, modelSizeBytes: 1_000_000_000, quantization: "XYZ_UNK")
+        let spec = ModelSpec(id: "unkq", name: "UnkQ", modelFile: "unk.gguf", version: "X", metadata: meta, runtimeParams: base, isAvailable: false, filePath: nil)
+        let (params, out) = await AutotuneService.shared.recommendForTest(spec: spec, base: base, timeoutSeconds: 1.0, trace: false, injectedHasher: { "h" }, injectedDeviceId: { "d" })
+        guard out.usedFallback && !out.timedOut && !out.cacheHit else {
+            print("❌ Expected unknown-quant fallback without timeout/cacheHit")
+            return false
+        }
+        // Ensure context not exceeding model max
+        guard params.nCtx <= meta.contextLength else {
+            print("❌ nCtx exceeds model max after fallback")
+            return false
+        }
+        print("✅ Unknown quantization fallback applied")
         return true
     }
 }

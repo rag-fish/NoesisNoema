@@ -143,6 +143,9 @@ class ModelManager {
         self.currentModelSpec = modelSpec
         
         print("[ModelManager] Switched to model: \(modelSpec.name) (\(modelSpec.id))")
+        
+        // Kick off background autotune (non-blocking)
+        self.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.5, completion: nil)
     }
     
     /// Legacy model mapping for backward compatibility
@@ -238,6 +241,30 @@ class ModelManager {
     /// This method should be implemented to handle different model types.
     func loadModel(from file: Any) {
         // TODO: Implement if needed.
+    }
+
+    /// Background autotune for the current model. Does not block the caller.
+    /// - Parameters:
+    ///   - trace: Enable detailed decision logs.
+    ///   - timeoutSeconds: Max seconds to wait before fallback is returned.
+    ///   - completion: Optional callback invoked on main queue with outcome.
+    func autotuneCurrentModelAsync(trace: Bool = false,
+                                   timeoutSeconds: Double = 3.0,
+                                   completion: ((AutotuneOutcome) -> Void)?) {
+        guard let spec = self.currentModelSpec else {
+            completion?(AutotuneOutcome(cacheHit: false, timedOut: false, usedFallback: true, warning: "No current model"))
+            return
+        }
+        Task {
+            let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: timeoutSeconds, trace: trace)
+            // Apply recommended params to the current spec
+            var updated = spec
+            updated.runtimeParams = params
+            self.currentModelSpec = updated
+            if let completion {
+                await MainActor.run { completion(outcome) }
+            }
+        }
     }
 
     static let shared = ModelManager()
