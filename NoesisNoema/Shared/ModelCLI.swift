@@ -144,9 +144,7 @@ struct ModelCLI {
     
     /// Handle 'nn model test' command
     private static func handleTestCommand(_ args: [String]) async -> Int {
-        print("Running model registry tests...")
-        await ModelRegistryTests.runTests()
-        return 0
+        return await TestRunner.runAllTests()
     }
     
     /// Print CLI usage information
