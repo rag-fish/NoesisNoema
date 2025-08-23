@@ -154,8 +154,7 @@ actor ModelRegistry {
     /// Find model specifications by architecture
     func findModelSpecs(withArchitecture architecture: String) -> [ModelSpec] {
         return getAllModelSpecs().filter { spec in
-            spec.metadata.architecture.lowercased() == architecture.lowercased()
-        }
+            spec.metadata.architecture.lowercased() == architecture.lowercased() }
     }
     
     /// Scan for GGUF files in standard locations and register them
@@ -333,14 +332,21 @@ actor ModelRegistry {
             paths.append("\(resourcePath)/Resources/Models")
         }
         
-        // User directories
-        if let homeDir = fileManager.homeDirectoryForCurrentUser.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)?.removingPercentEncoding {
+        // User directories (platform-aware)
+        let homeDirPath: String? = {
+            #if os(iOS)
+            return NSHomeDirectory()
+            #else
+            return fileManager.homeDirectoryForCurrentUser.path
+            #endif
+        }()
+        if let homeDir = homeDirPath {
             paths.append("\(homeDir)/Downloads")
             paths.append("\(homeDir)/Documents/Models")
             paths.append("\(homeDir)/.noesisnoema/models")
         }
         
-        // System-wide model directories
+        // System-wide model directories (desktop-oriented; filtered by existence below)
         paths.append("/usr/local/share/noesisnoema/models")
         paths.append("/opt/noesisnoema/models")
         
