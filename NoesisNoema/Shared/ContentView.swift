@@ -27,6 +27,9 @@ struct ContentView: View {
     @State private var recommendedReady: Bool = false
     @State private var autotuneWarning: String? = nil
 
+    // ランタイムモード（推奨/上書き）
+    @State private var runtimeMode: RuntimeMode = ModelManager.shared.getRuntimeMode()
+
     // これらは計算型プロパティにして初期化時の隔離制約を回避
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
@@ -106,6 +109,7 @@ struct ContentView: View {
                                         autotuneWarning = nil
                                         isAutotuningModel = true
                                         ModelManager.shared.switchLLMModel(name: newValue)
+                                        runtimeMode = ModelManager.shared.getRuntimeMode()
                                         selectedLLMPreset = "auto"
                                         ModelManager.shared.setLLMPreset(name: "auto")
                                         ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
@@ -117,14 +121,46 @@ struct ContentView: View {
                                     // インラインスピナー/バッジ
                                     if isAutotuningModel {
                                         ProgressView().scaleEffect(0.7).padding(.leading, 8)
-                                    } else if recommendedReady {
-                                        Text("Recommended")
-                                            .font(.caption2)
-                                            .foregroundStyle(.green)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.green.opacity(0.12), in: Capsule())
+                                    } else {
+                                        if runtimeMode == .override {
+                                            Text("Custom")
+                                                .font(.caption2)
+                                                .foregroundStyle(.orange)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.orange.opacity(0.12), in: Capsule())
+                                        } else if recommendedReady {
+                                            Text("Recommended")
+                                                .font(.caption2)
+                                                .foregroundStyle(.green)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.12), in: Capsule())
+                                        }
                                     }
+                                }
+                                // ランタイムモード（推奨/上書き） + リセット
+                                HStack(spacing: 12) {
+                                    Picker("Runtime Params", selection: $runtimeMode) {
+                                        Text("Use recommended").tag(RuntimeMode.recommended)
+                                        Text("Override").tag(RuntimeMode.override)
+                                    }
+                                    .pickerStyle(.radioGroup)
+                                    .onChange(of: runtimeMode) { oldValue, newValue in
+                                        ModelManager.shared.setRuntimeMode(newValue)
+                                        // バッジ反映
+                                        if newValue == .recommended { recommendedReady = true }
+                                    }
+                                    .accessibilityLabel(Text("Runtime parameters mode"))
+                                    
+                                    Button("Reset") {
+                                        ModelManager.shared.resetToRecommended()
+                                        runtimeMode = .recommended
+                                        recommendedReady = true
+                                    }
+                                    .disabled(runtimeMode != .override)
+                                    .keyboardShortcut(.init("r"), modifiers: [.command])
+                                    .accessibilityLabel(Text("Reset to recommended parameters"))
                                 }
                                 // 警告（非ブロッキング）
                                 if let warn = autotuneWarning {
@@ -202,6 +238,9 @@ struct ContentView: View {
                                 .padding(.horizontal)
                         }
                         .padding(.vertical)
+                        .onAppear {
+                            runtimeMode = ModelManager.shared.getRuntimeMode()
+                        }
                     }
                     .background(.clear)
                 }

@@ -1,10 +1,10 @@
 // !$*UTF8*$!
 {
-    archiveVersion = 1;
-    classes = {
-    };
-    objectVersion = 77;
-    objects = {
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
 
 /* Begin PBXBuildFile section */
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
@@ -60,6 +60,7 @@
 				Assets.xcassets,
 				Frameworks/llama_macos.xcframework,
 				"Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
+				"Resources/Models/llama3-8b.gguf",
 				Shared/ContentView.swift,
 				Shared/NoesisNoemaApp.swift,
 			);
@@ -68,12 +69,14 @@
 		F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				ModelRegistry/AutotuneService.swift,
 				ModelRegistry/GGUFReader.swift,
 				ModelRegistry/HardwareProfile.swift,
 				ModelRegistry/ModelCLI.swift,
 				ModelRegistry/ModelRegistry.swift,
 				ModelRegistry/ModelSpec.swift,
 				ModelRegistry/RegistryJSON.swift,
+				ModelRegistry/RegistryPersistence.swift,
 				ModelRegistry/TestRunner.swift,
 				"Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
 				"Resources/Models/Jan-v1-4B-Q4_K_M.gguf",
@@ -214,194 +217,182 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-        F41FD01A2E2A466F00909132 /* NoesisNoema */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */;
-            buildPhases = (
-                F41FD0172E2A466F00909132 /* Sources */,
-                F41FD0182E2A466F00909132 /* Frameworks */,
-                F41FD0192E2A466F00909132 /* Resources */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F41FD01D2E2A466F00909132 /* NoesisNoema */,
-            );
-            name = NoesisNoema;
-            packageProductDependencies = (
-                F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */,
-            );
-            productName = NoesisNoema;
-            productReference = F41FD01B2E2A466F00909132 /* NoesisNoema.app */;
-            productType = "com.apple.product-type.application";
-        };
-        F46088482E2CD45000D4C555 /* LlamaBridgeTest */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */;
-            buildPhases = (
-                F46088452E2CD45000D4C555 /* Sources */,
-                F46088462E2CD45000D4C555 /* Frameworks */,
-                F4F7BAB72E37A7A40018DE75 /* Resources */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
-                // Removed NoesisNoema root sync to avoid pulling UI/ZIPFoundation sources
-            );
-            name = LlamaBridgeTest;
-            packageProductDependencies = (
-            );
-            productName = LlamaBridgeTest;
-            productReference = F46088492E2CD45000D4C555 /* LlamaBridgeTest */;
-            productType = "com.apple.product-type.tool";
-        };
-        F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */;
-            buildPhases = (
-                F4C580F92E4F006000E64194 /* Sources */,
-                F4C580FA2E4F006000E64194 /* Frameworks */,
-                F4C580FB2E4F006000E64194 /* Resources */,
-                F4C581A12E4F900000E64194 /* Embed Frameworks */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F41FD01D2E2A466F00909132 /* NoesisNoema */,
-                F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
-            );
-            name = NoesisNoemaMobile;
-            packageProductDependencies = (
-                F4D1DB532E4F18ED006B902C /* ZIPFoundation */,
-            );
-            productName = NoesisNoemaMobile;
-            productReference = F4C580FD2E4F006000E64194 /* NoesisNoemaMobile.app */;
-            productType = "com.apple.product-type.application";
-        };
+		F41FD01A2E2A466F00909132 /* NoesisNoema */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */;
+			buildPhases = (
+				F41FD0172E2A466F00909132 /* Sources */,
+				F41FD0182E2A466F00909132 /* Frameworks */,
+				F41FD0192E2A466F00909132 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F41FD01D2E2A466F00909132 /* NoesisNoema */,
+			);
+			name = NoesisNoema;
+			packageProductDependencies = (
+				F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */,
+			);
+			productName = NoesisNoema;
+			productReference = F41FD01B2E2A466F00909132 /* NoesisNoema.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F46088482E2CD45000D4C555 /* LlamaBridgeTest */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */;
+			buildPhases = (
+				F46088452E2CD45000D4C555 /* Sources */,
+				F46088462E2CD45000D4C555 /* Frameworks */,
+				F4F7BAB72E37A7A40018DE75 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
+			);
+			name = LlamaBridgeTest;
+			packageProductDependencies = (
+			);
+			productName = LlamaBridgeTest;
+			productReference = F46088492E2CD45000D4C555 /* LlamaBridgeTest */;
+			productType = "com.apple.product-type.tool";
+		};
+		F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */;
+			buildPhases = (
+				F4C580F92E4F006000E64194 /* Sources */,
+				F4C580FA2E4F006000E64194 /* Frameworks */,
+				F4C580FB2E4F006000E64194 /* Resources */,
+				F4C581A12E4F900000E64194 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F41FD01D2E2A466F00909132 /* NoesisNoema */,
+				F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
+			);
+			name = NoesisNoemaMobile;
+			packageProductDependencies = (
+				F4D1DB532E4F18ED006B902C /* ZIPFoundation */,
+			);
+			productName = NoesisNoemaMobile;
+			productReference = F4C580FD2E4F006000E64194 /* NoesisNoemaMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-        F41FD0132E2A466F00909132 /* Project object */ = {
-            isa = PBXProject;
-            attributes = {
-                BuildIndependentTargetsInParallel = 1;
-                LastSwiftUpdateCheck = 1640;
-                LastUpgradeCheck = 1640;
-                TargetAttributes = {
-                    F41FD01A2E2A466F00909132 = {
-                        CreatedOnToolsVersion = 16.4;
-                    };
-                    F46088482E2CD45000D4C555 = {
-                        CreatedOnToolsVersion = 16.4;
-                        LastSwiftMigration = 1640;
-                    };
-                    F4C580FC2E4F006000E64194 = {
-                        CreatedOnToolsVersion = 16.4;
-                    };
-                };
-            };
-            buildConfigurationList = F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */;
-            developmentRegion = en;
-            hasScannedForEncodings = 0;
-            knownRegions = (
-                en,
-                Base,
-            );
-            mainGroup = F41FD0122E2A466F00909132;
-            minimizedProjectReferenceProxies = 1;
-            packageReferences = (
-                F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
-            );
-            preferredProjectObjectVersion = 77;
-            productRefGroup = F41FD01C2E2A466F00909132 /* Products */;
-            projectDirPath = "";
-            projectReferences = (
-                {
-                    ProductGroup = F46083782E2CCDB900D4C555 /* Products */;
-                    ProjectRef = F4607E7A2E2CCDB900D4C555 /* llama.swiftui.xcodeproj */;
-                },
-                {
-                    ProductGroup = F46060D62E2CAA5E00D4C555 /* Products */;
-                    ProjectRef = F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */;
-                },
-                {
-                    ProductGroup = F41D04C72E30FCD40023545E /* Products */;
-                    ProjectRef = F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */;
-                },
-            );
-            projectRoot = "";
-            targets = (
-                F41FD01A2E2A466F00909132 /* NoesisNoema */,
-                F46088482E2CD45000D4C555 /* LlamaBridgeTest */,
-                F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */,
-            );
-        };
+		F41FD0132E2A466F00909132 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					F41FD01A2E2A466F00909132 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					F46088482E2CD45000D4C555 = {
+						CreatedOnToolsVersion = 16.4;
+						LastSwiftMigration = 1640;
+					};
+					F4C580FC2E4F006000E64194 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+				};
+			};
+			buildConfigurationList = F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = F41FD0122E2A466F00909132;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F41FD01C2E2A466F00909132 /* Products */;
+			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = F46083782E2CCDB900D4C555 /* Products */;
+					ProjectRef = F4607E7A2E2CCDB900D4C555 /* llama.swiftui.xcodeproj */;
+				},
+				{
+					ProductGroup = F46060D62E2CAA5E00D4C555 /* Products */;
+					ProjectRef = F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */;
+				},
+				{
+					ProductGroup = F41D04C72E30FCD40023545E /* Products */;
+					ProjectRef = F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */;
+				},
+			);
+			projectRoot = "";
+			targets = (
+				F41FD01A2E2A466F00909132 /* NoesisNoema */,
+				F46088482E2CD45000D4C555 /* LlamaBridgeTest */,
+				F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */,
+			);
+		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-        F41FD0192E2A466F00909132 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4C580FB2E4F006000E64194 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4F7BAB72E37A7A40018DE75 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
+		F41FD0192E2A466F00909132 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F4C580FB2E4F006000E64194 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F4F7BAB72E37A7A40018DE75 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-        F41FD0172E2A466F00909132 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F46088452E2CD45000D4C555 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-                BBBB00012E50000000000001 /* ModelCLI.swift in Sources */,
-                BBBB00022E50000000000001 /* TestRunner.swift in Sources */,
-                BBBB00032E50000000000001 /* ModelRegistry.swift in Sources */,
-                BBBB00042E50000000000001 /* ModelSpec.swift in Sources */,
-                BBBB00052E50000000000001 /* GGUFReader.swift in Sources */,
-                BBBB00062E50000000000001 /* RegistryJSON.swift in Sources */,
-                BBBB00072E50000000000001 /* HardwareProfile.swift in Sources */,
-                BBBB00102E50000000000001 /* LibLlama.swift in Sources */,
-                BBBB00112E50000000000001 /* LlamaState.swift in Sources */,
-                BBBB00122E50000000000001 /* LlamaRuntimeCheck.swift in Sources */,
-                BBBB00132E50000000000001 /* SystemLog.swift in Sources */,
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4C580F92E4F006000E64194 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
+		F41FD0172E2A466F00909132 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F46088452E2CD45000D4C555 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F4C580F92E4F006000E64194 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -736,67 +727,67 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-        F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F41FD0242E2A467000909132 /* Debug */,
-                F41FD0252E2A467000909132 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F41FD0272E2A467000909132 /* Debug */,
-                F41FD0282E2A467000909132 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F460884E2E2CD45000D4C555 /* Debug */,
-                F460884F2E2CD45000D4C555 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F4C581062E4F006800E64194 /* Debug */,
-                F4C581072E4F006800E64194 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
+		F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F41FD0242E2A467000909132 /* Debug */,
+				F41FD0252E2A467000909132 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F41FD0272E2A467000909132 /* Debug */,
+				F41FD0282E2A467000909132 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F460884E2E2CD45000D4C555 /* Debug */,
+				F460884F2E2CD45000D4C555 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F4C581062E4F006800E64194 /* Debug */,
+				F4C581072E4F006800E64194 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-        F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
-            isa = XCRemoteSwiftPackageReference;
-            repositoryURL = "https://github.com/weichsel/ZIPFoundation";
-            requirement = {
-                kind = upToNextMajorVersion;
-                minimumVersion = 0.9.19;
-            };
-        };
+		F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-        F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */ = {
-            isa = XCSwiftPackageProductDependency;
-            package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-            productName = ZIPFoundation;
-        };
-        F4D1DB532E4F18ED006B902C /* ZIPFoundation */ = {
-            isa = XCSwiftPackageProductDependency;
-            package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-            productName = ZIPFoundation;
-        };
+		F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		F4D1DB532E4F18ED006B902C /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
 /* End XCSwiftPackageProductDependency section */
-    };
-    rootObject = F41FD0132E2A466F00909132 /* Project object */;
+	};
+	rootObject = F41FD0132E2A466F00909132 /* Project object */;
 }

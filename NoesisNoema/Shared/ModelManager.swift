@@ -11,6 +11,9 @@ class ModelManager {
     /// The current model specification from the registry
     private(set) var currentModelSpec: ModelSpec?
 
+    /// Current runtime mode (recommended or override)
+    private(set) var runtimeMode: RuntimeMode = .recommended
+
     /// LLM generation preset (auto or specific). Exposed to UI.
     private(set) var currentLLMPreset: String = "auto" // auto|factual|balanced|creative|json|code
 
@@ -55,6 +58,9 @@ class ModelManager {
         }
     }
     
+    /// Tests can disable background autotune to avoid flakiness
+    static var disableAutotuneForTests: Bool = false
+
     /// Get available LLM model names (synchronous snapshot for UI)
     var availableLLMModels: [String] {
         return cachedLLMModelNames
@@ -70,17 +76,51 @@ class ModelManager {
         await ModelRegistry.shared.scanForModels()
         await ModelRegistry.shared.updateModelAvailability()
         
-        // Try to set current model spec based on current LLM model
-        let preferred = await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
+        // Load last selected model from persistence if available
+        let lastSelected = await RegistryPersistence.shared.getLastSelectedModelId()
+        var preferred: ModelSpec?
+        if let lastSelected, let loaded = await ModelRegistry.shared.getModelSpec(id: lastSelected) {
+            preferred = loaded
+        } else {
+            preferred = await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
+        }
+        if preferred == nil {
+            let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
+            if let first = allSpecs.first { preferred = first }
+        }
         if let preferred {
             self.currentModelSpec = preferred
-        } else {
-            let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
-            if let first = allSpecs.first { self.currentModelSpec = first }
+            self.currentLLMModel = LLMModel(name: preferred.name, modelFile: preferred.modelFile, version: preferred.version)
+            // Apply persisted mode/params
+            await applyPersistedState(for: preferred.id, fallbackSpec: preferred)
         }
         
         // Update cached model lists for UI
         await self.updateCachedRegistrySnapshot()
+    }
+
+    /// Apply persisted mode and runtime params for a model id
+    private func applyPersistedState(for modelId: String, fallbackSpec: ModelSpec) async {
+        if let rec = await RegistryPersistence.shared.getRecord(for: modelId) {
+            self.runtimeMode = rec.mode
+            switch rec.mode {
+            case .recommended:
+                var updated = fallbackSpec
+                updated.runtimeParams = rec.recommended
+                self.currentModelSpec = updated
+            case .override:
+                var updated = fallbackSpec
+                if let ov = rec.overrideParams { updated.runtimeParams = ov }
+                self.currentModelSpec = updated
+            }
+        } else {
+            // Seed persistence with current tuned params as recommended
+            let seed = ModelRuntimeRecord(recommended: fallbackSpec.runtimeParams, overrideParams: nil, mode: .recommended)
+            await RegistryPersistence.shared.updateRecord(modelId: modelId) { $0 = seed }
+            self.runtimeMode = .recommended
+        }
+        // Remember as last selected
+        await RegistryPersistence.shared.setLastSelectedModel(id: modelId)
     }
 
     /// Update cached LLM model lists from registry (available only)
@@ -144,8 +184,13 @@ class ModelManager {
         
         print("[ModelManager] Switched to model: \(modelSpec.name) (\(modelSpec.id))")
         
+        // Apply persisted runtime mode/params if any
+        await applyPersistedState(for: modelSpec.id, fallbackSpec: modelSpec)
+        
         // Kick off background autotune (non-blocking)
-        self.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.5, completion: nil)
+        if !Self.disableAutotuneForTests {
+            self.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.5, completion: nil)
+        }
     }
     
     /// Legacy model mapping for backward compatibility
@@ -257,13 +302,101 @@ class ModelManager {
         }
         Task {
             let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: timeoutSeconds, trace: trace)
-            // Apply recommended params to the current spec
-            var updated = spec
-            updated.runtimeParams = params
-            self.currentModelSpec = updated
+            // Persist recommended params regardless of mode
+            await RegistryPersistence.shared.updateRecord(modelId: spec.id) { rec in
+                if rec == nil {
+                    rec = ModelRuntimeRecord(recommended: params, overrideParams: nil, mode: .recommended)
+                } else {
+                    rec!.recommended = params
+                }
+            }
+            
+            // Apply to current spec only if in recommended mode
+            if self.runtimeMode == .recommended {
+                var updated = spec
+                updated.runtimeParams = params
+                self.currentModelSpec = updated
+            }
+            
             if let completion {
                 await MainActor.run { completion(outcome) }
             }
+        }
+    }
+
+    // MARK: - Runtime mode and overrides
+
+    func getRuntimeMode() -> RuntimeMode { runtimeMode }
+
+    func setRuntimeMode(_ mode: RuntimeMode) {
+        Task { await setRuntimeModeAsync(mode) }
+    }
+
+    @discardableResult
+    func setRuntimeModeAsync(_ mode: RuntimeMode) async -> Void {
+        guard let spec = self.currentModelSpec else { return }
+        self.runtimeMode = mode
+        await RegistryPersistence.shared.updateRecord(modelId: spec.id) { rec in
+            if rec == nil {
+                rec = ModelRuntimeRecord(recommended: spec.runtimeParams, overrideParams: nil, mode: mode)
+            } else {
+                rec!.mode = mode
+            }
+        }
+        // Apply params according to mode
+        if let rec = await RegistryPersistence.shared.getRecord(for: spec.id) {
+            var updated = spec
+            switch mode {
+            case .recommended:
+                updated.runtimeParams = rec.recommended
+            case .override:
+                if let ov = rec.overrideParams { updated.runtimeParams = ov }
+            }
+            self.currentModelSpec = updated
+        }
+    }
+
+    func updateOverrideParams(_ params: RuntimeParams) {
+        Task { await updateOverrideParamsAsync(params) }
+    }
+
+    func updateOverrideParamsAsync(_ params: RuntimeParams) async {
+        guard let spec = self.currentModelSpec else { return }
+        await RegistryPersistence.shared.updateRecord(modelId: spec.id) { rec in
+            if rec == nil {
+                rec = ModelRuntimeRecord(recommended: spec.runtimeParams, overrideParams: params, mode: .override)
+            } else {
+                rec!.overrideParams = params
+                rec!.mode = .override
+            }
+        }
+        // Apply immediately if in override mode
+        if self.runtimeMode == .override {
+            var updated = spec
+            updated.runtimeParams = params
+            self.currentModelSpec = updated
+        }
+    }
+
+    func resetToRecommended() {
+        Task { await resetToRecommendedAsync() }
+    }
+
+    func resetToRecommendedAsync() async {
+        guard let spec = self.currentModelSpec else { return }
+        self.runtimeMode = .recommended
+        await RegistryPersistence.shared.updateRecord(modelId: spec.id) { rec in
+            if rec == nil {
+                rec = ModelRuntimeRecord(recommended: spec.runtimeParams, overrideParams: nil, mode: .recommended)
+            } else {
+                rec!.mode = .recommended
+                // Keep overrideParams but not used
+            }
+        }
+        if let rec = await RegistryPersistence.shared.getRecord(for: spec.id) {
+            var updated = spec
+            updated.runtimeParams = rec.recommended
+            self.currentModelSpec = updated
         }
     }
 
