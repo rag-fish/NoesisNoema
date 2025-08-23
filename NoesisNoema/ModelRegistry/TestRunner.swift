@@ -59,6 +59,14 @@ class TestRunner {
         // Test 11: Unknown quantization fallback
         print("\n🔬 Test 11: Unknown Quantization Fallback")
         allTestsPassed = await testUnknownQuantFallback() && allTestsPassed
+
+        // Test 12: Persistence across restart
+        print("\n🔬 Test 12: Persistence Across Restart")
+        allTestsPassed = await testPersistenceAcrossRestart() && allTestsPassed
+
+        // Test 13: Reset restores recommended
+        print("\n🔬 Test 13: Reset Restores Recommended")
+        allTestsPassed = await testResetRestoresRecommended() && allTestsPassed
         
         // Summary
         print("\n" + String(repeating: "=", count: 50))
@@ -466,6 +474,79 @@ class TestRunner {
             return false
         }
         print("✅ Unknown quantization fallback applied")
+        return true
+    }
+
+    /// Test 12: Settings persist after restart (simulated via cache clear)
+    private static func testPersistenceAcrossRestart() async -> Bool {
+        // Use isolated temp directory
+        let tmpDir = URL(fileURLWithPath: "/tmp/nn_persist_\(UUID().uuidString)", isDirectory: true)
+        RegistryPersistence.baseDirectoryOverride = tmpDir
+        await RegistryPersistence.shared.wipe()
+        await RegistryPersistence.shared.clearCache()
+        
+        // Prepare a model id and two distinct params
+        let modelId = "jan-v1-4b"
+        var recommended = RuntimeParams.oomSafeDefaults()
+        recommended.nCtx = 4096
+        var overrideP = recommended
+        overrideP.nCtx = 1024
+        
+        // Save a record
+        await RegistryPersistence.shared.updateRecord(modelId: modelId) { rec in
+            rec = ModelRuntimeRecord(recommended: recommended, overrideParams: overrideP, mode: .override)
+        }
+        await RegistryPersistence.shared.setLastSelectedModel(id: modelId)
+        
+        // Simulate restart: clear cache then load
+        await RegistryPersistence.shared.clearCache()
+        guard let rec = await RegistryPersistence.shared.getRecord(for: modelId) else {
+            print("❌ Failed to load persisted record")
+            return false
+        }
+        guard let last = await RegistryPersistence.shared.getLastSelectedModelId(), last == modelId else {
+            print("❌ Last selected model id not persisted correctly")
+            return false
+        }
+        guard rec.mode == .override, let ov = rec.overrideParams, ov.nCtx == 1024, rec.recommended.nCtx == 4096 else {
+            print("❌ Persisted fields mismatch (mode/override/recommended)")
+            return false
+        }
+        print("✅ Persistence works across restart (simulated)")
+        return true
+    }
+
+    /// Test 13: Reset should switch to recommended and keep value
+    private static func testResetRestoresRecommended() async -> Bool {
+        let tmpDir = URL(fileURLWithPath: "/tmp/nn_persist_\(UUID().uuidString)", isDirectory: true)
+        RegistryPersistence.baseDirectoryOverride = tmpDir
+        await RegistryPersistence.shared.wipe()
+        await RegistryPersistence.shared.clearCache()
+        
+        let modelId = "llama-3-8b"
+        var recommended = RuntimeParams.oomSafeDefaults()
+        recommended.nCtx = 2048
+        var overrideP = recommended
+        overrideP.nCtx = 512
+        
+        await RegistryPersistence.shared.updateRecord(modelId: modelId) { rec in
+            rec = ModelRuntimeRecord(recommended: recommended, overrideParams: overrideP, mode: .override)
+        }
+        // Reset behavior: set mode to recommended
+        await RegistryPersistence.shared.updateRecord(modelId: modelId) { rec in
+            if rec == nil { rec = ModelRuntimeRecord(recommended: recommended, overrideParams: nil, mode: .recommended) }
+            else { rec!.mode = .recommended }
+        }
+        await RegistryPersistence.shared.clearCache()
+        guard let rec = await RegistryPersistence.shared.getRecord(for: modelId) else {
+            print("❌ Failed to reload record after reset")
+            return false
+        }
+        guard rec.mode == .recommended && rec.recommended.nCtx == 2048 else {
+            print("❌ Reset did not restore recommended values")
+            return false
+        }
+        print("✅ Reset switches back to recommended")
         return true
     }
 }

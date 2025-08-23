@@ -24,6 +24,9 @@ struct ContentView: View {
     @State private var recommendedReady: Bool = false
     @State private var autotuneWarning: String? = nil
 
+    // ランタイムモード（推奨/上書き）
+    @State private var runtimeMode: RuntimeMode = ModelManager.shared.getRuntimeMode()
+
     @State private var showImporter = false
     @State private var showSplash = true
     @FocusState private var questionFocused: Bool
@@ -60,6 +63,7 @@ struct ContentView: View {
                                 autotuneWarning = nil
                                 isAutotuningModel = true
                                 ModelManager.shared.switchLLMModel(name: newValue)
+                                runtimeMode = ModelManager.shared.getRuntimeMode()
                                 // モデル変更時はプリセットを auto に戻す
                                 selectedLLMPreset = "auto"
                                 ModelManager.shared.setLLMPreset(name: "auto")
@@ -71,15 +75,46 @@ struct ContentView: View {
                             }
                             if isAutotuningModel {
                                 ProgressView().scaleEffect(0.8)
-                            } else if recommendedReady {
-                                Text("Recommended")
-                                    .font(.caption2)
-                                    .foregroundStyle(.green)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.green.opacity(0.12), in: Capsule())
+                            } else {
+                                if runtimeMode == .override {
+                                    Text("Custom")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.orange.opacity(0.12), in: Capsule())
+                                } else if recommendedReady {
+                                    Text("Recommended")
+                                        .font(.caption2)
+                                        .foregroundStyle(.green)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.green.opacity(0.12), in: Capsule())
+                                }
                             }
                         }
+                    }
+
+                    // ランタイムモード（推奨/上書き） + リセット
+                    HStack(spacing: 12) {
+                        Picker("Runtime Params", selection: $runtimeMode) {
+                            Text("Use recommended").tag(RuntimeMode.recommended)
+                            Text("Override").tag(RuntimeMode.override)
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .onChange(of: runtimeMode) { oldValue, newValue in
+                            ModelManager.shared.setRuntimeMode(newValue)
+                            if newValue == .recommended { recommendedReady = true }
+                        }
+                        .accessibilityLabel(Text("Runtime parameters mode"))
+
+                        Button("Reset") {
+                            ModelManager.shared.resetToRecommended()
+                            runtimeMode = .recommended
+                            recommendedReady = true
+                        }
+                        .disabled(runtimeMode != .override)
+                        .accessibilityLabel(Text("Reset to recommended parameters"))
                     }
 
                     // 新規: LLM Preset ピッカー（プルダウン）
@@ -155,6 +190,7 @@ struct ContentView: View {
                     }
                 }
                 .padding(.horizontal)
+                .onAppear { runtimeMode = ModelManager.shared.getRuntimeMode() }
                 // 背景タップでキーボード閉じる
                 .contentShape(Rectangle())
                 .onTapGesture { questionFocused = false }
