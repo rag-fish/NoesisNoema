@@ -286,48 +286,76 @@ struct ModelSpec: Codable, Sendable, Identifiable {
         )
     }
     
-    /// Auto-tune runtime parameters based on model metadata and system capabilities
+    /// Auto-tune runtime parameters based on model metadata and system capabilities (includes VRAM/quantization mapping)
     static func autoTuneParameters(metadata: GGUFMetadata, baseParams: RuntimeParams) -> RuntimeParams {
+        // probe hardware once
+        let hw = HardwareProbe.probe()
+        return autoTuneParameters(metadata: metadata, baseParams: baseParams, hardware: hw)
+    }
+    
+    /// Auto-tune with explicit hardware profile (for tests)
+    static func autoTuneParameters(metadata: GGUFMetadata, baseParams: RuntimeParams, hardware: HardwareProfile) -> RuntimeParams {
         var params = baseParams
         
-        // Adjust context length based on model's capability
+        // Threads from CPU cores (cap reasonable range)
+        params.nThreads = Int32(min(max(2, hardware.cpuCores), 12))
+        
+        // Respect model's max context
         params.nCtx = min(params.nCtx, metadata.contextLength)
         
-        // Adjust batch size based on model size
+        // Size buckets adjust batch and GPU layers ceiling
         if metadata.parameterCount > 20.0 {
-            // Large models (>20B parameters) - reduce batch size
             params.nBatch = min(params.nBatch, 256)
-            params.nGpuLayers = min(params.nGpuLayers, 40) // Conservative GPU offloading
         } else if metadata.parameterCount > 7.0 {
-            // Medium models (7-20B parameters)
             params.nBatch = min(params.nBatch, 512)
-            params.nGpuLayers = min(params.nGpuLayers, 80)
         }
-        // Small models (<7B) keep default settings
         
-        // Adjust based on quantization
-        switch metadata.quantization {
-        case let q where q.contains("Q2"):
-            // Lower quality quantization - can use larger batch
-            params.nBatch = min(params.nBatch * 2, 1024)
-        case let q where q.contains("Q8") || q.contains("Q6"):
-            // Higher quality quantization - reduce batch to fit in memory
+        // Quantization-aware batch adjustment
+        let quantU = metadata.quantization.uppercased()
+        if quantU.hasPrefix("Q8") {
             params.nBatch = max(params.nBatch / 2, 128)
-        default:
-            break
+        } else if quantU.hasPrefix("Q6") || quantU.hasPrefix("Q5") {
+            params.nBatch = max(params.nBatch * 3 / 4, 128)
+        } else if quantU.hasPrefix("Q3") {
+            params.nBatch = min(params.nBatch * 2, 1024)
         }
         
-        // Enable flash attention if supported
+        // Compute GPU layers from VRAM and quantization
+        let suggestedGpuLayers = computeGpuLayers(vramGB: hardware.vramTotalGB, quant: quantU)
+        if params.nGpuLayers == 0 || Int(params.nGpuLayers) > suggestedGpuLayers {
+            params.nGpuLayers = Int32(suggestedGpuLayers)
+        }
+        
+        // Flash attention
         params.useFlashAttention = metadata.supportsFlashAttention
         
-        // Set memory limit based on model size with safety margin
+        // Memory limit: ~2x model size unless lower already set
         let modelSizeMB = metadata.modelSizeBytes / (1024 * 1024)
-        let recommendedMemory = modelSizeMB * 2 // 2x model size for safety
+        let recommendedMemory = modelSizeMB * 2
         if params.memoryLimitMB == 0 || params.memoryLimitMB > recommendedMemory {
             params.memoryLimitMB = recommendedMemory
         }
         
         return params
+    }
+    
+    /// Suggest GPU layers from VRAM (GiB) and quantization
+    private static func computeGpuLayers(vramGB: Double, quant: String) -> Int {
+        var base: Int
+        if vramGB >= 24 { base = 30 }
+        else if vramGB >= 16 { base = 20 }
+        else if vramGB >= 8 { base = 10 }
+        else if vramGB >= 4 { base = 4 }
+        else { base = 0 }
+        
+        if quant.hasPrefix("Q8") {
+            base = max(0, base - 8)
+        } else if quant.hasPrefix("Q6") || quant.hasPrefix("Q5") {
+            base = max(0, base - 4)
+        } else if quant.hasPrefix("Q3") {
+            base += 4
+        }
+        return base
     }
     
     /// Generate appropriate tags based on model metadata

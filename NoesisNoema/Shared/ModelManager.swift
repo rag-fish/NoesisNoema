@@ -14,6 +14,22 @@ class ModelManager {
     /// LLM generation preset (auto or specific). Exposed to UI.
     private(set) var currentLLMPreset: String = "auto" // auto|factual|balanced|creative|json|code
 
+    /// Cached LLM model names/ids for synchronous UI access
+    private var cachedLLMModelNames: [String] = [
+        "Jan-V1-4B",
+        "Llama-3",
+        "Phi-3-mini",
+        "Gemma-2B",
+        "GPT-OSS-20B"
+    ]
+    private var cachedLLMModelIds: [String] = [
+        "jan-v1-4b",
+        "llama-3-8b",
+        "phi-3-mini",
+        "gemma-2b",
+        "gpt-oss-20b"
+    ]
+
     /// The list of available embedding model names.
     /// Intended for use in UI dropdowns for embedding model selection in ContentView.
     let availableEmbeddingModels: [String] = [
@@ -39,20 +55,14 @@ class ModelManager {
         }
     }
     
-    /// Get available LLM model names from the registry
+    /// Get available LLM model names (synchronous snapshot for UI)
     var availableLLMModels: [String] {
-        get async {
-            let specs = await ModelRegistry.shared.getAvailableModelSpecs()
-            return specs.map { $0.name }
-        }
+        return cachedLLMModelNames
     }
     
-    /// Get available LLM model IDs from the registry
+    /// Get available LLM model IDs (synchronous snapshot for UI)
     var availableLLMModelIds: [String] {
-        get async {
-            let specs = await ModelRegistry.shared.getAvailableModelSpecs()
-            return specs.map { $0.id }
-        }
+        return cachedLLMModelIds
     }
     
     /// Initialize the model registry
@@ -61,10 +71,23 @@ class ModelManager {
         await ModelRegistry.shared.updateModelAvailability()
         
         // Try to set current model spec based on current LLM model
-        if let spec = await ModelRegistry.shared.getModelSpec(id: "jan_v1_4b") ?? 
-                     await ModelRegistry.shared.getAllModelSpecs().first {
-            self.currentModelSpec = spec
+        let preferred = await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
+        if let preferred {
+            self.currentModelSpec = preferred
+        } else {
+            let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
+            if let first = allSpecs.first { self.currentModelSpec = first }
         }
+        
+        // Update cached model lists for UI
+        await self.updateCachedRegistrySnapshot()
+    }
+
+    /// Update cached LLM model lists from registry (available only)
+    private func updateCachedRegistrySnapshot() async {
+        let specs = await ModelRegistry.shared.getAvailableModelSpecs()
+        self.cachedLLMModelNames = specs.map { $0.name }
+        self.cachedLLMModelIds = specs.map { $0.id }
     }
 
     /// Switches the current embedding model to the specified name, if available.
@@ -83,6 +106,11 @@ class ModelManager {
         Task {
             await self.switchLLMModelAsync(identifier: identifier)
         }
+    }
+
+    /// Backward-compatible wrapper for callers using the old external label 'name'.
+    func switchLLMModel(name: String) {
+        switchLLMModel(identifier: name)
     }
     
     /// Async version of switchLLMModel that uses the model registry
@@ -121,15 +149,15 @@ class ModelManager {
     private func getLegacyModelSpec(name: String) async -> ModelSpec? {
         switch name {
         case "Jan-V1-4B":
-            return await ModelRegistry.shared.getModelSpec(id: "jan_v1_4b")
+            return await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
         case "Llama-3":
-            return await ModelRegistry.shared.getModelSpec(id: "llama_3_8b")
+            return await ModelRegistry.shared.getModelSpec(id: "llama-3-8b")
         case "Phi-3-mini":
-            return await ModelRegistry.shared.getModelSpec(id: "phi_3_mini")
+            return await ModelRegistry.shared.getModelSpec(id: "phi-3-mini")
         case "Gemma-2B":
-            return await ModelRegistry.shared.getModelSpec(id: "gemma_2b")
+            return await ModelRegistry.shared.getModelSpec(id: "gemma-2b")
         case "GPT-OSS-20B":
-            return await ModelRegistry.shared.getModelSpec(id: "gpt_oss_20b")
+            return await ModelRegistry.shared.getModelSpec(id: "gpt-oss-20b")
         default:
             return nil
         }
@@ -165,6 +193,9 @@ class ModelManager {
                 self.currentModelSpec = updatedSpec
             }
         }
+        
+        // Update cached lists
+        await self.updateCachedRegistrySnapshot()
     }
 
     /// Generates an embedding for the given text using the current embedding model.
@@ -210,4 +241,4 @@ class ModelManager {
     }
 
     static let shared = ModelManager()
-} // Example usage of the ModelManager
+} // Example usage of the ModelManagerっこう

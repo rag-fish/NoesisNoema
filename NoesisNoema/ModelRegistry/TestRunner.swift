@@ -40,6 +40,14 @@ class TestRunner {
         print("\n🔬 Test 6: Runtime Parameter Optimization")
         allTestsPassed = testRuntimeParameterOptimization() && allTestsPassed
         
+        // Test 7: Registry JSON Loader (validation)
+        print("\n🔬 Test 7: Registry JSON Loader Validation")
+        allTestsPassed = testRegistryJSONLoader() && allTestsPassed
+        
+        // Test 8: M1 Max Autotune Case
+        print("\n🔬 Test 8: M1 Max Autotune Case")
+        allTestsPassed = testM1MaxAutotune() && allTestsPassed
+        
         // Summary
         print("\n" + String(repeating: "=", count: 50))
         if allTestsPassed {
@@ -53,112 +61,100 @@ class TestRunner {
     
     /// Test OOM-safe defaults
     private static func testOOMSafeDefaults() -> Bool {
-        do {
-            let params = RuntimeParams.oomSafeDefaults()
-            
-            // Basic validation
-            guard params.nThreads > 0 && params.nThreads <= 16 else {
-                print("❌ Invalid thread count: \(params.nThreads)")
-                return false
-            }
-            
-            guard params.nCtx >= 1024 && params.nCtx <= 32768 else {
-                print("❌ Invalid context size: \(params.nCtx)")
-                return false
-            }
-            
-            guard params.nBatch > 0 && params.nBatch <= 2048 else {
-                print("❌ Invalid batch size: \(params.nBatch)")
-                return false
-            }
-            
-            guard params.memoryLimitMB > 512 else {
-                print("❌ Memory limit too low: \(params.memoryLimitMB)")
-                return false
-            }
-            
-            guard params.temperature > 0 && params.temperature <= 2.0 else {
-                print("❌ Invalid temperature: \(params.temperature)")
-                return false
-            }
-            
-            print("✅ OOM-safe defaults are valid")
-            print("   Threads: \(params.nThreads), Context: \(params.nCtx), Batch: \(params.nBatch)")
-            print("   Memory limit: \(params.memoryLimitMB) MB")
-            return true
-            
-        } catch {
-            print("❌ Error testing OOM-safe defaults: \(error)")
+        let params = RuntimeParams.oomSafeDefaults()
+        
+        // Basic validation
+        guard params.nThreads > 0 && params.nThreads <= 16 else {
+            print("❌ Invalid thread count: \(params.nThreads)")
             return false
         }
+        
+        guard params.nCtx >= 1024 && params.nCtx <= 32768 else {
+            print("❌ Invalid context size: \(params.nCtx)")
+            return false
+        }
+        
+        guard params.nBatch > 0 && params.nBatch <= 2048 else {
+            print("❌ Invalid batch size: \(params.nBatch)")
+            return false
+        }
+        
+        guard params.memoryLimitMB > 512 else {
+            print("❌ Memory limit too low: \(params.memoryLimitMB)")
+            return false
+        }
+        
+        guard params.temperature > 0 && params.temperature <= 2.0 else {
+            print("❌ Invalid temperature: \(params.temperature)")
+            return false
+        }
+        
+        print("✅ OOM-safe defaults are valid")
+        print("   Threads: \(params.nThreads), Context: \(params.nCtx), Batch: \(params.nBatch)")
+        print("   Memory limit: \(params.memoryLimitMB) MB")
+        return true
     }
     
     /// Test model spec auto-tuning
     private static func testModelSpecAutoTuning() -> Bool {
-        do {
-            // Test small model (4B)
-            let smallMetadata = GGUFMetadata(
-                architecture: "qwen",
-                parameterCount: 4.0,
-                contextLength: 32768,
-                modelSizeBytes: 2_500_000_000, // 2.5GB
-                quantization: "Q4_K_M",
-                layerCount: 32,
-                embeddingDimension: 2048
-            )
-            
-            let smallSpec = ModelSpec.withAutoTunedParams(
-                id: "test-small",
-                name: "Test Small",
-                modelFile: "test-small.gguf",
-                version: "4B",
-                metadata: smallMetadata
-            )
-            
-            // Test large model (20B)
-            let largeMetadata = GGUFMetadata(
-                architecture: "gpt",
-                parameterCount: 20.0,
-                contextLength: 4096,
-                modelSizeBytes: 12_000_000_000, // 12GB
-                quantization: "Q4_K_S",
-                layerCount: 44,
-                embeddingDimension: 6144
-            )
-            
-            let largeSpec = ModelSpec.withAutoTunedParams(
-                id: "test-large",
-                name: "Test Large",
-                modelFile: "test-large.gguf",
-                version: "20B",
-                metadata: largeMetadata
-            )
-            
-            // Validate auto-tuning worked correctly
-            guard largeSpec.runtimeParams.nBatch <= smallSpec.runtimeParams.nBatch else {
-                print("❌ Large model should have smaller or equal batch size")
-                return false
-            }
-            
-            guard smallSpec.tags.contains("small") else {
-                print("❌ Small model should have 'small' tag")
-                return false
-            }
-            
-            guard largeSpec.tags.contains("large") else {
-                print("❌ Large model should have 'large' tag")
-                return false
-            }
-            
-            print("✅ Model auto-tuning working correctly")
-            print("   Small model batch: \(smallSpec.runtimeParams.nBatch)")
-            print("   Large model batch: \(largeSpec.runtimeParams.nBatch)")
-            return true
-            
-        } catch {
-            print("❌ Error testing model spec auto-tuning: \(error)")
+        // Test small model (4B)
+        let smallMetadata = GGUFMetadata(
+            architecture: "qwen",
+            parameterCount: 4.0,
+            contextLength: 32768,
+            modelSizeBytes: 2_500_000_000, // 2.5GB
+            quantization: "Q4_K_M",
+            layerCount: 32,
+            embeddingDimension: 2048
+        )
+        
+        let smallSpec = ModelSpec.withAutoTunedParams(
+            id: "test-small",
+            name: "Test Small",
+            modelFile: "test-small.gguf",
+            version: "4B",
+            metadata: smallMetadata
+        )
+        
+        // Test large model (20B)
+        let largeMetadata = GGUFMetadata(
+            architecture: "gpt",
+            parameterCount: 20.0,
+            contextLength: 4096,
+            modelSizeBytes: 12_000_000_000, // 12GB
+            quantization: "Q4_K_S",
+            layerCount: 44,
+            embeddingDimension: 6144
+        )
+        
+        let largeSpec = ModelSpec.withAutoTunedParams(
+            id: "test-large",
+            name: "Test Large",
+            modelFile: "test-large.gguf",
+            version: "20B",
+            metadata: largeMetadata
+        )
+        
+        // Validate auto-tuning worked correctly
+        guard largeSpec.runtimeParams.nBatch <= smallSpec.runtimeParams.nBatch else {
+            print("❌ Large model should have smaller or equal batch size")
             return false
         }
+        
+        guard smallSpec.tags.contains("small") else {
+            print("❌ Small model should have 'small' tag")
+            return false
+        }
+        
+        guard largeSpec.tags.contains("large") else {
+            print("❌ Large model should have 'large' tag")
+            return false
+        }
+        
+        print("✅ Model auto-tuning working correctly")
+        print("   Small model batch: \(smallSpec.runtimeParams.nBatch)")
+        print("   Large model batch: \(largeSpec.runtimeParams.nBatch)")
+        return true
     }
     
     /// Test GGUF reader validation
@@ -294,6 +290,79 @@ class TestRunner {
         print("✅ Runtime parameter optimization working")
         print("   Small model batch: \(smallParams.nBatch), GPU layers: \(smallParams.nGpuLayers)")
         print("   Large model batch: \(largeParams.nBatch), GPU layers: \(largeParams.nGpuLayers)")
+        return true
+    }
+    
+    /// Test registry.json loader and validation
+    private static func testRegistryJSONLoader() -> Bool {
+        // Malformed: missing 'models'
+        let badTopLevel = "{" + "\"foo\": []" + "}"
+        do {
+            _ = try RegistryJSONLoader.load(from: badTopLevel)
+            print("❌ Loader should fail when 'models' is missing")
+            return false
+        } catch { /* expected */ }
+        
+        // Entry not object
+        let badEntry = "[1,2,3]"
+        do {
+            _ = try RegistryJSONLoader.load(from: badEntry)
+            print("❌ Loader should fail when entry is not an object")
+            return false
+        } catch { /* expected */ }
+        
+        // Minimal valid
+        let ok = "{" +
+        "\"models\":[{" +
+        "\"id\":\"llama3-8b\"," +
+        "\"name\":\"Llama 3 8B\"," +
+        "\"model_file\":\"llama3-8b.Q4_K_M.gguf\"," +
+        "\"version\":\"8B\"," +
+        "\"quantization\":\"Q4_K_M\"" +
+        "}]" +
+        "}"
+        do {
+            let specs = try RegistryJSONLoader.load(from: ok)
+            guard specs.count == 1, specs[0].id == "llama3-8b" else {
+                print("❌ Minimal valid registry did not parse as expected")
+                return false
+            }
+        } catch {
+            print("❌ Loader failed on minimal valid registry: \(error)")
+            return false
+        }
+        
+        print("✅ Registry JSON loader validation working")
+        return true
+    }
+    
+    /// Test M1 Max hardware case autotune
+    private static func testM1MaxAutotune() -> Bool {
+        // Construct a fake M1 Max profile (Darwin/arm64, unified memory 64GB)
+        let hw = HardwareProfile(os: "Darwin", arch: "arm64", cpuCores: 10, memTotalGB: 64.0, vramTotalGB: 64.0, gpuVendor: "Apple", soc: "Apple M1 Max")
+        let base = RuntimeParams.oomSafeDefaults()
+        let meta = GGUFMetadata(
+            architecture: "qwen",
+            parameterCount: 4.0,
+            contextLength: 32768,
+            modelSizeBytes: 2_500_000_000,
+            quantization: "Q4_K_M"
+        )
+        let tuned = ModelSpec.autoTuneParameters(metadata: meta, baseParams: base, hardware: hw)
+        // Expectations: high threads, GPU layers suggested > 4, context respected <= 32768
+        guard tuned.nThreads >= 4 && tuned.nThreads <= 12 else {
+            print("❌ Unexpected thread count for M1 Max: \(tuned.nThreads)")
+            return false
+        }
+        guard tuned.nGpuLayers >= 4 else {
+            print("❌ Expected some GPU layers on M1 Max, got \(tuned.nGpuLayers)")
+            return false
+        }
+        guard tuned.nCtx <= meta.contextLength else {
+            print("❌ Context exceeds model capability")
+            return false
+        }
+        print("✅ M1 Max autotune behaves as expected (nGpuLayers=\(tuned.nGpuLayers))")
         return true
     }
 }

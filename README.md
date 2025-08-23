@@ -146,7 +146,7 @@ Importer safeguards:
   - Multiline input with placeholder; Return adds a newline (does not send)
   - Only the Ask button can start inference (no accidental double sends)
   - During generation: global overlay lock; all inputs disabled (no duplicate queries)
-  - Tap outside or scroll to dismiss the keyboard
+  - Tap outside or scroll History to dismiss the keyboard
   - QADetail overlays History; close with swipe‑down or ✖︎; answers are text‑selectable and copyable
   - Scroll indicators visible in answers to clarify vertical scroll
 - macOS

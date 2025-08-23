@@ -25,6 +25,18 @@ import NoesisNoema_Shared
 // This assumes the shared files are accessible in the build
 #endif
 
+// Fast path: handle `model` subcommands via shared ModelCLI before running the harness
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == "model" {
+    Task {
+        var subArgs = CommandLine.arguments
+        // remove the 'model' token so that args[1] becomes the actual command (e.g., 'test')
+        subArgs.remove(at: 1)
+        let code = await ModelCLI.handleCommand(subArgs)
+        exit(Int32(code))
+    }
+    dispatchMain()
+}
+
 // MARK: - CLI Args
 struct CLI {
     var modelPath: String?
@@ -243,14 +255,41 @@ let cli0 = parseArgs()
 var cli = cli0
 let fm = FileManager.default
 
-// Check if this is a model management command
-if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == "model" {
-    Task {
-        let exitCode = await ModelCLI.handleCommand(CommandLine.arguments)
-        exit(Int32(exitCode))
-    }
-    dispatchMain()
+// Quick utility: print OOM-like defaults (approx) without app types
+func printDefaultsAndExit() -> Never {
+    let cores = ProcessInfo.processInfo.processorCount
+    let memGB = Double(ProcessInfo.processInfo.physicalMemory) / (1024*1024*1024)
+    let threads = max(1, min(cores - 1, 8))
+    #if os(macOS)
+    let ctx: UInt32 = memGB >= 16 ? 8192 : (memGB >= 8 ? 4096 : 2048)
+    let batch: UInt32 = memGB >= 16 ? 1024 : (memGB >= 8 ? 512 : 256)
+    #else
+    let ctx: UInt32 = memGB >= 8 ? 4096 : (memGB >= 6 ? 2048 : 1024)
+    let batch: UInt32 = memGB >= 8 ? 512 : (memGB >= 6 ? 256 : 128)
+    #endif
+    let gpuLayers = memGB >= 16 ? 999 : (memGB >= 8 ? 80 : 40)
+    let memLimitMB = memGB >= 16 ? 4096 : (memGB >= 8 ? 2048 : 1024)
+    print("📊 OOM-Safe Defaults (approx without app types):")
+    print("   CPU Cores: \(cores)")
+    print(String(format: "   Total Memory: %.1f GB", memGB))
+    print("   → Recommended Threads: \(threads)")
+    print("   → Context Size: \(ctx)")
+    print("   → Batch Size: \(batch)")
+    print("   → Memory Limit: \(memLimitMB) MB")
+    print("   → GPU Layers: \(gpuLayers)")
+    exit(0)
 }
+
+func printDemoAndExit() -> Never {
+    print("🚀 NoesisNoema Model Registry Demonstration (lite)")
+    print(String(repeating: "=", count: 60))
+    print("")
+    printDefaultsAndExit()
+}
+
+// Flag-only modes (no model load)
+if CommandLine.arguments.contains("--defaults") { printDefaultsAndExit() }
+if CommandLine.arguments.contains("--demo") { printDemoAndExit() }
 
 // Resolve model path
 var modelPath: String?

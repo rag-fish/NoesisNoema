@@ -29,6 +29,10 @@ struct ModelCLI {
             return await handleAvailableCommand(Array(args.dropFirst(2)))
         case "test":
             return await handleTestCommand(Array(args.dropFirst(2)))
+        case "defaults":
+            return handleDefaultsCommand()
+        case "demo":
+            return await handleDemoCommand()
         case "help", "-h", "--help":
             printUsage()
             return 0
@@ -77,8 +81,8 @@ struct ModelCLI {
         let showAll = args.contains("--all") || args.contains("-a")
         let showAvailable = args.contains("--available") || !showAll
         
-        let specs = showAvailable ? 
-            await registry.getAvailableModelSpecs() : 
+        let specs = showAvailable ?
+            await registry.getAvailableModelSpecs() :
             await registry.getAllModelSpecs()
         
         if specs.isEmpty {
@@ -96,8 +100,8 @@ struct ModelCLI {
         for spec in specs {
             let status = spec.isAvailable ? "✓" : "✗"
             let paramStr = String(format: "%.1fB", spec.metadata.parameterCount)
-            let sizeStr = spec.metadata.modelSizeBytes > 0 ? 
-                String(format: "%.1f GB", Double(spec.metadata.modelSizeBytes) / (1024 * 1024 * 1024)) : 
+            let sizeStr = spec.metadata.modelSizeBytes > 0 ?
+                String(format: "%.1f GB", Double(spec.metadata.modelSizeBytes) / (1024 * 1024 * 1024)) :
                 "Unknown"
             
             print("\(status) \(spec.id)")
@@ -147,6 +151,77 @@ struct ModelCLI {
         return await TestRunner.runAllTests()
     }
     
+    /// Print OOM-safe defaults
+    private static func handleDefaultsCommand() -> Int {
+        let params = RuntimeParams.oomSafeDefaults()
+        print("📊 OOM-Safe Defaults based on your system:")
+        print("   CPU Cores: \(ProcessInfo.processInfo.processorCount)")
+        let totalGB = Double(ProcessInfo.processInfo.physicalMemory) / (1024*1024*1024)
+        print("   Total Memory: \(String(format: "%.1f GB", totalGB))")
+        print("   → Recommended Threads: \(params.nThreads)")
+        print("   → Context Size: \(params.nCtx)")
+        print("   → Batch Size: \(params.nBatch)")
+        print("   → Memory Limit: \(params.memoryLimitMB) MB")
+        print("   → GPU Layers: \(params.nGpuLayers)")
+        return 0
+    }
+    
+    /// Handle 'nn model demo' command (textual demo of auto-tuning and registry)
+    private static func handleDemoCommand() async -> Int {
+        print("🚀 NoesisNoema Model Registry Demonstration")
+        print(String(repeating: "=", count: 60))
+        print("")
+        _ = handleDefaultsCommand()
+        
+        // Sample models demo
+        let base = RuntimeParams.oomSafeDefaults()
+        let samples: [(String, GGUFMetadata)] = [
+            ("Small Model (Phi-3 Mini)", GGUFMetadata(architecture: "phi3", parameterCount: 3.8, contextLength: 4096, modelSizeBytes: 2_200_000_000, quantization: "Q4_K_M", layerCount: 32, embeddingDimension: 3072)),
+            ("Medium Model (LLaMA-3 8B)", GGUFMetadata(architecture: "llama", parameterCount: 8.0, contextLength: 8192, modelSizeBytes: 4_600_000_000, quantization: "Q4_K_M", layerCount: 32, embeddingDimension: 4096)),
+            ("Large Model (GPT-OSS 20B)", GGUFMetadata(architecture: "gpt", parameterCount: 20.0, contextLength: 4096, modelSizeBytes: 12_000_000_000, quantization: "Q4_K_S", layerCount: 44, embeddingDimension: 6144))
+        ]
+        print("\n🧠 Example Model Specifications:")
+        for (name, meta) in samples {
+            let autoParams = ModelSpec.autoTuneParameters(metadata: meta, baseParams: base)
+            print("\n   \(name):")
+            print("     Parameters: \(String(format: "%.1fB", meta.parameterCount))")
+            print("     File Size: \(String(format: "%.1f GB", Double(meta.modelSizeBytes) / (1024*1024*1024)))")
+            print("     Auto-tuned Settings:")
+            print("       - Context: \(autoParams.nCtx) (max: \(meta.contextLength))")
+            print("       - Batch: \(autoParams.nBatch)")
+            print("       - GPU Layers: \(autoParams.nGpuLayers)")
+            print("       - Memory Limit: \(autoParams.memoryLimitMB) MB")
+        }
+        
+        // Registry preview
+        print("\n📋 Predefined Model Registry:")
+        let registry = ModelRegistry.shared
+        let all = await registry.getAllModelSpecs()
+        for spec in all.prefix(3) {
+            print("\n   \(spec.name) (\(spec.id)):")
+            print("     Architecture: \(spec.metadata.architecture)")
+            print("     Parameters: \(String(format: "%.1fB", spec.metadata.parameterCount))")
+            print("     Quantization: \(spec.metadata.quantization)")
+            print("     Tags: \(spec.tags.joined(separator: ", "))")
+            print("     Runtime: ctx=\(spec.runtimeParams.nCtx), batch=\(spec.runtimeParams.nBatch)")
+        }
+        
+        print("\n💡 Key Benefits:")
+        print("   ✅ Automatic parameter tuning based on GGUF metadata")
+        print("   ✅ OOM-safe defaults prevent memory crashes")
+        print("   ✅ Device-specific optimization (iOS vs macOS)")
+        print("   ✅ Model size-aware batch sizing")
+        print("   ✅ Quantization-aware memory management")
+        
+        print("\n🔧 CLI Usage Examples:")
+        print("   nn model list                    # List available models")
+        print("   nn model info jan-v1-4b         # Show detailed model info")
+        print("   nn model scan /path/to/models    # Scan for GGUF files")
+        print("   nn model test                    # Run functionality tests")
+        
+        return 0
+    }
+    
     /// Print CLI usage information
     private static func printUsage() {
         print("""
@@ -160,6 +235,8 @@ struct ModelCLI {
           scan [directory]   Scan for GGUF models in standard locations or specified directory
           available          List only available models
           test               Run model registry tests
+          defaults           Print OOM-safe default runtime parameters
+          demo               Print a textual demo of auto-tuning and registry
           help               Show this help message
         
         Examples:
@@ -169,6 +246,8 @@ struct ModelCLI {
           nn model scan
           nn model scan /path/to/models
           nn model available
+          nn model defaults
+          nn model demo
         
         Model ID Format:
           Model IDs are lowercase, with hyphens replaced by underscores.
