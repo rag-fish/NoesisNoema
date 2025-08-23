@@ -17,6 +17,14 @@
 
 import Foundation
 
+// Import the shared model management components
+#if canImport(NoesisNoema_Shared)
+import NoesisNoema_Shared
+#else
+// For direct compilation, include the source files
+// This assumes the shared files are accessible in the build
+#endif
+
 // MARK: - CLI Args
 struct CLI {
     var modelPath: String?
@@ -234,6 +242,15 @@ func cleanOutput(_ s: String) -> String {
 let cli0 = parseArgs()
 var cli = cli0
 let fm = FileManager.default
+
+// Check if this is a model management command
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == "model" {
+    Task {
+        let exitCode = await ModelCLI.handleCommand(CommandLine.arguments)
+        exit(Int32(exitCode))
+    }
+    dispatchMain()
+}
 
 // Resolve model path
 var modelPath: String?
