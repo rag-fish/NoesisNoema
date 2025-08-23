@@ -19,6 +19,11 @@ struct ContentView: View {
     // 新規: LLMプリセット選択（iOS）
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
 
+    // 新規: オートチューン状態（iOS）
+    @State private var isAutotuningModel: Bool = false
+    @State private var recommendedReady: Bool = false
+    @State private var autotuneWarning: String? = nil
+
     @State private var showImporter = false
     @State private var showSplash = true
     @FocusState private var questionFocused: Bool
@@ -44,15 +49,36 @@ struct ContentView: View {
 
                         Spacer(minLength: 16)
 
-                        Picker("LLM", selection: $selectedLLMModel) {
-                            ForEach(availableLLMModels, id: \.self) { Text($0) }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                        .onChange(of: selectedLLMModel) { oldValue, newValue in
-                            ModelManager.shared.switchLLMModel(name: newValue)
-                            // モデル変更時はプリセットを auto に戻す
-                            selectedLLMPreset = "auto"
-                            ModelManager.shared.setLLMPreset(name: "auto")
+                        HStack(spacing: 8) {
+                            Picker("LLM", selection: $selectedLLMModel) {
+                                ForEach(availableLLMModels, id: \.self) { Text($0) }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                            .onChange(of: selectedLLMModel) { oldValue, newValue in
+                                // UI: リセット→非同期オートチューン
+                                recommendedReady = false
+                                autotuneWarning = nil
+                                isAutotuningModel = true
+                                ModelManager.shared.switchLLMModel(name: newValue)
+                                // モデル変更時はプリセットを auto に戻す
+                                selectedLLMPreset = "auto"
+                                ModelManager.shared.setLLMPreset(name: "auto")
+                                ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
+                                    isAutotuningModel = false
+                                    recommendedReady = true
+                                    if let w = outcome.warning { autotuneWarning = w }
+                                }
+                            }
+                            if isAutotuningModel {
+                                ProgressView().scaleEffect(0.8)
+                            } else if recommendedReady {
+                                Text("Recommended")
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.green.opacity(0.12), in: Capsule())
+                            }
                         }
                     }
 
@@ -67,6 +93,16 @@ struct ContentView: View {
                         ModelManager.shared.setLLMPreset(name: newValue)
                     }
                     .disabled(isLoading)
+
+                    // 非ブロッキング警告
+                    if let warn = autotuneWarning {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                            Text(warn)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
 
                     // 複数行入力: TextEditor + プレースホルダ + Rounded枠
                     ZStack(alignment: .topLeading) {

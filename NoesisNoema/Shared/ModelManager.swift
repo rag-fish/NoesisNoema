@@ -8,9 +8,27 @@ class ModelManager {
     var currentEmbeddingModel: EmbeddingModel
     /// The currently selected LLM model.
     var currentLLMModel: LLMModel
+    /// The current model specification from the registry
+    private(set) var currentModelSpec: ModelSpec?
 
     /// LLM generation preset (auto or specific). Exposed to UI.
     private(set) var currentLLMPreset: String = "auto" // auto|factual|balanced|creative|json|code
+
+    /// Cached LLM model names/ids for synchronous UI access
+    private var cachedLLMModelNames: [String] = [
+        "Jan-V1-4B",
+        "Llama-3",
+        "Phi-3-mini",
+        "Gemma-2B",
+        "GPT-OSS-20B"
+    ]
+    private var cachedLLMModelIds: [String] = [
+        "jan-v1-4b",
+        "llama-3-8b",
+        "phi-3-mini",
+        "gemma-2b",
+        "gpt-oss-20b"
+    ]
 
     /// The list of available embedding model names.
     /// Intended for use in UI dropdowns for embedding model selection in ContentView.
@@ -19,27 +37,6 @@ class ModelManager {
         "all-MiniLM-L6-v2",
         "LaBSE",
         "sentence-bert-base-ja"
-    ]
-
-    /// The list of available LLM model names.
-    /// Intended for use in UI dropdowns for LLM model selection in ContentView.
-    let availableLLMModels: [String] = [
-        // Align with UI picker options and include Jan-V1-4B
-        "Jan-V1-4B",
-        "Llama-3",
-        "Phi-3-mini",
-        "Gemma-2B",
-        // Add new OSS GPT model
-        "GPT-OSS-20B",
-        // legacy/other options can remain available if needed
-        "default-llm",
-        "llama3-8b",
-        "llama3-70b",
-        "gpt4all",
-        "openchat",
-        "mistral-7b",
-        "phi-2",
-        "tinyllama"
     ]
 
     /// The list of available LLM presets for UI selection.
@@ -51,6 +48,46 @@ class ModelManager {
         self.currentEmbeddingModel = EmbeddingModel(name: "default-embedding")
         // Default LLM -> Jan-V1-4B (bundled under Resources/Models)
         self.currentLLMModel = LLMModel(name: "Jan-V1-4B", modelFile: "Jan-v1-4B-Q4_K_M.gguf", version: "4B")
+        
+        // Initialize model registry in background
+        Task {
+            await self.initializeModelRegistry()
+        }
+    }
+    
+    /// Get available LLM model names (synchronous snapshot for UI)
+    var availableLLMModels: [String] {
+        return cachedLLMModelNames
+    }
+    
+    /// Get available LLM model IDs (synchronous snapshot for UI)
+    var availableLLMModelIds: [String] {
+        return cachedLLMModelIds
+    }
+    
+    /// Initialize the model registry
+    private func initializeModelRegistry() async {
+        await ModelRegistry.shared.scanForModels()
+        await ModelRegistry.shared.updateModelAvailability()
+        
+        // Try to set current model spec based on current LLM model
+        let preferred = await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
+        if let preferred {
+            self.currentModelSpec = preferred
+        } else {
+            let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
+            if let first = allSpecs.first { self.currentModelSpec = first }
+        }
+        
+        // Update cached model lists for UI
+        await self.updateCachedRegistrySnapshot()
+    }
+
+    /// Update cached LLM model lists from registry (available only)
+    private func updateCachedRegistrySnapshot() async {
+        let specs = await ModelRegistry.shared.getAvailableModelSpecs()
+        self.cachedLLMModelNames = specs.map { $0.name }
+        self.cachedLLMModelIds = specs.map { $0.id }
     }
 
     /// Switches the current embedding model to the specified name, if available.
@@ -63,35 +100,70 @@ class ModelManager {
         }
     }
 
-    /// Switches the current LLM model to the specified name, if available.
-    /// - Parameter name: The name of the LLM model to switch to.
+    /// Switches the current LLM model to the specified name or ID, if available.
+    /// - Parameter identifier: The name or ID of the LLM model to switch to.
+    func switchLLMModel(identifier: String) {
+        Task {
+            await self.switchLLMModelAsync(identifier: identifier)
+        }
+    }
+
+    /// Backward-compatible wrapper for callers using the old external label 'name'.
     func switchLLMModel(name: String) {
-        var modelFile = ""
-        var version = ""
+        switchLLMModel(identifier: name)
+    }
+    
+    /// Async version of switchLLMModel that uses the model registry
+    func switchLLMModelAsync(identifier: String) async {
+        // First try to find by ID
+        var spec = await ModelRegistry.shared.getModelSpec(id: identifier.lowercased())
+        
+        // If not found by ID, try to find by name
+        if spec == nil {
+            let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
+            spec = allSpecs.first { $0.name.lowercased() == identifier.lowercased() }
+        }
+        
+        // Fallback to legacy mapping for backward compatibility
+        if spec == nil {
+            spec = await getLegacyModelSpec(name: identifier)
+        }
+        
+        guard let modelSpec = spec else {
+            print("[ModelManager] Model not found: \(identifier)")
+            return
+        }
+        
+        // Update current model and spec
+        self.currentLLMModel = LLMModel(
+            name: modelSpec.name,
+            modelFile: modelSpec.modelFile,
+            version: modelSpec.version
+        )
+        self.currentModelSpec = modelSpec
+        
+        print("[ModelManager] Switched to model: \(modelSpec.name) (\(modelSpec.id))")
+        
+        // Kick off background autotune (non-blocking)
+        self.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.5, completion: nil)
+    }
+    
+    /// Legacy model mapping for backward compatibility
+    private func getLegacyModelSpec(name: String) async -> ModelSpec? {
         switch name {
         case "Jan-V1-4B":
-            modelFile = "Jan-v1-4B-Q4_K_M.gguf"
-            version = "4B"
+            return await ModelRegistry.shared.getModelSpec(id: "jan-v1-4b")
         case "Llama-3":
-            modelFile = "llama3-8b.gguf"
-            version = "8B"
+            return await ModelRegistry.shared.getModelSpec(id: "llama-3-8b")
         case "Phi-3-mini":
-            modelFile = "phi-3-mini.gguf"
-            version = "mini"
+            return await ModelRegistry.shared.getModelSpec(id: "phi-3-mini")
         case "Gemma-2B":
-            modelFile = "gemma-2b.gguf"
-            version = "2B"
+            return await ModelRegistry.shared.getModelSpec(id: "gemma-2b")
         case "GPT-OSS-20B":
-            modelFile = "gpt-oss-20b-Q4_K_S.gguf"
-            version = "20B"
+            return await ModelRegistry.shared.getModelSpec(id: "gpt-oss-20b")
         default:
-            modelFile = ""
-            version = ""
+            return nil
         }
-        if availableLLMModels.contains(name) {
-            self.currentLLMModel = LLMModel(name: name, modelFile: modelFile, version: version)
-        }
-        // Optionally, else: ignore or handle error (not found)
     }
 
     /// Set the current LLM preset (UI-driven). Unknown values fallback to 'auto'.
@@ -103,13 +175,30 @@ class ModelManager {
         }
     }
 
-    /// Stub for importing a new model resource.
-    /// - Parameter file: The file to import (type depends on UI implementation).
-    /// This method should handle loading a new model file (embedding or LLM), register it,
-    /// and update the available model lists for UI selection. The implementation should
-    /// handle validation, file storage, and updating `availableEmbeddingModels` or `availableLLMModels`.
-    func importModelResource(file: Any) {
-        // TODO: Implement model file import, registration, and update model lists.
+    /// Get the current model's runtime parameters
+    func getCurrentRuntimeParams() -> RuntimeParams? {
+        return currentModelSpec?.runtimeParams
+    }
+    
+    /// Get OOM-safe runtime parameters for the current model
+    func getOOMSafeParams() -> RuntimeParams {
+        return currentModelSpec?.runtimeParams ?? RuntimeParams.oomSafeDefaults()
+    }
+    
+    /// Refresh model registry and update availability
+    func refreshModelRegistry() async {
+        await ModelRegistry.shared.scanForModels()
+        await ModelRegistry.shared.updateModelAvailability()
+        
+        // Update current model spec if it exists
+        if let currentSpec = currentModelSpec {
+            if let updatedSpec = await ModelRegistry.shared.getModelSpec(id: currentSpec.id) {
+                self.currentModelSpec = updatedSpec
+            }
+        }
+        
+        // Update cached lists
+        await self.updateCachedRegistrySnapshot()
     }
 
     /// Generates an embedding for the given text using the current embedding model.
@@ -154,5 +243,29 @@ class ModelManager {
         // TODO: Implement if needed.
     }
 
+    /// Background autotune for the current model. Does not block the caller.
+    /// - Parameters:
+    ///   - trace: Enable detailed decision logs.
+    ///   - timeoutSeconds: Max seconds to wait before fallback is returned.
+    ///   - completion: Optional callback invoked on main queue with outcome.
+    func autotuneCurrentModelAsync(trace: Bool = false,
+                                   timeoutSeconds: Double = 3.0,
+                                   completion: ((AutotuneOutcome) -> Void)?) {
+        guard let spec = self.currentModelSpec else {
+            completion?(AutotuneOutcome(cacheHit: false, timedOut: false, usedFallback: true, warning: "No current model"))
+            return
+        }
+        Task {
+            let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: timeoutSeconds, trace: trace)
+            // Apply recommended params to the current spec
+            var updated = spec
+            updated.runtimeParams = params
+            self.currentModelSpec = updated
+            if let completion {
+                await MainActor.run { completion(outcome) }
+            }
+        }
+    }
+
     static let shared = ModelManager()
-} // Example usage of the ModelManager
+} // Example usage of the ModelManagerっこう
