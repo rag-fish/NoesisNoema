@@ -22,10 +22,11 @@ struct ContentView: View {
     @State private var qaHistory: [QAPair] = []
     @State private var selectedQAPair: QAPair? = nil
 
-    let availableEmbeddingModels = ModelManager.shared.availableEmbeddingModels
-    let availableLLMModels = ModelManager.shared.availableLLMModels
+    // これらは計算型プロパティにして初期化時の隔離制約を回避
+    var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
+    var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
     // 新規: プリセット候補
-    let availableLLMPresets = ModelManager.shared.availableLLMPresets
+    var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
 
     var body: some View {
         NavigationSplitView {
