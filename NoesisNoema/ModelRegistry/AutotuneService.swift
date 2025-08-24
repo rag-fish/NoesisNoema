@@ -79,6 +79,7 @@ actor AutotuneService {
                                base: RuntimeParams,
                                timeoutSeconds: Double,
                                trace: Bool,
+                               dryRun: Bool = false,
                                injectedHasher: (() async throws -> String)? = nil,
                                injectedDeviceId: (() -> String)? = nil) async -> (RuntimeParams, AutotuneOutcome) {
         // Trace helper
@@ -102,10 +103,13 @@ actor AutotuneService {
                     let quant = spec.metadata.quantization.uppercased()
                     tlog("quantization=\(quant)")
 
-                    // Compute hash (or injected)
+                    // Compute hash (or injected); dryRun skips file hashing
                     let sha: String
                     if let injectedHasher {
                         sha = try await injectedHasher()
+                    } else if dryRun {
+                        tlog("dry-run: skipping file hashing")
+                        sha = "nofile"
                     } else if let path = spec.filePath {
                         tlog("hashing file: \(path)")
                         sha = try self.sha256Hex(ofFile: path)
@@ -182,9 +186,10 @@ actor AutotuneService {
     ///   - spec: Model specification to tune for.
     ///   - timeoutSeconds: Max seconds before returning fallback (default 3.0).
     ///   - trace: When true, prints step-by-step logs.
-    func recommend(for spec: ModelSpec, timeoutSeconds: Double = 3.0, trace: Bool = false) async -> (RuntimeParams, AutotuneOutcome) {
+    ///   - dryRun: When true, skip any file I/O (hashing) for faster CI.
+    func recommend(for spec: ModelSpec, timeoutSeconds: Double = 3.0, trace: Bool = false, dryRun: Bool = false) async -> (RuntimeParams, AutotuneOutcome) {
         let base = RuntimeParams.oomSafeDefaults()
-        return await recommendCore(spec: spec, base: base, timeoutSeconds: timeoutSeconds, trace: trace)
+        return await recommendCore(spec: spec, base: base, timeoutSeconds: timeoutSeconds, trace: trace, dryRun: dryRun)
     }
 
     /// Testing helper allowing injection
