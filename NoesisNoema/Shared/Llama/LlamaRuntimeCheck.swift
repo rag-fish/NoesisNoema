@@ -1,4 +1,4 @@
-// filepath: Shared/LlamaRuntimeCheck.swift
+// filepath: Shared/Llama/LlamaRuntimeCheck.swift
 // Purpose: Lightweight runtime guard to detect broken llama.framework loads early.
 // License: MIT
 
