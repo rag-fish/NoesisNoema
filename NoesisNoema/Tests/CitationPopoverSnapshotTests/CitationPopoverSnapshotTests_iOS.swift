@@ -1,6 +1,7 @@
 // filepath: NoesisNoema/Tests/CitationPopoverSnapshotTests/CitationPopoverSnapshotTests_iOS.swift
 // Comments: English
 
+#if canImport(XCTest)
 #if os(iOS)
 import XCTest
 import SwiftUI
@@ -28,4 +29,5 @@ final class CitationPopoverSnapshotTests_iOS: XCTestCase {
         }
     }
 }
+#endif
 #endif

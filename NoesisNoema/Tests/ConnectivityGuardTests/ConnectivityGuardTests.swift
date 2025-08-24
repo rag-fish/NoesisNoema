@@ -1,6 +1,7 @@
 // filepath: NoesisNoema/Tests/ConnectivityGuardTests/ConnectivityGuardTests.swift
 // Comments: English
 
+#if canImport(XCTest)
 import XCTest
 @testable import NoesisNoema
 
@@ -27,3 +28,4 @@ final class ConnectivityGuardTests: XCTestCase {
         }
     }
 }
+#endif

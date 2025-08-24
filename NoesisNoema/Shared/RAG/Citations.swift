@@ -39,9 +39,10 @@ enum CitationExtractor {
         }
     }
     static func splitParagraphs(_ text: String) -> [String] {
-        // Split by two or more newlines as paragraph separators
-        let parts = text.components(separatedBy: /\n{2,}/)
-        return parts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        // Normalize runs of 2+ newlines to exactly two, then split safely on string
+        let normalized = text.replacingOccurrences(of: "\\n{2,}", with: "\n\n", options: .regularExpression)
+        let parts = normalized.components(separatedBy: "\n\n")
+        return parts.map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
 }
