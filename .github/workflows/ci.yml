@@ -27,7 +27,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build | cat
 
-      - name: Sanity: nn model info --dry-run
+      - name: "Sanity: nn model info --dry-run"
         run: |
           set -euxo pipefail
           ./ci_build/Build/Products/Debug/LlamaBridgeTest model info jan-v1-4b --dry-run
