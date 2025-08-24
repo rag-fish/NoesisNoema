@@ -37,6 +37,18 @@ if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == 
     dispatchMain()
 }
 
+// Fast path: handle `rag` subcommands via shared RagCLI before running the harness
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == "rag" {
+    Task {
+        var subArgs = CommandLine.arguments
+        // remove the 'rag' token so that args[1] becomes the actual command (e.g., 'retrieve')
+        subArgs.remove(at: 1)
+        let code = await RagCLI.handleCommand(subArgs)
+        exit(Int32(code))
+    }
+    dispatchMain()
+}
+
 // MARK: - CLI Args
 struct CLI {
     var modelPath: String?

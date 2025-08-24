@@ -151,11 +151,16 @@ class VectorStore {
         // 軽いトリムと安全上限
         context = context.trimmingCharacters(in: .whitespacesAndNewlines)
         if context.count > 2000 { context = String(context.prefix(2000)) }
+        #if BRIDGE_TEST
+        // In bridge test CLI builds we don't have ModelManager; return context echo.
+        return context.isEmpty ? "" : "[RAG Context]\n" + context
+        #else
         // LLMへ文脈を注入して生成
         let model = ModelManager.shared.currentLLMModel
         let ctx = context.isEmpty ? nil : context
         let answer = model.generate(prompt: query, context: ctx)
         return answer
+        #endif
     }
     
     /// VectorStoreのシングルトン（RAG検索対象チャンクを保持）
