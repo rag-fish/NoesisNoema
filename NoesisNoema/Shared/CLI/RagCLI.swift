@@ -6,6 +6,68 @@
 
 import Foundation
 
+#if BRIDGE_TEST
+// Minimal DeepSearch for CLI builds (LlamaBridgeTest) in case the shared file is not included in the target
+private struct _CLI_DeepSearch {
+    struct Config {
+        var rounds: Int = 2
+        var breadth: Int = 8
+        var topK: Int = 5
+        var mmrLambda: Float = 0.7
+        var enableQueryIteration: Bool = true
+        var trace: Bool = false
+    }
+    var config: Config = .init()
+    private let store: VectorStore
+    private var retriever: LocalRetriever
+    init(store: VectorStore = .shared, config: Config = .init()) {
+        self.store = store
+        self.config = config
+        var rcfg = LocalRetriever.Config()
+        rcfg.stageCandidates = max(config.breadth, rcfg.stageCandidates)
+        rcfg.topK = max(config.topK, 1)
+        rcfg.mmrLambda = config.mmrLambda
+        rcfg.enableQueryIteration = config.enableQueryIteration
+        self.retriever = LocalRetriever(store: store, config: rcfg)
+    }
+    func retrieve(query: String) -> [Chunk] {
+        let base = retriever.retrieve(query: query, k: config.breadth, lambda: config.mmrLambda, trace: config.trace)
+        guard !base.isEmpty else { return [] }
+        // Simple expansion: take top terms from first few chunks
+        var pool = base
+        var seen = Set(pool.map { $0.content })
+        let terms = topTerms(from: base)
+        for t in terms.prefix(6) {
+            let cand = retriever.retrieve(query: t, k: config.breadth, lambda: config.mmrLambda, trace: config.trace)
+            for c in cand where seen.insert(c.content).inserted { pool.append(c) }
+        }
+        let qEmb = store.embeddingModel.embed(text: query)
+        return MMR.rerank(queryEmbedding: qEmb, candidates: pool, k: config.topK, lambda: config.mmrLambda, trace: config.trace)
+    }
+    private func topTerms(from chunks: [Chunk]) -> [String] {
+        var freq: [String:Int] = [:]
+        for c in chunks.prefix(config.breadth) {
+            let toks = tokenize(c.content)
+            for t in Set(toks) { if t.count >= 3 { freq[t, default: 0] += 1 } }
+        }
+        return freq.sorted { $0.value > $1.value }.map { $0.key }
+    }
+    private func tokenize(_ s: String) -> [String] {
+        let lowered = s.lowercased()
+        let pattern = "[A-Za-z0-9一-龥ぁ-ゔァ-ヴー々〆〤_]+"
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let range = NSRange(lowered.startIndex..<lowered.endIndex, in: lowered)
+        let matches = regex?.matches(in: lowered, options: [], range: range) ?? []
+        return matches.compactMap { m in
+            guard let r = Range(m.range, in: lowered) else { return nil }
+            return String(lowered[r])
+        }
+    }
+}
+// Typealias to keep CLI code unchanged
+private typealias DeepSearch = _CLI_DeepSearch
+#endif
+
 struct RagCLI {
     static func handleCommand(_ args: [String]) async -> Int {
         guard args.count >= 2 else {
