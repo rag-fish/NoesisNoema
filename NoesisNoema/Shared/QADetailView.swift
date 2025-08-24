@@ -18,6 +18,16 @@ struct QADetailView: View {
     let qapair: QAPair
     var onClose: (() -> Void)? = nil
     @State private var showCitations: Bool = false
+    // Feedback UI state
+    @State private var showingTagSheet: Bool = false
+    @State private var pendingVerdict: FeedbackVerdict? = nil
+    @State private var showSubmittedToast: Bool = false
+
+    // Default negative reason tags
+    private let negativeReasonTags: [String] = [
+        "Not factual", "Hallucination", "Out of scope", "Poor retrieval",
+        "Formatting", "Toxicity", "Off topic", "Other"
+    ]
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -92,6 +102,30 @@ struct QADetailView: View {
                 .frame(maxHeight: .infinity)
                 .layoutPriority(1)
 
+                // Feedback row
+                HStack(spacing: 12) {
+                    Text("Feedback:")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        submitFeedback(verdict: .up, tags: [])
+                    } label: {
+                        Label("Good", systemImage: "hand.thumbsup")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        pendingVerdict = .down
+                        showingTagSheet = true
+                    } label: {
+                        Label("Bad", systemImage: "hand.thumbsdown")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+                }
+                .padding(.top, 4)
+
                 if let date = qapair.date {
                     Text("Answered at: \(date.formatted(.dateTime))")
                         .font(.footnote)
@@ -105,6 +139,16 @@ struct QADetailView: View {
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+            .sheet(isPresented: $showingTagSheet) {
+                FeedbackTagSheet(allTags: negativeReasonTags, onCancel: {
+                    showingTagSheet = false
+                    pendingVerdict = nil
+                }, onSubmit: { tags in
+                    showingTagSheet = false
+                    if let v = pendingVerdict { submitFeedback(verdict: v, tags: tags) }
+                    pendingVerdict = nil
+                })
+            }
 
             // 右上のクローズボタン
             if onClose != nil {
@@ -120,7 +164,45 @@ struct QADetailView: View {
                         .padding(8), alignment: .topTrailing
                     )
             }
+
+            // Submitted toast
+            if showSubmittedToast {
+                VStack {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("Feedback submitted")
+                            .font(.footnote)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(8)
+                    .background(.ultraThickMaterial, in: Capsule())
+                    Spacer()
+                }
+                .padding(.top, 12)
+            }
         }
+    }
+
+    private func submitFeedback(verdict: FeedbackVerdict, tags: [String]) {
+        let rec = FeedbackRecord(
+            id: UUID(),
+            qaId: qapair.id,
+            question: qapair.question,
+            verdict: verdict,
+            tags: tags,
+            timestamp: Date()
+        )
+        FeedbackStore.shared.save(rec)
+        RewardBus.shared.publish(qaId: qapair.id, verdict: verdict, tags: tags)
+        // Light confirmation toast
+        withAnimation { showSubmittedToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation { showSubmittedToast = false }
+        }
+        // Optional: haptics on iOS
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
     }
 }
 
