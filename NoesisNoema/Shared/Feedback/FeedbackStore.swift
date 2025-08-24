@@ -24,26 +24,34 @@ struct FeedbackRecord: Codable, Hashable {
 // MARK: - Keychain helper
 private enum KeychainHelper {
     static func loadOrCreateKey(tag: String) throws -> SymmetricKey {
-        let keyTag = tag.data(using: .utf8)!
-        // Query existing
+        // Store symmetric key bytes as a generic password (cross-platform safe)
+        let service = tag
+        let account = "encryption-key"
         let query: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: keyTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeAES,
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
             kSecReturnData as String: true
         ]
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecSuccess, let data = item as? Data {
+        if status == errSecSuccess, let data = item as? Data, data.count == 32 {
             return SymmetricKey(data: data)
         }
         // Create new 256-bit key
         let key = SymmetricKey(size: .bits256)
         let data = key.withUnsafeBytes { Data($0) }
+        // Upsert: delete any stray, then add
+        let delQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(delQuery as CFDictionary)
         let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: keyTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeAES,
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
