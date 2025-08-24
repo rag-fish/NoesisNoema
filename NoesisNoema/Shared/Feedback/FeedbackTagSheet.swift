@@ -34,20 +34,29 @@ private struct WrapTags: View {
     @Binding var selected: Set<String>
     var body: some View {
         FlexibleStack(spacing: 8, runSpacing: 8) {
-            ForEach(tags, id: \.self) { tag in
+            SwiftUI.ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
                 let isOn = selected.contains(tag)
-                Text(tag)
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(isOn ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.12), in: Capsule())
-                    .foregroundStyle(isOn ? .accent : .primary)
-                    .onTapGesture { toggle(tag) }
-                    .help("Toggle tag: \(tag)")
+                TagChip(tag: tag, isOn: isOn) { toggle(tag) }
             }
         }
     }
     private func toggle(_ t: String) { if selected.contains(t) { selected.remove(t) } else { selected.insert(t) } }
+}
+
+private struct TagChip: View {
+    let tag: String
+    let isOn: Bool
+    let onTap: () -> Void
+    var body: some View {
+        Text(tag)
+            .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isOn ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.12), in: Capsule())
+            .foregroundStyle(isOn ? Color.accentColor : Color.primary)
+            .onTapGesture { onTap() }
+            .help("Toggle tag: \\(tag)")
+    }
 }
 
 // A simple flow layout for tags
