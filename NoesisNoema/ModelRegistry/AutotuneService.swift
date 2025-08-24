@@ -23,6 +23,11 @@ actor AutotuneService {
     // In-memory cache
     private var cache: [String: RuntimeParams] = [:]
 
+    /// Clear all cached recommendations (used when user requests re-tune)
+    func clearCache() {
+        cache.removeAll()
+    }
+
     // Conservative fallback presets for unknown quantization or timeouts
     nonisolated private func conservativePreset(base: RuntimeParams, meta: GGUFMetadata) -> RuntimeParams {
         var p = base
