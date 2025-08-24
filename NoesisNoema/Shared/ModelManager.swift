@@ -33,6 +33,9 @@ class ModelManager {
         "gpt-oss-20b"
     ]
 
+    /// Last retrieved chunks used for the latest RAG context (for citations UI)
+    private(set) var lastRetrievedChunks: [Chunk] = []
+
     /// The list of available embedding model names.
     /// Intended for use in UI dropdowns for embedding model selection in ContentView.
     let availableEmbeddingModels: [String] = [
@@ -246,6 +249,29 @@ class ModelManager {
         await self.updateCachedRegistrySnapshot()
     }
 
+    /// Returns true if all components are local-only and no remote calls are required
+    func isFullyLocal() -> Bool {
+        // Embedding and vector store are local; verify LLM model file exists locally or is embedded
+        let fm = FileManager.default
+        let fileName = currentLLMModel.modelFile
+        if fileName.isEmpty { return currentLLMModel.isEmbedded }
+        // CWD
+        if fm.fileExists(atPath: fm.currentDirectoryPath + "/" + fileName) { return true }
+        // Executable dir
+        let exeDir = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().path
+        if fm.fileExists(atPath: exeDir + "/" + fileName) { return true }
+        // Bundle lookup
+        if let bundleURL = Bundle.main.resourceURL {
+            if fm.fileExists(atPath: bundleURL.appendingPathComponent(fileName).path) { return true }
+            let subdirs = ["Models", "Resources/Models", "Resources", "NoesisNoema/Resources/Models"]
+            for d in subdirs {
+                let p = bundleURL.appendingPathComponent(d).appendingPathComponent(fileName).path
+                if fm.fileExists(atPath: p) { return true }
+            }
+        }
+        return currentLLMModel.isEmbedded
+    }
+
     /// Generates an embedding for the given text using the current embedding model.
     /// - Parameter text: The text to embed.
     /// - Returns: An array of floats representing the embedding.
@@ -265,6 +291,7 @@ class ModelManager {
         // RAG文脈を構築
         let embedding = self.currentEmbeddingModel.embed(text: question)
         let topChunks = VectorStore.shared.findRelevant(queryEmbedding: embedding, topK: 6)
+        self.lastRetrievedChunks = topChunks
         var context = topChunks.map { $0.content }.joined(separator: "\n---\n")
         if context.isEmpty { context = "" }
         // コンテキストの安全上限（簡易）

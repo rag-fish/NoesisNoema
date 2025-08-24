@@ -17,6 +17,7 @@ import AppKit
 struct QADetailView: View {
     let qapair: QAPair
     var onClose: (() -> Void)? = nil
+    @State private var showCitations: Bool = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -49,9 +50,25 @@ struct QADetailView: View {
                     .font(.title3)
                     .padding(.bottom, 8)
                 Divider()
-                Text("Answer")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Answer")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if qapair.citations != nil {
+                        Button(action: { showCitations.toggle() }) {
+                            Label("Citations", systemImage: "book")
+                        }
+                        .buttonStyle(.bordered)
+                        .popover(isPresented: $showCitations, arrowEdge: .top) {
+                            if let c = qapair.citations {
+                                CitationPopoverView(citations: c)
+                            } else {
+                                Text("No citations").padding(12)
+                            }
+                        }
+                    }
+                }
                 // 回答の全文表示＋選択＋コピー（最大化）
                 ScrollView {
                     let answerText = qapair.answer
@@ -108,5 +125,5 @@ struct QADetailView: View {
 }
 
 #Preview {
-    QADetailView(qapair: QAPair(question: "What is Spinoza's first axiom?", answer: "The first axiom is that everything that exists, exists either in itself or in something else."))
+    QADetailView(qapair: QAPair(question: "What is Spinoza's first axiom?", answer: "The first axiom is that everything that exists, exists either in itself or in something else.", citations: ParagraphCitations(perParagraph: [[1],[1,2]], catalog: [CitationInfo(index: 1, title: "Ethics", path: "/tmp/ethics.pdf", page: 1), CitationInfo(index: 2, title: "Letters", path: nil, page: nil)])))
 }

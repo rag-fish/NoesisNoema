@@ -20,13 +20,11 @@ class GoogleDriveService {
         * - Parameter file: The file to be uploaded, which can be of any type.
         * - Note: This method should handle the authentication and upload process to Google Drive.
         */
-    
-    /**
-        * Downloads a file from Google Drive.
-        * - Parameter filename: The name of the file to be downloaded, which can be of any type.
-        * - Note: This method should handle the authentication and retrieval of the file from Google Drive.
-        */
     func upload(file: Any) -> Void {
+        if !ConnectivityGuard.canPerformRemoteCall() {
+            print("[GoogleDriveService] Offline: Remote calls are disabled. Enable Offline toggle to allow network access.")
+            return
+        }
         // TODO: Implement the upload functionality by authenticating the user with Google OAuth2,
         //       preparing the file data for upload, calling the Google Drive API to upload the file,
         //       handling possible errors such as network issues or permission denials,
@@ -42,6 +40,10 @@ class GoogleDriveService {
         * - Note: This method should handle the authentication and retrieval of the file from Google Drive.
         */
     func download(filename: Any) -> Void {
+        if !ConnectivityGuard.canPerformRemoteCall() {
+            print("[GoogleDriveService] Offline: Remote calls are disabled. Enable Offline toggle to allow network access.")
+            return
+        }
         // TODO: Implement the download functionality by authenticating the user with Google OAuth2,
         //       querying the Google Drive API to locate and retrieve the specified file,
         //       managing error cases such as file not found, access denied, or network failures,
@@ -54,6 +56,10 @@ class GoogleDriveService {
         * - Note: This method should retrieve and return a list of files available in Google Drive.
         */
     func listFiles() -> Void {
+        if !ConnectivityGuard.canPerformRemoteCall() {
+            print("[GoogleDriveService] Offline: Remote calls are disabled. Enable Offline toggle to allow network access.")
+            return
+        }
         // TODO: Implement the listing functionality by authenticating the user with Google OAuth2,
         //       querying the Google Drive API to fetch the list of files accessible to the user,
         //       handling pagination and filtering as needed,

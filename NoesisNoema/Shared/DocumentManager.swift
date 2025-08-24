@@ -177,7 +177,16 @@ class DocumentManager: ObservableObject {
                 try? fileManager.removeItem(at: tempDir)
                 return
             }
-            let chunks = zip(chunkStrings, embeddings).map { Chunk(content: $0.0, embedding: $0.1) }
+            let chunks = zip(chunkStrings, embeddings).map { Chunk(content: $0.0, embedding: $0.1, sourceTitle: nil, sourcePath: nil, page: nil) }
+            // After building chunks, attach a default title so UI can show citations
+            let baseName = fileURL.deletingPathExtension().lastPathComponent
+            let timestamp = Date()
+            let docName = "\(baseName)_\(Int(timestamp.timeIntervalSince1970))"
+            let titledChunks = chunks.map { ch -> Chunk in
+                var c = ch
+                c.sourceTitle = docName
+                return c
+            }
             var metadata: [String: Any] = [:]
             if fileManager.fileExists(atPath: metadataURL.path) {
                 let metadataData = try Data(contentsOf: metadataURL)
@@ -185,13 +194,10 @@ class DocumentManager: ObservableObject {
                     metadata = meta
                 }
             }
-            let baseName = fileURL.deletingPathExtension().lastPathComponent
-            let timestamp = Date()
-            let docName = "\(baseName)_\(Int(timestamp.timeIntervalSince1970))"
-            let ragFile = LLMRagFile(filename: docName, metadata: metadata, chunks: chunks)
+            let ragFile = LLMRagFile(filename: docName, metadata: metadata, chunks: titledChunks)
             self.llmragFiles.append(ragFile)
             print("Imported RAGpack document: \(docName)")
-            let uniqueChunks = chunks.filter { chunk in
+            let uniqueChunks = titledChunks.filter { chunk in
                 !VectorStore.shared.chunks.contains(where: { $0.content == chunk.content && $0.embedding == chunk.embedding })
             }
             DispatchQueue.main.async {

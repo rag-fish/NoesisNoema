@@ -10,5 +10,8 @@ import Foundation
 struct Chunk: Codable {
     var content: String
     var embedding: [Float]
-    // metadataは今後拡張可能
+    // metadata for citation popover
+    var sourceTitle: String?
+    var sourcePath: String?
+    var page: Int?
 }

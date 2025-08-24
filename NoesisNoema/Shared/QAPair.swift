@@ -18,6 +18,8 @@ struct QAPair: Identifiable, Codable, Equatable, Hashable {
     var answer: String
     /// Optional date timestamp for when the QAPair was created or modified.
     var date: Date?
+    /// Optional paragraph-level citation mapping and catalog
+    var citations: ParagraphCitations? = nil
     
     /// Initializes a new QAPair with given question, answer, and optional date.
     /// - Parameters:
@@ -25,10 +27,11 @@ struct QAPair: Identifiable, Codable, Equatable, Hashable {
     ///   - question: The question text.
     ///   - answer: The answer text.
     ///   - date: The optional timestamp. Defaults to current date.
-    init(id: UUID = UUID(), question: String, answer: String, date: Date? = Date()) {
+    init(id: UUID = UUID(), question: String, answer: String, date: Date? = Date(), citations: ParagraphCitations? = nil) {
         self.id = id
         self.question = question
         self.answer = answer
         self.date = date
+        self.citations = citations
     }
 }

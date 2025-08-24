@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 import AppKit
 
 struct ContentView: View {
+    @EnvironmentObject var appSettings: AppSettings
     @State private var question: String = ""
     @State private var answer: String = ""
     @State private var isLoading: Bool = false
@@ -83,6 +84,25 @@ struct ContentView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 16) {
+                            // Offline toggle + Local Only badge row
+                            HStack(spacing: 12) {
+                                Toggle("Offline", isOn: $appSettings.offline)
+                                    .toggleStyle(.switch)
+                                    .help("When enabled, any remote calls are blocked.")
+                                    .disabled(isLoading)
+                                if appSettings.offline && ModelManager.shared.isFullyLocal() {
+                                    Text("Local Only")
+                                        .font(.caption2)
+                                        .foregroundStyle(.green)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.green.opacity(0.12), in: Capsule())
+                                        .help("All components are local and remote calls are disabled.")
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+
                             Picker("Embedding Model", selection: $selectedEmbeddingModel) {
                                 ForEach(availableEmbeddingModels, id: \.self) { model in
                                     Text(model)
@@ -281,7 +301,16 @@ struct ContentView: View {
         answer = result
         isLoading = false
 
-        let newQAPair = QAPair(id: UUID(), question: question, answer: answer)
+        // Build citations mapping from answer text and last retrieved chunks
+        let perParagraph = CitationExtractor.extractParagraphLabels(from: result)
+        let chunks = ModelManager.shared.lastRetrievedChunks
+        // Build catalog with 1-based index
+        let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
+            CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)
+        }
+        let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
+
+        let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
         qaHistory.append(newQAPair)
         selectedQAPair = newQAPair
         question = ""
