@@ -241,3 +241,32 @@ Stay curious, and contribute if it resonates with you.
 
 🌟
 > Your knowledge. Your device. Your rules.
+
+---
+
+## ParamBandit: Thompson Sampling でクエリごとの最適パラメータを選択 🔬
+
+- What: 取得パラメータ（top_k, mmr_lambda, min_score）をクエリクラスタ単位で動的に選択する軽量バンディット。
+- Why: 最小限のフィードバックで素早く関連性を改善し、学習している手触りを提供。
+- Where: 生成器の前、Retrieval パイプラインの直前。
+- How:
+  - 各アーム（パラメータ集合）に Beta(α,β) を保持し、Thompson Sampling で選択。
+  - RewardBus のフィードバックイベント（👍/👎）で α/β を更新。
+  - 既定のアーム例: k4/l0.7/s0.20, k5/l0.9/s0.10, k6/l0.7/s0.15, k8/l0.5/s0.15。
+
+使用例（統合の考え方）
+- 既存の LocalRetriever 利用ポイントの直前で ParamBandit を呼び出し、返却されたパラメータで retrieve を実行。
+- UI 側のフィードバック（👍/👎）時に RewardBus.shared.publish(qaId:verdict:tags:) を発火。
+
+簡易フロー:
+1) let qa = UUID()
+2) let choice = ParamBandit.default.chooseParams(for: query, qaId: qa)
+3) let ps = choice.arm.params // topK, mmrLambda, minScore
+4) let chunks = LocalRetriever(store: .shared).retrieve(query: query, k: ps.topK, lambda: ps.mmrLambda)
+5) minScore で類似度フィルタ（BanditRetriever 参照）
+6) ユーザー評価時に RewardBus.shared.publish(qaId: qa, verdict: .up/.down, tags: …)
+
+テストとDoD
+- 単体: 初期α=1,β=1、👍でα++ / 👎でβ++ を検証（TestRunner に追加、CLIビルドではスキップ）。
+- 統合: 合成報酬で優良アームへ選好が収束することを確認（同上）。
+- DoD: ParamBandit を独立サービスとして追加、RewardBus 連携、既定アーム定義、軽量ドキュメント（本節）を整備。

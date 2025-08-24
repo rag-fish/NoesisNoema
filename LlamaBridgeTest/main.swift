@@ -49,6 +49,15 @@ if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == 
     dispatchMain()
 }
 
+// New: run internal tests without XCTest
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1].lowercased() == "tests" {
+    Task {
+        let code = await TestRunner.runAllTests()
+        exit(Int32(code))
+    }
+    dispatchMain()
+}
+
 // MARK: - CLI Args
 struct CLI {
     var modelPath: String?

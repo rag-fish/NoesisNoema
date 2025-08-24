@@ -92,6 +92,8 @@ final class FeedbackStore {
             } catch {
                 print("[FeedbackStore] persist error: \(error)")
             }
+            // Publish to RewardBus for real-time bandit updates
+            RewardBus.shared.publish(qaId: record.qaId, verdict: record.verdict, tags: record.tags)
         }
     }
 

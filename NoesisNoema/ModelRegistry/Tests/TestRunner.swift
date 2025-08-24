@@ -80,6 +80,22 @@ class TestRunner {
         print("\n🔬 Test 16: LocalRetriever Duplicate Suppression + Trace")
         allTestsPassed = testLocalRetrieverDuplicateSuppressionAndTrace() && allTestsPassed
         
+        // Test 17: ParamBandit initializes and updates via RewardBus
+        print("\n🔬 Test 17: ParamBandit Init + Reward Updates")
+        #if !BRIDGE_TEST
+        allTestsPassed = testParamBanditInitAndUpdates() && allTestsPassed
+        #else
+        print("(skipped under BRIDGE_TEST)")
+        #endif
+        
+        // Test 18: ParamBandit converges with synthetic rewards
+        print("\n🔬 Test 18: ParamBandit Convergence (synthetic)")
+        #if !BRIDGE_TEST
+        allTestsPassed = testParamBanditConvergence() && allTestsPassed
+        #else
+        print("(skipped under BRIDGE_TEST)")
+        #endif
+        
         // Summary
         print("\n" + String(repeating: "=", count: 50))
         if allTestsPassed {
@@ -660,3 +676,80 @@ class TestRunner {
         return true
     }
 }
+
+// MARK: - ParamBandit Tests
+#if !BRIDGE_TEST
+extension TestRunner {
+    /// Bandit initializes with α=1,β=1 and updates on RewardBus events
+    fileprivate static func testParamBanditInitAndUpdates() -> Bool {
+        // Deterministic RNG for stability
+        var seq: [Double] = Array(repeating: 0.6, count: 100)
+        var idx = 0
+        let rng: () -> Double = { defer { idx += 1 }; return seq[min(idx, seq.count-1)] }
+        
+        let arms = [
+            ParamBandit.Arm(id: "A", params: RetrievalParams(topK: 4, mmrLambda: 0.7, minScore: 0.1)),
+            ParamBandit.Arm(id: "B", params: RetrievalParams(topK: 6, mmrLambda: 0.5, minScore: 0.2))
+        ]
+        let bandit = ParamBandit(config: .init(arms: arms), rewardBus: RewardBus.shared, urand: rng)
+        let qa1 = UUID()
+        let (cluster, _) = bandit.chooseParams(for: "hello world", qaId: qa1)
+        // Priors should be 1/1 for each arm in this cluster
+        let st = bandit.state(cluster: cluster)
+        for a in arms {
+            guard let ab = st[a.id], ab.alpha == 1 && ab.beta == 1 else {
+                print("❌ wrong or missing priors for arm \(a.id): \(String(describing: st[a.id]))")
+                return false
+            }
+        }
+        // Publish reward for chosen arm (alpha increment)
+        let qa2 = UUID()
+        let chosen = bandit.chooseParams(for: "hello world", qaId: qa2).arm.id
+        RewardBus.shared.publish(qaId: qa2, verdict: .up, tags: [])
+        usleep(50_000)
+        let st2 = bandit.state(cluster: cluster)
+        guard let ab2 = st2[chosen], ab2.alpha == 2 && ab2.beta == 1 else {
+            print("❌ expected alpha increment for arm \(chosen), got \(String(describing: st2[chosen]))")
+            return false
+        }
+        print("✅ Priors + RewardBus update OK (arm=\(chosen))")
+        return true
+    }
+    
+    /// With synthetic rewards favoring one arm, TS should pick it more often
+    fileprivate static func testParamBanditConvergence() -> Bool {
+        // RNG cycling for coverage
+        var base: [Double] = (0..<1000).map { _ in Double.random(in: 0..<1) }
+        var i = 0
+        let rng: () -> Double = { defer { i += 1 }; return base[i % base.count] }
+        let arms = [
+            ParamBandit.Arm(id: "good", params: RetrievalParams(topK: 5, mmrLambda: 0.7, minScore: 0.1)),
+            ParamBandit.Arm(id: "bad", params: RetrievalParams(topK: 5, mmrLambda: 0.5, minScore: 0.2))
+        ]
+        let bandit = ParamBandit(config: .init(arms: arms), rewardBus: RewardBus.shared, urand: rng)
+        let cluster = bandit.chooseParams(for: "topic: swift mmr bandit").cluster
+        var picks: [String:Int] = [:]
+        for _ in 0..<300 {
+            let qa = UUID()
+            let choice = bandit.chooseParams(for: "topic: swift mmr bandit", qaId: qa).arm.id
+            picks[choice, default: 0] += 1
+            let reward: Bool = (choice == "good") ? (Double.random(in: 0..<1) < 0.7) : (Double.random(in: 0..<1) < 0.3)
+            RewardBus.shared.publish(qaId: qa, verdict: reward ? .up : .down, tags: [])
+        }
+        usleep(120_000)
+        let good = picks["good", default: 0]
+        let bad = picks["bad", default: 0]
+        guard good > bad else {
+            print("❌ TS did not prefer better arm (good=\(good), bad=\(bad))")
+            return false
+        }
+        let st = bandit.state(cluster: cluster)
+        guard let abGood = st["good"], abGood.alpha > abGood.beta else {
+            print("❌ Posterior for good arm not improved: \(String(describing: st["good"]))")
+            return false
+        }
+        print("✅ Convergence trend OK (good=\(good), bad=\(bad))")
+        return true
+    }
+}
+#endif
