@@ -1,4 +1,4 @@
-// filepath: /Users/raskolnikoff/Documents/Xcode Projects/NoesisNoema/NoesisNoema/Shared/MMR.swift
+// filepath: Shared/RAG/MMR.swift
 // Project: NoesisNoema
 // File: MMR.swift
 // Description: Maximal Marginal Relevance reranker over embedding space.

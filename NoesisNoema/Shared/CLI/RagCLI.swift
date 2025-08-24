@@ -1,4 +1,4 @@
-// filepath: /Users/raskolnikoff/Documents/Xcode Projects/NoesisNoema/NoesisNoema/Shared/RagCLI.swift
+// filepath: Shared/CLI/RagCLI.swift
 // Project: NoesisNoema
 // File: RagCLI.swift
 // Description: CLI interface for RAG retrieval using LocalRetriever (BM25+Embedding → Query iteration → MMR)

@@ -1,4 +1,4 @@
-// filepath: /Users/raskolnikoff/Documents/Xcode Projects/NoesisNoema/NoesisNoema/Shared/LocalRetriever.swift
+// filepath: Shared/RAG/LocalRetriever.swift
 // Project: NoesisNoema
 // File: LocalRetriever.swift
 // Description: Two-stage local retriever (BM25 + embedding hybrid) with query iteration and MMR rerank.

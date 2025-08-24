@@ -1,4 +1,4 @@
-// filepath: /Users/raskolnikoff/Documents/Xcode Projects/NoesisNoema/NoesisNoema/Shared/QueryIterator.swift
+// filepath: Shared/RAG/QueryIterator.swift
 // Project: NoesisNoema
 // File: QueryIterator.swift
 // Description: Lightweight query iterator that generates simple variants for retrieval.
