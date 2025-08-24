@@ -68,6 +68,14 @@ class TestRunner {
         print("\n🔬 Test 13: Reset Restores Recommended")
         allTestsPassed = await testResetRestoresRecommended() && allTestsPassed
         
+        // Test 14: Corrupted GGUF metadata should error
+        print("\n🔬 Test 14: Corrupted GGUF Metadata Error")
+        allTestsPassed = await testCorruptedGGUFMetadataError() && allTestsPassed
+        
+        // Test 15: M2 Pro Autotune Case
+        print("\n🔬 Test 15: M2 Pro Autotune Case")
+        allTestsPassed = testM2ProAutotune() && allTestsPassed
+        
         // Summary
         print("\n" + String(repeating: "=", count: 50))
         if allTestsPassed {
@@ -383,6 +391,73 @@ class TestRunner {
             return false
         }
         print("✅ M1 Max autotune behaves as expected (nGpuLayers=\(tuned.nGpuLayers))")
+        return true
+    }
+
+    /// Corrupted GGUF file should produce an error
+    private static func testCorruptedGGUFMetadataError() async -> Bool {
+        let tmp = URL(fileURLWithPath: "/tmp/nn_bad_\(UUID().uuidString).gguf")
+        do {
+            // Write wrong magic
+            try Data("NOTG".utf8).write(to: tmp)
+        } catch {
+            print("❌ Failed to create temp corrupted file: \(error)")
+            return false
+        }
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        
+        // Quick validity check
+        let valid = GGUFReader.isValidGGUFFile(at: tmp.path)
+        guard !valid else {
+            print("❌ Corrupted file should not be valid")
+            return false
+        }
+        
+        // Read should throw invalidGGUFFile
+        do {
+            _ = try await GGUFReader.readMetadata(from: tmp.path)
+            print("❌ Expected GGUFReader to throw for corrupted file")
+            return false
+        } catch {
+            if let e = error as? GGUFReader.GGUFError {
+                switch e {
+                case .invalidGGUFFile:
+                    print("✅ Corrupted GGUF produced invalidGGUFFile as expected")
+                    return true
+                default:
+                    print("❌ Unexpected GGUFError: \(e)")
+                    return false
+                }
+            } else {
+                print("❌ Unexpected error type: \(error)")
+                return false
+            }
+        }
+    }
+
+    /// Test M2 Pro hardware autotune
+    private static func testM2ProAutotune() -> Bool {
+        // Approx M2 Pro profile (arm64, 32GB unified memory)
+        let hw = HardwareProfile(os: "Darwin", arch: "arm64", cpuCores: 12, memTotalGB: 32.0, vramTotalGB: 32.0, gpuVendor: "Apple", soc: "Apple M2 Pro")
+        let base = RuntimeParams.oomSafeDefaults()
+        let meta = GGUFMetadata(
+            architecture: "llama",
+            parameterCount: 8.0,
+            contextLength: 8192,
+            modelSizeBytes: 4_600_000_000,
+            quantization: "Q4_K_M"
+        )
+        let tuned = ModelSpec.autoTuneParameters(metadata: meta, baseParams: base, hardware: hw)
+        // For 32GB VRAM, computeGpuLayers suggests >= 20 (actually 30). Ensure reasonable bound
+        guard tuned.nGpuLayers >= 20 else {
+            print("❌ Expected >=20 GPU layers on M2 Pro, got \(tuned.nGpuLayers)")
+            return false
+        }
+        guard tuned.nCtx <= meta.contextLength else {
+            print("❌ Context exceeds model capability on M2 Pro")
+            return false
+        }
+        print("✅ M2 Pro autotune behaves as expected (nGpuLayers=\(tuned.nGpuLayers))")
         return true
     }
 

@@ -47,16 +47,18 @@ struct ModelCLI {
     private static func handleInfoCommand(_ args: [String]) async -> Int {
         guard !args.isEmpty else {
             print("Error: Model ID required")
-            print("Usage: nn model info <model-id> [--trace]")
+            print("Usage: nn model info <model-id> [--dry-run] [--trace]")
             return 1
         }
         
-        // Parse args: first non-flag = id, flags: --trace
+        // Parse args: first non-flag = id, flags: --trace, --dry-run
         var modelId: String?
         var trace = false
+        var dryRun = false
         for a in args {
             if a.hasPrefix("-") {
                 if a == "--trace" { trace = true }
+                else if a == "--dry-run" { dryRun = true }
             } else if modelId == nil {
                 modelId = a
             }
@@ -83,8 +85,8 @@ struct ModelCLI {
             return 1
         }
         
-        // Run autotune with optional tracing (non-blocking for UI, but CLI waits)
-        let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: 3.0, trace: trace)
+        // Run autotune with optional tracing and dry-run (skip file hashing)
+        let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: 3.0, trace: trace, dryRun: dryRun)
         if let warn = outcome.warning { print("⚠️  \(warn)") }
         
         // Persist updated params back to registry for this session
@@ -269,8 +271,12 @@ struct ModelCLI {
           demo               Print a textual demo of auto-tuning and registry
           help               Show this help message
         
+        Options (info):
+          --dry-run          Skip file hashing and model load; compute recommended params only
+          --trace            Print decision rationale and timing during autotune
+        
         Examples:
-          nn model info jan-v1-4b
+          nn model info jan-v1-4b --dry-run
           nn model list
           nn model list --all
           nn model scan

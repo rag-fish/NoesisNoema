@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-sanity:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Build LlamaBridgeTest (Debug, no code signing)
+        run: |
+          set -euxo pipefail
+          xcodebuild -scheme LlamaBridgeTest \
+            -project "NoesisNoema.xcodeproj" \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath ci_build \
+            CODE_SIGNING_ALLOWED=NO \
+            build | cat
+
+      - name: Sanity: nn model info --dry-run
+        run: |
+          set -euxo pipefail
+          ./ci_build/Build/Products/Debug/LlamaBridgeTest model info jan-v1-4b --dry-run
+
+      - name: Run CLI tests
+        run: |
+          set -euxo pipefail
+          ./ci_build/Build/Products/Debug/LlamaBridgeTest model test
