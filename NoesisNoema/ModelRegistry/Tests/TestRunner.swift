@@ -76,6 +76,10 @@ class TestRunner {
         print("\n🔬 Test 15: M2 Pro Autotune Case")
         allTestsPassed = testM2ProAutotune() && allTestsPassed
         
+        // Test 16: LocalRetriever duplicate suppression and trace
+        print("\n🔬 Test 16: LocalRetriever Duplicate Suppression + Trace")
+        allTestsPassed = testLocalRetrieverDuplicateSuppressionAndTrace() && allTestsPassed
+        
         // Summary
         print("\n" + String(repeating: "=", count: 50))
         if allTestsPassed {
@@ -622,6 +626,37 @@ class TestRunner {
             return false
         }
         print("✅ Reset switches back to recommended")
+        return true
+    }
+
+    /// Test 16: LocalRetriever duplicate suppression and trace
+    private static func testLocalRetrieverDuplicateSuppressionAndTrace() -> Bool {
+        // Prepare demo corpus with duplicates
+        VectorStore.shared.clear()
+        let docs = [
+            "Swift is a powerful and intuitive programming language for iOS and macOS.",
+            "Swift is a powerful and intuitive programming language for iOS and macOS.", // duplicate
+            "BM25 is a ranking function used in search engines.",
+            "Embeddings map text to vectors in a semantic space.",
+            "MMR balances relevance and diversity for reranking.",
+            "Apple's M2 chips have unified memory."
+        ]
+        VectorStore.shared.addTexts(docs, deduplicate: false) // allow duplicates in store
+        
+        let retriever = LocalRetriever(store: .shared)
+        let results = retriever.retrieve(query: "swift programming", k: 4, lambda: 0.7, trace: true)
+        guard !results.isEmpty else {
+            print("❌ Retriever returned no results")
+            return false
+        }
+        // Ensure duplicate suppression by content
+        let contents = results.map { $0.content }
+        let uniqueCount = Set(contents).count
+        guard uniqueCount == contents.count else {
+            print("❌ Duplicate contents present in results: \(contents)")
+            return false
+        }
+        print("✅ Duplicate suppression OK (results=\(results.count))")
         return true
     }
 }
