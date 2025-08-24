@@ -16,6 +16,10 @@ struct RagCLI {
         switch command {
         case "retrieve":
             return handleRetrieve(Array(args.dropFirst(2)))
+        case "deep":
+            return handleDeep(Array(args.dropFirst(2)))
+        case "eval":
+            return handleEval(Array(args.dropFirst(2)))
         case "demo":
             return handleDemo(Array(args.dropFirst(2)))
         case "help", "-h", "--help":
@@ -58,6 +62,44 @@ struct RagCLI {
         }
         return 0
     }
+
+    private static func handleDeep(_ args: [String]) -> Int {
+        var query: String?
+        var topK = 5
+        var rounds = 2
+        var breadth = 8
+        var lambda: Float = 0.7
+        var trace = false
+        var i = 0
+        while i < args.count {
+            let a = args[i]
+            if a == "--top-k", i+1 < args.count, let v = Int(args[i+1]) { topK = v; i += 2; continue }
+            if a == "--rounds", i+1 < args.count, let v = Int(args[i+1]) { rounds = v; i += 2; continue }
+            if a == "--breadth", i+1 < args.count, let v = Int(args[i+1]) { breadth = v; i += 2; continue }
+            if a == "--lambda", i+1 < args.count, let v = Float(args[i+1]) { lambda = v; i += 2; continue }
+            if a == "--trace" { trace = true; i += 1; continue }
+            if !a.hasPrefix("-") && query == nil { query = a; i += 1; continue }
+            i += 1
+        }
+        guard let q = query, !q.isEmpty else {
+            print("Usage: nn rag deep \"<query>\" [--top-k N] [--rounds R] [--breadth B] [--lambda 0.7] [--trace]")
+            return 1
+        }
+        let cfg = DeepSearch.Config(rounds: rounds, breadth: breadth, topK: topK, mmrLambda: lambda, enableQueryIteration: true, trace: trace)
+        let deep = DeepSearch(store: .shared, config: cfg)
+        let results = deep.retrieve(query: q)
+        if results.isEmpty {
+            print("No results. VectorStore is empty or no matches found.")
+            return 0
+        }
+        print("[DeepSearch] Top \(min(topK, results.count)) results:")
+        for (idx, c) in results.enumerated() {
+            let preview = c.content.replacingOccurrences(of: "\n", with: " ")
+            let p = preview.count > 200 ? String(preview.prefix(200)) + "…" : preview
+            print(String(format: "%2d. %@", idx+1, p))
+        }
+        return 0
+    }
     
     private static func handleDemo(_ args: [String]) -> Int {
         // Seed a tiny demo corpus if empty
@@ -81,6 +123,78 @@ struct RagCLI {
         for c in results { print("- ", c.content) }
         return 0
     }
+
+    private static func handleEval(_ args: [String]) -> Int {
+        enum Method: String { case retrieve, deep }
+        var method: Method = .retrieve
+        var topK = 5
+        var rounds = 2
+        var breadth = 8
+        var lambda: Float = 0.7
+        var trace = false
+        var useBuiltin = true
+        var i = 0
+        while i < args.count {
+            let a = args[i]
+            if a == "--method", i+1 < args.count { method = Method(rawValue: args[i+1].lowercased()) ?? .retrieve; i += 2; continue }
+            if a == "--top-k", i+1 < args.count, let v = Int(args[i+1]) { topK = v; i += 2; continue }
+            if a == "--rounds", i+1 < args.count, let v = Int(args[i+1]) { rounds = v; i += 2; continue }
+            if a == "--breadth", i+1 < args.count, let v = Int(args[i+1]) { breadth = v; i += 2; continue }
+            if a == "--lambda", i+1 < args.count, let v = Float(args[i+1]) { lambda = v; i += 2; continue }
+            if a == "--trace" { trace = true; i += 1; continue }
+            if a == "--from-json" { useBuiltin = false; i += 1; continue } // reserved for future
+            i += 1
+        }
+        // Seed demo corpus if empty
+        if VectorStore.shared.count == 0 {
+            let docs = [
+                "Swift is a powerful and intuitive programming language for iOS and macOS.",
+                "MMR stands for Maximal Marginal Relevance and balances relevance and diversity.",
+                "BM25 is a ranking function used by search engines to estimate the relevance of documents.",
+                "Embedding models map text into vectors so that similar texts are close in the vector space.",
+                "Query iteration generates query variants to improve recall in retrieval systems.",
+                "Apple Silicon like M1 and M2 provides unified memory architecture."
+            ]
+            VectorStore.shared.addTexts(docs)
+        }
+        struct EvalCase { let query: String; let expect: [String] }
+        let builtin: [EvalCase] = [
+            .init(query: "what is mmr", expect: ["mmr", "maximal", "relevance"]),
+            .init(query: "explain bm25", expect: ["bm25", "ranking"]),
+            .init(query: "what are embeddings", expect: ["embedding", "vectors", "vector space"]),
+            .init(query: "query iteration", expect: ["query iteration"]),
+            .init(query: "apple silicon memory", expect: ["unified", "memory", "apple silicon"])
+        ]
+        let cases = useBuiltin ? builtin : builtin // placeholder for future JSON
+
+        var hits = 0
+        var total = cases.count
+        print("RAG Eval — method=\(method) topK=\(topK) rounds=\(rounds) breadth=\(breadth) lambda=\(lambda)")
+        for (idx, ec) in cases.enumerated() {
+            let results: [Chunk]
+            switch method {
+            case .retrieve:
+                let retr = LocalRetriever(store: .shared)
+                results = retr.retrieve(query: ec.query, k: topK, lambda: lambda, trace: trace)
+            case .deep:
+                let cfg = DeepSearch.Config(rounds: rounds, breadth: breadth, topK: topK, mmrLambda: lambda, enableQueryIteration: true, trace: trace)
+                let deep = DeepSearch(store: .shared, config: cfg)
+                results = deep.retrieve(query: ec.query)
+            }
+            let ok = results.contains { c in
+                let txt = c.content.lowercased()
+                return ec.expect.contains(where: { txt.contains($0.lowercased()) })
+            }
+            if ok { hits += 1 }
+            print(String(format: "%2d. %@ — %@", idx+1, ec.query, ok ? "HIT" : "MISS"))
+            if trace {
+                for (j, c) in results.enumerated() { print(String(format: "   %2d) %@", j+1, c.content)) }
+            }
+        }
+        let acc = total > 0 ? Double(hits) / Double(total) : 0
+        print(String(format: "Accuracy: %.1f%%  (%d/%d)", acc*100.0, hits, total))
+        return 0
+    }
     
     private static func printUsage() {
         print("""
@@ -90,6 +204,8 @@ struct RagCLI {
         
         Commands:
           retrieve "<query>"    Retrieve top-k chunks via BM25+Embedding → MMR
+          deep "<query>"        Multi-round DeepSearch (expansion + hybrid + MMR)
+          eval [options]         Run a tiny retrieval eval on a builtin dataset
           demo [query]           Seed a demo corpus and run a traced retrieval
           help                   Show this help
         
@@ -98,9 +214,25 @@ struct RagCLI {
           --lambda F             MMR trade-off (0..1, default: 0.7)
           --trace                Log decisions and intermediate stats
         
+        Options (deep):
+          --top-k N              Number of final results (default: 5)
+          --rounds R             Expansion rounds (default: 2)
+          --breadth B            Candidates per round (default: 8)
+          --lambda F             MMR trade-off (0..1, default: 0.7)
+          --trace                Log decisions and intermediate stats
+        
+        Options (eval):
+          --method retrieve|deep Select retrieval method (default: retrieve)
+          --top-k N              TopK for evaluation (default: 5)
+          --rounds R             Used when method=deep (default: 2)
+          --breadth B            Used when method=deep (default: 8)
+          --lambda F             MMR trade-off (default: 0.7)
+          --trace                Print per-case results
+        
         Examples:
           nn rag retrieve "explain bm25 and mmr" --top-k 5 --trace
-          nn rag demo "apple silicon unified memory"
+          nn rag deep "apple silicon unified memory" --rounds 2 --breadth 10 --top-k 5 --trace
+          nn rag eval --method deep --top-k 5 --rounds 2 --breadth 10 --trace
         """)
     }
 }
