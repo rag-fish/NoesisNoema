@@ -399,8 +399,11 @@ Task {
             if !buffer.isEmpty && !inThink { acc += buffer }
 
             let cleaned = cleanOutput(acc)
-            let fallback = acc.trimmingCharacters(in: .whitespacesAndNewlines)
-            return cleaned.isEmpty ? fallback : cleaned
+            // クリーニング結果が空の場合は上位で--plain再試行してもらうため、ここでは空文字を返す
+            if cleaned.isEmpty {
+                return ""
+            }
+            return cleaned
         }
 
         var finalOut = await infer(fullPrompt)

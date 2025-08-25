@@ -135,8 +135,6 @@ xcuserdata/
 # LLM model weights and frameworks
 llama.xcframework/
 llama.xcframework/*
-llama_macos.xcframework/
-llama_macos.xcframework/*
 
 # General large files (add more as needed)
 *.bin

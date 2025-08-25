@@ -84,6 +84,8 @@ struct RagCLI {
             return handleEval(Array(args.dropFirst(2)))
         case "demo":
             return handleDemo(Array(args.dropFirst(2)))
+        case "bandit":
+            return handleBandit(Array(args.dropFirst(2)))
         case "help", "-h", "--help":
             printUsage(); return 0
         default:
@@ -230,7 +232,7 @@ struct RagCLI {
         let cases = useBuiltin ? builtin : builtin // placeholder for future JSON
 
         var hits = 0
-        var total = cases.count
+        let total = cases.count
         print("RAG Eval — method=\(method) topK=\(topK) rounds=\(rounds) breadth=\(breadth) lambda=\(lambda)")
         for (idx, ec) in cases.enumerated() {
             let results: [Chunk]
@@ -269,6 +271,7 @@ struct RagCLI {
           deep "<query>"        Multi-round DeepSearch (expansion + hybrid + MMR)
           eval [options]         Run a tiny retrieval eval on a builtin dataset
           demo [query]           Seed a demo corpus and run a traced retrieval
+          bandit "<query>"      Retrieve using ParamBandit-selected params (TS) [non-BRIDGE builds]
           help                   Show this help
         
         Options (retrieve):
@@ -295,6 +298,69 @@ struct RagCLI {
           nn rag retrieve "explain bm25 and mmr" --top-k 5 --trace
           nn rag deep "apple silicon unified memory" --rounds 2 --breadth 10 --top-k 5 --trace
           nn rag eval --method deep --top-k 5 --rounds 2 --breadth 10 --trace
+          nn rag bandit "swift programming" --trace
         """)
     }
+}
+
+// MARK: - Bandit mode
+extension RagCLI {
+    #if BRIDGE_TEST
+    private static func handleBandit(_ args: [String]) -> Int {
+        print("Bandit mode is not available in BRIDGE_TEST builds.")
+        return 0
+    }
+    #else
+    private static func handleBandit(_ args: [String]) -> Int {
+        var query: String?
+        var trace = false
+        var thumbs: String? = nil // "up" or "down"
+        var i = 0
+        while i < args.count {
+            let a = args[i]
+            if a == "--trace" { trace = true; i += 1; continue }
+            if a == "--thumbs", i+1 < args.count { thumbs = args[i+1].lowercased(); i += 2; continue }
+            if !a.hasPrefix("-") && query == nil { query = a; i += 1; continue }
+            i += 1
+        }
+        guard let q = query, !q.isEmpty else {
+            print("Usage: nn rag bandit \"<query>\" [--trace] [--thumbs up|down]")
+            return 1
+        }
+        // Ensure demo data exists for a sensible output if store is empty
+        if VectorStore.shared.count == 0 {
+            let docs = [
+                "Swift is a powerful and intuitive programming language for iOS and macOS.",
+                "MMR balances relevance and diversity for reranking.",
+                "BM25 is a ranking function used in search engines.",
+                "Embeddings map text to vectors in a semantic space.",
+                "Apple's M2 chips have unified memory."
+            ]
+            VectorStore.shared.addTexts(docs)
+        }
+        let qaId = UUID()
+        let br = BanditRetriever(bandit: .default, store: .shared)
+        let results = br.retrieve(query: q, qaId: qaId, trace: trace)
+        if results.isEmpty { print("No results."); return 0 }
+        print("Top \(results.count) results:")
+        for (idx, c) in results.enumerated() {
+            let preview = c.content.replacingOccurrences(of: "\n", with: " ")
+            let p = preview.count > 200 ? String(preview.prefix(200)) + "…" : preview
+            print(String(format: "%2d. %@", idx+1, p))
+        }
+        if let t = thumbs {
+            switch t {
+            case "up":
+                RewardBus.shared.publish(qaId: qaId, verdict: .up, tags: ["cli"])
+                if trace { print("[bandit] 👍 published (qaId=\(qaId))") }
+            case "down":
+                RewardBus.shared.publish(qaId: qaId, verdict: .down, tags: ["cli"])
+                if trace { print("[bandit] 👎 published (qaId=\(qaId))") }
+            default:
+                print("[bandit] Unknown --thumbs value: \(t). Use 'up' or 'down'.")
+            }
+        }
+        return 0
+    }
+    #endif
 }

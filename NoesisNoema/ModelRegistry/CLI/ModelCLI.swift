@@ -180,7 +180,12 @@ struct ModelCLI {
     
     /// Handle 'nn model test' command
     private static func handleTestCommand(_ args: [String]) async -> Int {
+        #if BRIDGE_TEST
+        print("'nn model test' is not available in BRIDGE_TEST builds.")
+        return 0
+        #else
         return await TestRunner.runAllTests()
+        #endif
     }
     
     /// Print OOM-safe defaults
