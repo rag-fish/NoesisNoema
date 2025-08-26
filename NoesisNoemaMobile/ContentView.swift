@@ -309,7 +309,10 @@ struct ContentView: View {
         isLoading = true
         Task { @MainActor in
             let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-            documentManager.addQAPair(question: question, answer: result)
+            let newPair = documentManager.addQAPair(question: question, answer: result)
+            // Cache: 保存（ソースは ModelManager.shared.lastRetrievedChunks）
+            let sources = ModelManager.shared.lastRetrievedChunks
+            QAContextStore.shared.put(qaId: newPair.id, question: newPair.question, answer: newPair.answer, sources: sources, embedder: ModelManager.shared.currentEmbeddingModel)
             question = ""
             isLoading = false
         }

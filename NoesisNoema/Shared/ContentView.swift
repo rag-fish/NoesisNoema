@@ -311,6 +311,8 @@ struct ContentView: View {
         let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
 
         let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
+        // Cache: store QA context for potential thumbs-up capture
+        QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: ModelManager.shared.currentEmbeddingModel)
         qaHistory.append(newQAPair)
         selectedQAPair = newQAPair
         question = ""

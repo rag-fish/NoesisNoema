@@ -304,11 +304,14 @@ class DocumentManager: ObservableObject {
     /// - Parameters:
     ///   - question: The question string.
     ///   - answer: The answer string.
-    func addQAPair(question: String, answer: String) {
+    /// - Returns: The created QAPair.
+    @discardableResult
+    func addQAPair(question: String, answer: String) -> QAPair {
         let newPair = QAPair(question: question, answer: answer)
         qaHistory.append(newPair)
         selectedQAPair = newPair
         saveQAHistory()
+        return newPair
     }
     
     /// Selects the specified QA pair.

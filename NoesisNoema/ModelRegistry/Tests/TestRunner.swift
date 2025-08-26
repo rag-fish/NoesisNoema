@@ -1,3 +1,4 @@
+#if !BRIDGE_TEST
 // Project: NoesisNoema
 // File: TestRunner.swift
 // Created by Copilot on 2025/08/23
@@ -678,7 +679,6 @@ class TestRunner {
 }
 
 // MARK: - ParamBandit Tests
-#if !BRIDGE_TEST
 extension TestRunner {
     /// Bandit initializes with α=1,β=1 and updates on RewardBus events
     fileprivate static func testParamBanditInitAndUpdates() -> Bool {

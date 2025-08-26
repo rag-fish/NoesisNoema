@@ -18,13 +18,22 @@ Empower your own AGI — no cloud, no SaaS, just your device and your knowledge.
 
 The on‑device experience leveled up across macOS and iOS:
 
-- iOS Universal App (WIP → usable today)
+- iOS Universal App (iPhone/iPad; shipped)
   - Fresh iOS screenshot available in `docs/assets/noesisnoema_ios.png` (see above)
   - Always‑visible History, QADetail overlays on top (swipe‑down or ✖︎ to close)
   - Multiline input with placeholder, larger tap targets, equal‑width action buttons
   - Global loading lock to prevent duplicate queries; answer only appended once
   - Keyboard UX: tap outside or scroll to dismiss
   - Startup splash overlay: temporary "Noesis Noema" title on launch
+
+- Deep Search retrieval pipeline
+  - Two-stage retrieval: LocalRetriever + QueryIterator with MMR re‑ranking
+  - Works across multiple RAGpacks; better relevance and source diversity
+  - Tuned defaults per device; fast even on iPhone
+- Feedback loop (local‑only)
+  - Thumbs up/down captured via RewardBus
+  - ParamBandit tunes retrieval params per session (topK, mmrLambda, minScore)
+  - 100% offline; no telemetry
 - Output hygiene & stability
   - Streaming filter removes `<think>…</think>` and control tokens; stop at `<|im_end|>`
   - Final normalization unifies model differences for clean, copy‑ready answers
@@ -46,8 +55,10 @@ macOS keeps its “workstation feel”; iOS now brings the same private RAG, in 
 
 - Multi‑RAGpack search and synthesis
 - Transversal retrieval across packs (e.g., Kant × Spinoza)
+- Deep Search (query iteration + MMR re‑ranking) with cross‑pack support
 - Fast local inference via llama.cpp + GGUF models
 - Private by design: fully offline; no analytics; minimal, local SystemLog (no PII)
+- Feedback & learning: thumbs up/down feeds ParamBandit to auto‑tune retrieval (session‑scoped, offline)
 - Modern UX
   - Two‑pane macOS UI
   - iOS: History always visible; QADetail overlays; copy‑able answers; smooth keyboard handling
@@ -207,7 +218,7 @@ Importer safeguards:
 
 - iOS universal polishing (iPad layouts, sharing/export)
 - Enhanced right pane: chunk/source/document previews
-- Device‑optimal presets and power/thermal controls
+- Power/thermal controls (device‑aware throttling)
 - Cloudless peer‑to‑peer sync
 - Plugin/API extensibility
 - CI for App targets
