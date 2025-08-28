@@ -2,12 +2,12 @@ import Foundation
 
 class Preprocessor {
     var embeddingModel: EmbeddingModel
-    
+
     @discardableResult
     init(embeddingModel: EmbeddingModel) {
         self.embeddingModel = embeddingModel
     }
-    
+
     func preprocess(document: Any) -> [Chunk] {
         let text: String
         if let str = document as? String {
@@ -23,12 +23,12 @@ class Preprocessor {
         }
         return chunks
     }
-    
+
     func exportRAGpack(chunks: [Chunk], to url: URL) {
         // TODO: RAGpack serialization is currently handled by CLI/Colab tools.
         // This method is a stub for possible future in-app export functionality.
         // 例: JSON+NumPy形式でchunks/embeddings/metadataをzip化
         print("[Preprocessor] exportRAGpack is not implemented yet.")
     }
-    
+
 }

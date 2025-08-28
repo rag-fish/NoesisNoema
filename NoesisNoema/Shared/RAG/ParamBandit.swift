@@ -34,7 +34,7 @@ struct HashClusterer: QueryClusterer {
 final class ParamBandit {
     struct Arm: Hashable { let id: String; let params: RetrievalParams }
     struct BetaAB: Hashable { var alpha: Double; var beta: Double }
-    
+
     struct Config {
         var arms: [Arm]
         var clusterer: QueryClusterer
@@ -43,7 +43,7 @@ final class ParamBandit {
             self.clusterer = clusterer
         }
     }
-    
+
     static let `default`: ParamBandit = {
         let arms: [Arm] = [
             Arm(id: "k4_l0.7_s0.20", params: .init(topK: 4, mmrLambda: 0.7, minScore: 0.20)),
@@ -53,18 +53,18 @@ final class ParamBandit {
         ]
         return ParamBandit(config: .init(arms: arms))
     }()
-    
+
     private let config: Config
     private let rewardBus: RewardBus
     private var cancellable: AnyCancellable?
     private let urand: () -> Double
-    
+
     // cluster -> armId -> Beta
     private var table: [String: [String: BetaAB]] = [:]
     // qaId -> (cluster, armId)
     private var selectionByQa: [UUID: (String, String)] = [:]
     private let queue = DispatchQueue(label: "param.bandit.queue")
-    
+
     init(config: Config, rewardBus: RewardBus = RewardBus.shared, urand: @escaping () -> Double = { Double.random(in: 0..<1) }) {
         self.config = config
         self.rewardBus = rewardBus
@@ -78,9 +78,9 @@ final class ParamBandit {
             self?.handle(event)
         }
     }
-    
+
     deinit { cancellable?.cancel() }
-    
+
     // MARK: - Public API
     func chooseParams(for query: String, qaId: UUID? = nil) -> (cluster: String, arm: Arm) {
         let cluster = config.clusterer.clusterId(for: query)
@@ -97,7 +97,7 @@ final class ParamBandit {
         }
         return (cluster, best.0)
     }
-    
+
     // For explicit updates in tests or integration layers
     func update(cluster: String, armId: String, reward: Bool) {
         queue.sync {
@@ -107,13 +107,13 @@ final class ParamBandit {
             table[cluster]![armId] = ab
         }
     }
-    
+
     func state(cluster: String) -> [String: BetaAB] {
         return queue.sync { table[cluster] ?? [:] }
     }
-    
+
     func arms() -> [Arm] { config.arms }
-    
+
     // MARK: - Private
     private func handle(_ event: RewardEvent) {
         queue.async {
@@ -124,7 +124,7 @@ final class ParamBandit {
             }
         }
     }
-    
+
     private func ensureCluster(_ cluster: String) {
         if table[cluster] == nil {
             var m: [String: BetaAB] = [:]
@@ -132,7 +132,7 @@ final class ParamBandit {
             table[cluster] = m
         }
     }
-    
+
     private func sampleBeta(alpha: Double, beta: Double) -> Double {
         // Use two Gamma draws via Marsaglia and Tsang method (shape k=alpha, theta=1)
         func sampleGamma(_ k: Double) -> Double {

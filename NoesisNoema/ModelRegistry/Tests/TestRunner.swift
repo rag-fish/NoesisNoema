@@ -9,42 +9,42 @@ import Foundation
 
 /// Simple test runner that can be executed from CLI
 class TestRunner {
-    
+
     /// Run all tests and return exit code
     static func runAllTests() async -> Int {
         print("🧪 NoesisNoema Model Registry Test Suite")
         print(String(repeating: "=", count: 50))
-        
+
         var allTestsPassed = true
-        
+
         // Test 1: OOM-safe defaults
         print("\n🔬 Test 1: OOM-Safe Defaults")
         allTestsPassed = testOOMSafeDefaults() && allTestsPassed
-        
+
         // Test 2: Model spec auto-tuning
         print("\n🔬 Test 2: ModelSpec Auto-Tuning")
         allTestsPassed = testModelSpecAutoTuning() && allTestsPassed
-        
+
         // Test 3: GGUF reader validation
         print("\n🔬 Test 3: GGUF Reader Validation")
         allTestsPassed = testGGUFReaderValidation() && allTestsPassed
-        
+
         // Test 4: Model registry functionality
         print("\n🔬 Test 4: Model Registry")
         allTestsPassed = await testModelRegistry() && allTestsPassed
-        
+
         // Test 5: CLI model information formatting
         print("\n🔬 Test 5: CLI Model Information")
         allTestsPassed = await testCLIModelInfo() && allTestsPassed
-        
+
         // Test 6: Runtime parameter optimization
         print("\n🔬 Test 6: Runtime Parameter Optimization")
         allTestsPassed = testRuntimeParameterOptimization() && allTestsPassed
-        
+
         // Test 7: Registry JSON Loader (validation)
         print("\n🔬 Test 7: Registry JSON Loader Validation")
         allTestsPassed = testRegistryJSONLoader() && allTestsPassed
-        
+
         // Test 8: M1 Max Autotune Case
         print("\n🔬 Test 8: M1 Max Autotune Case")
         allTestsPassed = testM1MaxAutotune() && allTestsPassed
@@ -68,19 +68,19 @@ class TestRunner {
         // Test 13: Reset restores recommended
         print("\n🔬 Test 13: Reset Restores Recommended")
         allTestsPassed = await testResetRestoresRecommended() && allTestsPassed
-        
+
         // Test 14: Corrupted GGUF metadata should error
         print("\n🔬 Test 14: Corrupted GGUF Metadata Error")
         allTestsPassed = await testCorruptedGGUFMetadataError() && allTestsPassed
-        
+
         // Test 15: M2 Pro Autotune Case
         print("\n🔬 Test 15: M2 Pro Autotune Case")
         allTestsPassed = testM2ProAutotune() && allTestsPassed
-        
+
         // Test 16: LocalRetriever duplicate suppression and trace
         print("\n🔬 Test 16: LocalRetriever Duplicate Suppression + Trace")
         allTestsPassed = testLocalRetrieverDuplicateSuppressionAndTrace() && allTestsPassed
-        
+
         // Test 17: ParamBandit initializes and updates via RewardBus
         print("\n🔬 Test 17: ParamBandit Init + Reward Updates")
         #if !BRIDGE_TEST
@@ -88,7 +88,7 @@ class TestRunner {
         #else
         print("(skipped under BRIDGE_TEST)")
         #endif
-        
+
         // Test 18: ParamBandit converges with synthetic rewards
         print("\n🔬 Test 18: ParamBandit Convergence (synthetic)")
         #if !BRIDGE_TEST
@@ -96,7 +96,7 @@ class TestRunner {
         #else
         print("(skipped under BRIDGE_TEST)")
         #endif
-        
+
         // Summary
         print("\n" + String(repeating: "=", count: 50))
         if allTestsPassed {
@@ -107,43 +107,43 @@ class TestRunner {
             return 1
         }
     }
-    
+
     /// Test OOM-safe defaults
     private static func testOOMSafeDefaults() -> Bool {
         let params = RuntimeParams.oomSafeDefaults()
-        
+
         // Basic validation
         guard params.nThreads > 0 && params.nThreads <= 16 else {
             print("❌ Invalid thread count: \(params.nThreads)")
             return false
         }
-        
+
         guard params.nCtx >= 1024 && params.nCtx <= 32768 else {
             print("❌ Invalid context size: \(params.nCtx)")
             return false
         }
-        
+
         guard params.nBatch > 0 && params.nBatch <= 2048 else {
             print("❌ Invalid batch size: \(params.nBatch)")
             return false
         }
-        
+
         guard params.memoryLimitMB > 512 else {
             print("❌ Memory limit too low: \(params.memoryLimitMB)")
             return false
         }
-        
+
         guard params.temperature > 0 && params.temperature <= 2.0 else {
             print("❌ Invalid temperature: \(params.temperature)")
             return false
         }
-        
+
         print("✅ OOM-safe defaults are valid")
         print("   Threads: \(params.nThreads), Context: \(params.nCtx), Batch: \(params.nBatch)")
         print("   Memory limit: \(params.memoryLimitMB) MB")
         return true
     }
-    
+
     /// Test model spec auto-tuning
     private static func testModelSpecAutoTuning() -> Bool {
         // Test small model (4B)
@@ -156,7 +156,7 @@ class TestRunner {
             layerCount: 32,
             embeddingDimension: 2048
         )
-        
+
         let smallSpec = ModelSpec.withAutoTunedParams(
             id: "test-small",
             name: "Test Small",
@@ -164,7 +164,7 @@ class TestRunner {
             version: "4B",
             metadata: smallMetadata
         )
-        
+
         // Test large model (20B)
         let largeMetadata = GGUFMetadata(
             architecture: "gpt",
@@ -175,7 +175,7 @@ class TestRunner {
             layerCount: 44,
             embeddingDimension: 6144
         )
-        
+
         let largeSpec = ModelSpec.withAutoTunedParams(
             id: "test-large",
             name: "Test Large",
@@ -183,29 +183,29 @@ class TestRunner {
             version: "20B",
             metadata: largeMetadata
         )
-        
+
         // Validate auto-tuning worked correctly
         guard largeSpec.runtimeParams.nBatch <= smallSpec.runtimeParams.nBatch else {
             print("❌ Large model should have smaller or equal batch size")
             return false
         }
-        
+
         guard smallSpec.tags.contains("small") else {
             print("❌ Small model should have 'small' tag")
             return false
         }
-        
+
         guard largeSpec.tags.contains("large") else {
             print("❌ Large model should have 'large' tag")
             return false
         }
-        
+
         print("✅ Model auto-tuning working correctly")
         print("   Small model batch: \(smallSpec.runtimeParams.nBatch)")
         print("   Large model batch: \(largeSpec.runtimeParams.nBatch)")
         return true
     }
-    
+
     /// Test GGUF reader validation
     private static func testGGUFReaderValidation() -> Bool {
         // Test invalid file
@@ -214,71 +214,71 @@ class TestRunner {
             print("❌ Non-existent file should not be valid")
             return false
         }
-        
+
         // Test with empty path
         let emptyPathValid = GGUFReader.isValidGGUFFile(at: "")
         guard !emptyPathValid else {
             print("❌ Empty path should not be valid")
             return false
         }
-        
+
         print("✅ GGUF reader validation working")
         return true
     }
-    
+
     /// Test model registry functionality
     private static func testModelRegistry() async -> Bool {
         let registry = ModelRegistry.shared
-        
+
         // Get all specs
         let allSpecs = await registry.getAllModelSpecs()
         guard !allSpecs.isEmpty else {
             print("❌ Registry should have predefined models")
             return false
         }
-        
+
         // Test finding specific model
         let janModel = await registry.getModelSpec(id: "jan-v1-4b")
         guard let jan = janModel else {
             print("❌ Should find Jan model")
             return false
         }
-        
+
         guard jan.name == "Jan-V1-4B" else {
             print("❌ Jan model name mismatch: \(jan.name)")
             return false
         }
-        
+
         // Test finding by tag
         let qwenModels = await registry.findModelSpecs(withTag: "qwen")
         guard !qwenModels.isEmpty else {
             print("❌ Should find models with qwen tag")
             return false
         }
-        
+
         // Test finding by architecture
         let llamaModels = await registry.findModelSpecs(withArchitecture: "llama")
         guard !llamaModels.isEmpty else {
             print("❌ Should find models with llama architecture")
             return false
         }
-        
+
         print("✅ Model registry functionality working")
         print("   Total models: \(allSpecs.count)")
         print("   Qwen models: \(qwenModels.count)")
         print("   LLaMA models: \(llamaModels.count)")
         return true
     }
-    
+
     /// Test CLI model information formatting
     private static func testCLIModelInfo() async -> Bool {
         let registry = ModelRegistry.shared
-        
+
         guard let modelInfo = await registry.getModelInfo(id: "jan-v1-4b") else {
             print("❌ Should get model info for Jan model")
             return false
         }
-        
+
         // Check that info contains expected sections
         let requiredSections = [
             "Model ID:",
@@ -289,22 +289,22 @@ class TestRunner {
             "Tags:",
             "Description:"
         ]
-        
+
         for section in requiredSections {
             guard modelInfo.contains(section) else {
                 print("❌ Model info missing section: \(section)")
                 return false
             }
         }
-        
+
         print("✅ CLI model information formatting working")
         return true
     }
-    
+
     /// Test runtime parameter optimization
     private static func testRuntimeParameterOptimization() -> Bool {
         let baseParams = RuntimeParams.oomSafeDefaults()
-        
+
         // Test with different model sizes
         let smallModel = GGUFMetadata(
             architecture: "phi3",
@@ -313,7 +313,7 @@ class TestRunner {
             modelSizeBytes: 2_000_000_000,
             quantization: "Q4_K_M"
         )
-        
+
         let largeModel = GGUFMetadata(
             architecture: "llama",
             parameterCount: 70.0,
@@ -321,27 +321,27 @@ class TestRunner {
             modelSizeBytes: 40_000_000_000,
             quantization: "Q4_K_M"
         )
-        
+
         let smallParams = ModelSpec.autoTuneParameters(metadata: smallModel, baseParams: baseParams)
         let largeParams = ModelSpec.autoTuneParameters(metadata: largeModel, baseParams: baseParams)
-        
+
         // Large model should have more conservative settings
         guard largeParams.nBatch <= smallParams.nBatch else {
             print("❌ Large model should have smaller batch size")
             return false
         }
-        
+
         guard largeParams.nGpuLayers <= smallParams.nGpuLayers else {
             print("❌ Large model should have fewer GPU layers")
             return false
         }
-        
+
         print("✅ Runtime parameter optimization working")
         print("   Small model batch: \(smallParams.nBatch), GPU layers: \(smallParams.nGpuLayers)")
         print("   Large model batch: \(largeParams.nBatch), GPU layers: \(largeParams.nGpuLayers)")
         return true
     }
-    
+
     /// Test registry.json loader and validation
     private static func testRegistryJSONLoader() -> Bool {
         // Malformed: missing 'models'
@@ -351,7 +351,7 @@ class TestRunner {
             print("❌ Loader should fail when 'models' is missing")
             return false
         } catch { /* expected */ }
-        
+
         // Entry not object
         let badEntry = "[1,2,3]"
         do {
@@ -359,7 +359,7 @@ class TestRunner {
             print("❌ Loader should fail when entry is not an object")
             return false
         } catch { /* expected */ }
-        
+
         // Minimal valid
         let ok = "{" +
         "\"models\":[{" +
@@ -380,11 +380,11 @@ class TestRunner {
             print("❌ Loader failed on minimal valid registry: \(error)")
             return false
         }
-        
+
         print("✅ Registry JSON loader validation working")
         return true
     }
-    
+
     /// Test M1 Max hardware case autotune
     private static func testM1MaxAutotune() -> Bool {
         // Construct a fake M1 Max profile (Darwin/arm64, unified memory 64GB)
@@ -426,14 +426,14 @@ class TestRunner {
             return false
         }
         defer { try? FileManager.default.removeItem(at: tmp) }
-        
+
         // Quick validity check
         let valid = GGUFReader.isValidGGUFFile(at: tmp.path)
         guard !valid else {
             print("❌ Corrupted file should not be valid")
             return false
         }
-        
+
         // Read should throw invalidGGUFFile
         do {
             _ = try await GGUFReader.readMetadata(from: tmp.path)
@@ -580,20 +580,20 @@ class TestRunner {
         RegistryPersistence.baseDirectoryOverride = tmpDir
         await RegistryPersistence.shared.wipe()
         await RegistryPersistence.shared.clearCache()
-        
+
         // Prepare a model id and two distinct params
         let modelId = "jan-v1-4b"
         var recommended = RuntimeParams.oomSafeDefaults()
         recommended.nCtx = 4096
         var overrideP = recommended
         overrideP.nCtx = 1024
-        
+
         // Save a record
         await RegistryPersistence.shared.updateRecord(modelId: modelId) { rec in
             rec = ModelRuntimeRecord(recommended: recommended, overrideParams: overrideP, mode: .override)
         }
         await RegistryPersistence.shared.setLastSelectedModel(id: modelId)
-        
+
         // Simulate restart: clear cache then load
         await RegistryPersistence.shared.clearCache()
         guard let rec = await RegistryPersistence.shared.getRecord(for: modelId) else {
@@ -618,13 +618,13 @@ class TestRunner {
         RegistryPersistence.baseDirectoryOverride = tmpDir
         await RegistryPersistence.shared.wipe()
         await RegistryPersistence.shared.clearCache()
-        
+
         let modelId = "llama-3-8b"
         var recommended = RuntimeParams.oomSafeDefaults()
         recommended.nCtx = 2048
         var overrideP = recommended
         overrideP.nCtx = 512
-        
+
         await RegistryPersistence.shared.updateRecord(modelId: modelId) { rec in
             rec = ModelRuntimeRecord(recommended: recommended, overrideParams: overrideP, mode: .override)
         }
@@ -659,7 +659,7 @@ class TestRunner {
             "Apple's M2 chips have unified memory."
         ]
         VectorStore.shared.addTexts(docs, deduplicate: false) // allow duplicates in store
-        
+
         let retriever = LocalRetriever(store: .shared)
         let results = retriever.retrieve(query: "swift programming", k: 4, lambda: 0.7, trace: true)
         guard !results.isEmpty else {
@@ -686,7 +686,7 @@ extension TestRunner {
         var seq: [Double] = Array(repeating: 0.6, count: 100)
         var idx = 0
         let rng: () -> Double = { defer { idx += 1 }; return seq[min(idx, seq.count-1)] }
-        
+
         let arms = [
             ParamBandit.Arm(id: "A", params: RetrievalParams(topK: 4, mmrLambda: 0.7, minScore: 0.1)),
             ParamBandit.Arm(id: "B", params: RetrievalParams(topK: 6, mmrLambda: 0.5, minScore: 0.2))
@@ -715,7 +715,7 @@ extension TestRunner {
         print("✅ Priors + RewardBus update OK (arm=\(chosen))")
         return true
     }
-    
+
     /// With synthetic rewards favoring one arm, TS should pick it more often
     fileprivate static func testParamBanditConvergence() -> Bool {
         // RNG cycling for coverage

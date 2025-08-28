@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+  - repo: local
+    hooks:
+      - id: lint-pbxproj
+        name: Validate Xcode project
+        entry: plutil -lint NoesisNoema.xcodeproj/project.pbxproj
+        language: system
+        files: \.pbxproj$

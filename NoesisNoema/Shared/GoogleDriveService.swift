@@ -7,7 +7,7 @@
 
 
 class GoogleDriveService {
-    
+
     /**
         * Represents a service for interacting with Google Drive.
         * - Methods:
@@ -15,7 +15,7 @@ class GoogleDriveService {
         *   - download(filename: Any): Downloads a file from Google Drive.
         *   - listFiles(): Lists files in Google Drive.
         */
-    
+
     /**     * Uploads a file to Google Drive.
         * - Parameter file: The file to be uploaded, which can be of any type.
         * - Note: This method should handle the authentication and upload process to Google Drive.
@@ -32,8 +32,8 @@ class GoogleDriveService {
         //       Ensure the method supports various file types and sizes, and consider returning
         //       a confirmation or metadata about the uploaded file in future versions.
     }
-    
-    
+
+
     /**
         * Downloads a file from Google Drive.
         * - Parameter filename: The name of the file to be downloaded, which can be of any type.
@@ -50,7 +50,7 @@ class GoogleDriveService {
         //       and ensuring the file is correctly saved or returned to the caller.
         //       Consider supporting progress callbacks and returning the file data or a local file path.
     }
-    
+
     /**
         * Lists files in Google Drive.
         * - Note: This method should retrieve and return a list of files available in Google Drive.
@@ -67,5 +67,5 @@ class GoogleDriveService {
         //       and returning a structured list of file metadata (e.g., names, IDs, sizes).
         //       Ensure the method is efficient and scalable for large file collections.
     }
-    
+
 }

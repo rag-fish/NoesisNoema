@@ -7,7 +7,7 @@
 import Foundation
 
 class LLMModel: @unchecked Sendable {
-    
+
     /**
         * Represents a large language model (LLM) with its properties and methods.
         *
@@ -18,19 +18,19 @@ class LLMModel: @unchecked Sendable {
         *   - isEmbedded: A boolean indicating if the model is embedded.
         */
     var name: String
-    
+
     /**
         * The file containing the model.
         * This file is used to load the model's configuration and weights.
         */
     var modelFile: String
-    
+
     /**
         * The version of the model.
         * This is used to ensure compatibility with other components.
         */
     var version: String
-    
+
     /**
         * Indicates whether the model is embedded.
         * This is used to determine if the model can be used directly or needs to be loaded from a file.
@@ -43,7 +43,7 @@ class LLMModel: @unchecked Sendable {
         * - Parameter modelFile: The file containing the model.
         * - Parameter version: The version of the model.
         * - Parameter isEmbedded: A boolean indicating if the model is embedded.
-     
+
      */
     init(name: String, modelFile: String, version: String, isEmbedded: Bool = false) {
         self.name = name
@@ -51,7 +51,7 @@ class LLMModel: @unchecked Sendable {
         self.version = version
         self.isEmbedded = isEmbedded
     }
-    
+
     /**
         * Generates a response based on the provided prompt.
         * - Parameter prompt: The input text to generate a response for.

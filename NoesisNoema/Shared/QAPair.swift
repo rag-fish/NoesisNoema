@@ -20,7 +20,7 @@ struct QAPair: Identifiable, Codable, Equatable, Hashable {
     var date: Date?
     /// Optional paragraph-level citation mapping and catalog
     var citations: ParagraphCitations? = nil
-    
+
     /// Initializes a new QAPair with given question, answer, and optional date.
     /// - Parameters:
     ///   - id: The unique identifier. Defaults to a new UUID.

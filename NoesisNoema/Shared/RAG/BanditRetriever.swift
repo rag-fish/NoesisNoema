@@ -8,13 +8,13 @@ struct BanditRetriever {
     var bandit: ParamBandit
     var base: LocalRetriever
     private let store: VectorStore
-    
+
     init(bandit: ParamBandit = .default, store: VectorStore = .shared) {
         self.bandit = bandit
         self.store = store
         self.base = LocalRetriever(store: store, config: .init())
     }
-    
+
     /// Retrieve chunks using Thompson-sampled parameters per query cluster.
     /// - Parameters:
     ///   - query: input query

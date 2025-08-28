@@ -15,7 +15,7 @@ import Foundation
     of the query are handled externally by a service or controller.
 */
 class UserQuery {
-    
+
     /**
         The question asked by the user.
     */
@@ -34,5 +34,5 @@ class UserQuery {
     init(question: String) {
         self.question = question
     }
-    
+
 }

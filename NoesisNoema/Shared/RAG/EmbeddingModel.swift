@@ -7,7 +7,7 @@
 import Foundation
 
 class EmbeddingModel {
-    
+
     /**
         * Represents an embedding model with its properties and methods.
         * - Properties:
@@ -22,7 +22,7 @@ class EmbeddingModel {
     init(name: String) {
         self.name = name
     }
-    
+
     /// テキストを埋め込みベクトルに変換（トークナイザーに依存しないダミー実装）
     func embed(text: String) -> [Float] {
         // 1. テキストの文字コードの合計を計算
@@ -34,7 +34,7 @@ class EmbeddingModel {
         // 3. 埋め込みベクトルを返す
         return embedding
     }
-    
+
     /// embeddings.csvから[[Float]]としてロードする
     func loadEmbeddingsCSV(from url: URL) -> [[Float]] {
         do {

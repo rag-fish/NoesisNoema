@@ -8,16 +8,16 @@ import Foundation
 
 /// CLI interface for model management
 struct ModelCLI {
-    
+
     /// Main entry point for model CLI commands
     static func handleCommand(_ args: [String]) async -> Int {
         guard args.count >= 2 else {
             printUsage()
             return 1
         }
-        
+
         let command = args[1].lowercased()
-        
+
         switch command {
         case "info":
             return await handleInfoCommand(Array(args.dropFirst(2)))
@@ -42,7 +42,7 @@ struct ModelCLI {
             return 1
         }
     }
-    
+
     /// Handle 'nn model info <id>' command
     private static func handleInfoCommand(_ args: [String]) async -> Int {
         guard !args.isEmpty else {
@@ -50,7 +50,7 @@ struct ModelCLI {
             print("Usage: nn model info <model-id> [--dry-run] [--trace]")
             return 1
         }
-        
+
         // Parse args: first non-flag = id, flags: --trace, --dry-run
         var modelId: String?
         var trace = false
@@ -67,14 +67,14 @@ struct ModelCLI {
             print("Error: Model ID required")
             return 1
         }
-        
+
         let id = modelId.lowercased()
         let registry = ModelRegistry.shared
-        
+
         // First scan for models to ensure we have the latest information
         await registry.scanForModels()
         await registry.updateModelAvailability()
-        
+
         guard var spec = await registry.getModelSpec(id: id) else {
             print("Error: Model '\(id)' not found")
             print("\nAvailable models:")
@@ -84,14 +84,14 @@ struct ModelCLI {
             }
             return 1
         }
-        
+
         // Run autotune with optional tracing and dry-run (skip file hashing)
         let (params, outcome) = await AutotuneService.shared.recommend(for: spec, timeoutSeconds: 3.0, trace: trace, dryRun: dryRun)
         if let warn = outcome.warning { print("⚠️  \(warn)") }
-        
+
         // Persist updated params back to registry for this session
         await registry.updateRuntimeParams(for: spec.id, params: params)
-        
+
         // Re-read composed info for printing
         if let modelInfo = await registry.getModelInfo(id: id) {
             print(modelInfo)
@@ -103,20 +103,20 @@ struct ModelCLI {
             return 0
         }
     }
-    
+
     /// Handle 'nn model list' command
     private static func handleListCommand(_ args: [String]) async -> Int {
         let registry = ModelRegistry.shared
         await registry.scanForModels()
         await registry.updateModelAvailability()
-        
+
         let showAll = args.contains("--all") || args.contains("-a")
         let showAvailable = args.contains("--available") || !showAll
-        
+
         let specs = showAvailable ?
             await registry.getAvailableModelSpecs() :
             await registry.getAllModelSpecs()
-        
+
         if specs.isEmpty {
             if showAvailable {
                 print("No available models found. Try 'nn model list --all' to see all registered models.")
@@ -125,17 +125,17 @@ struct ModelCLI {
             }
             return 0
         }
-        
+
         print(showAvailable ? "Available Models:" : "All Registered Models:")
         print(String(repeating: "=", count: 60))
-        
+
         for spec in specs {
             let status = spec.isAvailable ? "✓" : "✗"
             let paramStr = String(format: "%.1fB", spec.metadata.parameterCount)
             let sizeStr = spec.metadata.modelSizeBytes > 0 ?
                 String(format: "%.1f GB", Double(spec.metadata.modelSizeBytes) / (1024 * 1024 * 1024)) :
                 "Unknown"
-            
+
             print("\(status) \(spec.id)")
             print("   Name: \(spec.name) (\(spec.version))")
             print("   Architecture: \(spec.metadata.architecture), Parameters: \(paramStr), Size: \(sizeStr)")
@@ -146,14 +146,14 @@ struct ModelCLI {
             print("   Tags: \(spec.tags.joined(separator: ", "))")
             print()
         }
-        
+
         return 0
     }
-    
+
     /// Handle 'nn model scan' command
     private static func handleScanCommand(_ args: [String]) async -> Int {
         let registry = ModelRegistry.shared
-        
+
         if args.isEmpty {
             print("Scanning standard model directories...")
             await registry.scanForModels()
@@ -163,21 +163,21 @@ struct ModelCLI {
                 await registry.scanDirectory(path)
             }
         }
-        
+
         await registry.updateModelAvailability()
-        
+
         let availableCount = await registry.getAvailableModelSpecs().count
         let totalCount = await registry.getAllModelSpecs().count
-        
+
         print("Scan complete. Found \(availableCount) available models out of \(totalCount) registered.")
         return 0
     }
-    
+
     /// Handle 'nn model available' command
     private static func handleAvailableCommand(_ args: [String]) async -> Int {
         return await handleListCommand(["--available"])
     }
-    
+
     /// Handle 'nn model test' command
     private static func handleTestCommand(_ args: [String]) async -> Int {
         #if BRIDGE_TEST
@@ -187,7 +187,7 @@ struct ModelCLI {
         return await TestRunner.runAllTests()
         #endif
     }
-    
+
     /// Print OOM-safe defaults
     private static func handleDefaultsCommand() -> Int {
         let params = RuntimeParams.oomSafeDefaults()
@@ -202,14 +202,14 @@ struct ModelCLI {
         print("   → GPU Layers: \(params.nGpuLayers)")
         return 0
     }
-    
+
     /// Handle 'nn model demo' command (textual demo of auto-tuning and registry)
     private static func handleDemoCommand() async -> Int {
         print("🚀 NoesisNoema Model Registry Demonstration")
         print(String(repeating: "=", count: 60))
         print("")
         _ = handleDefaultsCommand()
-        
+
         // Sample models demo
         let base = RuntimeParams.oomSafeDefaults()
         let samples: [(String, GGUFMetadata)] = [
@@ -229,7 +229,7 @@ struct ModelCLI {
             print("       - GPU Layers: \(autoParams.nGpuLayers)")
             print("       - Memory Limit: \(autoParams.memoryLimitMB) MB")
         }
-        
+
         // Registry preview
         print("\n📋 Predefined Model Registry:")
         let registry = ModelRegistry.shared
@@ -242,30 +242,30 @@ struct ModelCLI {
             print("     Tags: \(spec.tags.joined(separator: ", "))")
             print("     Runtime: ctx=\(spec.runtimeParams.nCtx), batch=\(spec.runtimeParams.nBatch)")
         }
-        
+
         print("\n💡 Key Benefits:")
         print("   ✅ Automatic parameter tuning based on GGUF metadata")
         print("   ✅ OOM-safe defaults prevent memory crashes")
         print("   ✅ Device-specific optimization (iOS vs macOS)")
         print("   ✅ Model size-aware batch sizing")
         print("   ✅ Quantization-aware memory management")
-        
+
         print("\n🔧 CLI Usage Examples:")
         print("   nn model list                    # List available models")
         print("   nn model info jan-v1-4b         # Show detailed model info")
         print("   nn model scan /path/to/models    # Scan for GGUF files")
         print("   nn model test                    # Run functionality tests")
-        
+
         return 0
     }
-    
+
     /// Print CLI usage information
     private static func printUsage() {
         print("""
         NoesisNoema Model CLI
-        
+
         Usage: nn model <command> [options]
-        
+
         Commands:
           info <model-id>    Show detailed information about a model
           list [--all]       List available models (or all with --all)
@@ -275,11 +275,11 @@ struct ModelCLI {
           defaults           Print OOM-safe default runtime parameters
           demo               Print a textual demo of auto-tuning and registry
           help               Show this help message
-        
+
         Options (info):
           --dry-run          Skip file hashing and model load; compute recommended params only
           --trace            Print decision rationale and timing during autotune
-        
+
         Examples:
           nn model info jan-v1-4b --dry-run
           nn model list
@@ -289,7 +289,7 @@ struct ModelCLI {
           nn model available
           nn model defaults
           nn model demo
-        
+
         Model ID Format:
           Model IDs are lowercase, with hyphens replaced by underscores.
           Examples: jan_v1_4b, llama_3_8b, phi_3_mini
@@ -300,12 +300,12 @@ struct ModelCLI {
 /// Enhanced main function for LlamaBridgeTest with model CLI support
 func enhancedMain() async -> Int {
     let args = CommandLine.arguments
-    
+
     // Check if this is a model CLI command
     if args.count >= 2 && args[1].lowercased() == "model" {
         return await ModelCLI.handleCommand(args)
     }
-    
+
     // Otherwise, fall back to existing LlamaBridgeTest functionality
     return await runOriginalLlamaBridgeTest()
 }

@@ -47,7 +47,7 @@ struct MMR {
         }
         return selected
     }
-    
+
     private static func cosine(_ a: [Float], _ b: [Float]) -> Float {
         var dot: Float = 0, na: Float = 0, nb: Float = 0
         let n = min(a.count, b.count)

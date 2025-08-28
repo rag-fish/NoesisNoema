@@ -10,13 +10,13 @@ class AnswerGenerator {
     var embeddingModel: EmbeddingModel
     var vectorStore: VectorStore
     var llmModel: LLMModel
-    
+
     init(embeddingModel: EmbeddingModel, vectorStore: VectorStore, llmModel: LLMModel) {
         self.embeddingModel = embeddingModel
         self.vectorStore = vectorStore
         self.llmModel = llmModel
     }
-    
+
     /**
      * Generates an answer based on the provided query.
      * - Parameters:
@@ -34,29 +34,29 @@ class AnswerGenerator {
         let metadata: [String: Any] = ["chunks": relevantChunks.map { $0.content }]
         return Answer(text: response, score: score, metadata: metadata)
     }
-    
+
     /// Embeds the query text into a vector representation.
     private func embedQuery(_ query: String) -> [Float] {
         return embeddingModel.embed(text: query)
     }
-    
+
     /// Finds the most relevant chunks from the vector store based on the query embedding.
     private func findRelevantChunks(queryEmbedding: [Float], topK: Int) -> [Chunk] {
         return vectorStore.findRelevant(queryEmbedding: queryEmbedding, topK: topK)
     }
-    
+
     /// Builds the prompt string to be sent to the language model.
     private func buildPrompt(query: String, chunks: [Chunk]) -> String {
         let context = chunks.map { $0.content }.joined(separator: "\n")
         return "Question: \(query)\nContext:\n\(context)"
     }
-    
+
     /// Calculates a similarity score between the query embedding and a chunk embedding using dot product.
     private func scoreAnswer(queryEmbedding: [Float], chunkEmbedding: [Float]?) -> Float {
         // embeddingがないため常に0.0を返す
         return 0.0
     }
-    
+
     /// Computes the dot product of two vectors.
     private func dotProduct(_ vectorA: [Float], _ vectorB: [Float]) -> Float {
         return zip(vectorA, vectorB).reduce(0) { $0 + $1.0 * $1.1 }

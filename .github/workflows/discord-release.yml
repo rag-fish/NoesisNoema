@@ -55,4 +55,3 @@ jobs:
             } else {
               core.info(`Sent release ${release.tag_name} to Discord`);
             }
-

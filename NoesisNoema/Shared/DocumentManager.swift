@@ -43,7 +43,7 @@ class DocumentManager: ObservableObject {
     @Published var ragpackChunks: [String: [Chunk]] = [:]
     let historyKey = "RAGpackUploadHistory"
     let ragpackChunksKey = "RAGpackChunks"
-    
+
     /// Stores all question-answer pairs (QA history).
     @Published var qaHistory: [QAPair] = []
     /// Tracks the currently selected question-answer pair.
@@ -245,7 +245,7 @@ class DocumentManager: ObservableObject {
     func importModelResource(file: Any) {
         // TODO: implement model resource import for RAGpack-based architecture.
     }
-    
+
     /// モデルファイル探索＋LlamaStateでロード＋推論
     func inferWithLlama(prompt: String, fileName: String = "llama3-8b.gguf", completion: @escaping (String) -> Void) {
         // プレ・プロンプト（独白/CoT抑止）
@@ -297,9 +297,9 @@ class DocumentManager: ObservableObject {
         print("[Llama] NOT FOUND in any attempted path!")
         completion("[Llama] Model file not found.")
     }
-    
+
     // MARK: - QA History Management
-    
+
     /// Adds a new question-answer pair to the QA history and sets it as the selected pair.
     /// - Parameters:
     ///   - question: The question string.
@@ -313,13 +313,13 @@ class DocumentManager: ObservableObject {
         saveQAHistory()
         return newPair
     }
-    
+
     /// Selects the specified QA pair.
     /// - Parameter pair: The QA pair to select.
     func selectQAPair(_ pair: QAPair) {
         selectedQAPair = pair
     }
-    
+
     /// Deletes QA pairs at the specified offsets. If the deleted pair was selected, clears the selection.
     /// - Parameter offsets: The index set of QA pairs to delete.
     func deleteQAPair(at offsets: IndexSet) {
@@ -332,14 +332,14 @@ class DocumentManager: ObservableObject {
         qaHistory.remove(atOffsets: offsets)
         saveQAHistory()
     }
-    
+
     /// Clears all QA history and selection.
     func clearQAHistroy() {
         qaHistory.removeAll()
         selectedQAPair = nil
         saveQAHistory()
     }
-    
+
     /// Saves the QA history to UserDefaults.
     private func saveQAHistory() {
         let encoder = JSONEncoder()
@@ -347,7 +347,7 @@ class DocumentManager: ObservableObject {
             UserDefaults.standard.set(data, forKey: qaHistoryKey)
         }
     }
-    
+
     /// Loads the QA history from UserDefaults.
     private func loadQAHistory() {
         let decoder = JSONDecoder()

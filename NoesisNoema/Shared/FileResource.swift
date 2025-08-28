@@ -6,12 +6,12 @@
 import Foundation
 
 class FileResource {
-    
+
     var filename: String
     var data: Data
-    
+
     /// Initializes a FileResource with a filename and data.
-    
+
     init(filename: String, data: Data) {
         self.filename = filename
         self.data = data

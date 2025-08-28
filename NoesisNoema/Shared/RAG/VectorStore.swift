@@ -6,7 +6,7 @@
 import Foundation
 
 class VectorStore {
-    
+
     /**
         A structure representing a chunk of text with its embedding.
         - `text`: The text content of the chunk.
@@ -24,11 +24,11 @@ class VectorStore {
         self.chunks = chunks
         self.isEmbedded = false
     }
-    
+
     // MARK: - CRUD / Utilities
     /// 総チャンク数
     var count: Int { chunks.count }
-    
+
     /// 生テキスト群を受け取り、埋め込みを生成して追加（重複はcontent+embeddingで排除）
     func addTexts(_ texts: [String], deduplicate: Bool = true) {
         guard !texts.isEmpty else { return }
@@ -40,7 +40,7 @@ class VectorStore {
         }
         addChunks(newChunks, deduplicate: deduplicate)
     }
-    
+
     /// 既存のChunk配列を追加（必要なら重複除外）
     func addChunks(_ newChunks: [Chunk], deduplicate: Bool = true) {
         guard !newChunks.isEmpty else { return }
@@ -57,10 +57,10 @@ class VectorStore {
             chunks.append(contentsOf: uniques)
         }
     }
-    
+
     /// 全削除
     func clear() { chunks.removeAll() }
-    
+
     /// すべてのチャンクを現行のEmbeddingModelで再埋め込み（contentは保持）
     func reembedAll() {
         guard !chunks.isEmpty else { return }
@@ -68,20 +68,20 @@ class VectorStore {
             chunks[i].embedding = embeddingModel.embed(text: chunks[i].content)
         }
     }
-    
+
     /// JSONファイルへ保存（ChunkはCodable）
     func save(to url: URL) throws {
         let data = try JSONEncoder().encode(chunks)
         try data.write(to: url, options: .atomic)
     }
-    
+
     /// JSONファイルから読込（既存は置き換え）
     func load(from url: URL) throws {
         let data = try Data(contentsOf: url)
         let loaded = try JSONDecoder().decode([Chunk].self, from: data)
         self.chunks = loaded
     }
-        
+
     /**
         クエリ埋め込みベクトルに最も類似したChunkを返す
         - Parameter queryEmbedding: クエリの埋め込みベクトル（[Float]型）
@@ -105,7 +105,7 @@ class VectorStore {
         }
         return scored.sorted { $0.1 > $1.1 }.prefix(topK).map { $0.0 }
     }
-    
+
     private func cosineSimilarity(a: [Float], b: [Float]) -> Float {
         var dot: Float = 0
         var na: Float = 0
@@ -124,7 +124,7 @@ class VectorStore {
         if denom == 0 { return 0 }
         return dot / denom
     }
-    
+
     /// Retrieves the top-K most relevant chunks for a given query string using the embedding model.
     /// - Parameters:
     ///   - query: The query string to search for relevant chunks.
@@ -137,7 +137,7 @@ class VectorStore {
         let relevantChunks = findRelevant(queryEmbedding: queryEmbedding, topK: topK)
         return relevantChunks
     }
-    
+
     /// Generates a RAG (Retrieval-Augmented Generation) answer for the given query.
     /// - Parameters:
     ///   - query: The question/query string.
@@ -162,7 +162,7 @@ class VectorStore {
         return answer
         #endif
     }
-    
+
     /// VectorStoreのシングルトン（RAG検索対象チャンクを保持）
     static let shared = VectorStore(embeddingModel: EmbeddingModel(name: "default-embedding"))
 }

@@ -246,8 +246,8 @@ PR Checklist (policy):
 
 ## From the Maintainers 💬
 
-This project is not just code — it’s our exploration of private AGI, blending philosophy and engineering.  
-Each commit is a step toward tools that respect autonomy, curiosity, and the joy of building.  
+This project is not just code — it’s our exploration of private AGI, blending philosophy and engineering.
+Each commit is a step toward tools that respect autonomy, curiosity, and the joy of building.
 Stay curious, and contribute if it resonates with you.
 
 🌟

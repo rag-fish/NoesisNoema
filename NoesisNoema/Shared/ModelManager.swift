@@ -54,13 +54,13 @@ class ModelManager {
         self.currentEmbeddingModel = EmbeddingModel(name: "default-embedding")
         // Default LLM -> Jan-V1-4B (bundled under Resources/Models)
         self.currentLLMModel = LLMModel(name: "Jan-V1-4B", modelFile: "Jan-v1-4B-Q4_K_M.gguf", version: "4B")
-        
+
         // Initialize model registry in background
         Task {
             await self.initializeModelRegistry()
         }
     }
-    
+
     /// Tests can disable background autotune to avoid flakiness
     static var disableAutotuneForTests: Bool = false
 
@@ -68,17 +68,17 @@ class ModelManager {
     var availableLLMModels: [String] {
         return cachedLLMModelNames
     }
-    
+
     /// Get available LLM model IDs (synchronous snapshot for UI)
     var availableLLMModelIds: [String] {
         return cachedLLMModelIds
     }
-    
+
     /// Initialize the model registry
     private func initializeModelRegistry() async {
         await ModelRegistry.shared.scanForModels()
         await ModelRegistry.shared.updateModelAvailability()
-        
+
         // Load last selected model from persistence if available
         let lastSelected = await RegistryPersistence.shared.getLastSelectedModelId()
         var preferred: ModelSpec?
@@ -97,7 +97,7 @@ class ModelManager {
             // Apply persisted mode/params
             await applyPersistedState(for: preferred.id, fallbackSpec: preferred)
         }
-        
+
         // Update cached model lists for UI
         await self.updateCachedRegistrySnapshot()
     }
@@ -155,28 +155,28 @@ class ModelManager {
     func switchLLMModel(name: String) {
         switchLLMModel(identifier: name)
     }
-    
+
     /// Async version of switchLLMModel that uses the model registry
     func switchLLMModelAsync(identifier: String) async {
         // First try to find by ID
         var spec = await ModelRegistry.shared.getModelSpec(id: identifier.lowercased())
-        
+
         // If not found by ID, try to find by name
         if spec == nil {
             let allSpecs = await ModelRegistry.shared.getAllModelSpecs()
             spec = allSpecs.first { $0.name.lowercased() == identifier.lowercased() }
         }
-        
+
         // Fallback to legacy mapping for backward compatibility
         if spec == nil {
             spec = await getLegacyModelSpec(name: identifier)
         }
-        
+
         guard let modelSpec = spec else {
             print("[ModelManager] Model not found: \(identifier)")
             return
         }
-        
+
         // Update current model and spec
         self.currentLLMModel = LLMModel(
             name: modelSpec.name,
@@ -184,18 +184,18 @@ class ModelManager {
             version: modelSpec.version
         )
         self.currentModelSpec = modelSpec
-        
+
         print("[ModelManager] Switched to model: \(modelSpec.name) (\(modelSpec.id))")
-        
+
         // Apply persisted runtime mode/params if any
         await applyPersistedState(for: modelSpec.id, fallbackSpec: modelSpec)
-        
+
         // Kick off background autotune (non-blocking)
         if !Self.disableAutotuneForTests {
             self.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.5, completion: nil)
         }
     }
-    
+
     /// Legacy model mapping for backward compatibility
     private func getLegacyModelSpec(name: String) async -> ModelSpec? {
         switch name {
@@ -227,24 +227,24 @@ class ModelManager {
     func getCurrentRuntimeParams() -> RuntimeParams? {
         return currentModelSpec?.runtimeParams
     }
-    
+
     /// Get OOM-safe runtime parameters for the current model
     func getOOMSafeParams() -> RuntimeParams {
         return currentModelSpec?.runtimeParams ?? RuntimeParams.oomSafeDefaults()
     }
-    
+
     /// Refresh model registry and update availability
     func refreshModelRegistry() async {
         await ModelRegistry.shared.scanForModels()
         await ModelRegistry.shared.updateModelAvailability()
-        
+
         // Update current model spec if it exists
         if let currentSpec = currentModelSpec {
             if let updatedSpec = await ModelRegistry.shared.getModelSpec(id: currentSpec.id) {
                 self.currentModelSpec = updatedSpec
             }
         }
-        
+
         // Update cached lists
         await self.updateCachedRegistrySnapshot()
     }
@@ -343,14 +343,14 @@ class ModelManager {
                     rec!.recommended = params
                 }
             }
-            
+
             // Apply to current spec only if in recommended mode
             if self.runtimeMode == .recommended {
                 var updated = spec
                 updated.runtimeParams = params
                 self.currentModelSpec = updated
             }
-            
+
             if let completion {
                 await MainActor.run { completion(outcome) }
             }

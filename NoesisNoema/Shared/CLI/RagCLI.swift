@@ -93,7 +93,7 @@ struct RagCLI {
             printUsage(); return 1
         }
     }
-    
+
     private static func handleRetrieve(_ args: [String]) -> Int {
         var query: String?
         var topK = 5
@@ -164,7 +164,7 @@ struct RagCLI {
         }
         return 0
     }
-    
+
     private static func handleDemo(_ args: [String]) -> Int {
         // Seed a tiny demo corpus if empty
         if VectorStore.shared.count == 0 {
@@ -259,13 +259,13 @@ struct RagCLI {
         print(String(format: "Accuracy: %.1f%%  (%d/%d)", acc*100.0, hits, total))
         return 0
     }
-    
+
     private static func printUsage() {
         print("""
         NoesisNoema RAG CLI
-        
+
         Usage: nn rag <command> [options]
-        
+
         Commands:
           retrieve "<query>"    Retrieve top-k chunks via BM25+Embedding → MMR
           deep "<query>"        Multi-round DeepSearch (expansion + hybrid + MMR)
@@ -273,19 +273,19 @@ struct RagCLI {
           demo [query]           Seed a demo corpus and run a traced retrieval
           bandit "<query>"      Retrieve using ParamBandit-selected params (TS) [non-BRIDGE builds]
           help                   Show this help
-        
+
         Options (retrieve):
           --top-k N              Number of final results (default: 5)
           --lambda F             MMR trade-off (0..1, default: 0.7)
           --trace                Log decisions and intermediate stats
-        
+
         Options (deep):
           --top-k N              Number of final results (default: 5)
           --rounds R             Expansion rounds (default: 2)
           --breadth B            Candidates per round (default: 8)
           --lambda F             MMR trade-off (0..1, default: 0.7)
           --trace                Log decisions and intermediate stats
-        
+
         Options (eval):
           --method retrieve|deep Select retrieval method (default: retrieve)
           --top-k N              TopK for evaluation (default: 5)
@@ -293,7 +293,7 @@ struct RagCLI {
           --breadth B            Used when method=deep (default: 8)
           --lambda F             MMR trade-off (default: 0.7)
           --trace                Print per-case results
-        
+
         Examples:
           nn rag retrieve "explain bm25 and mmr" --top-k 5 --trace
           nn rag deep "apple silicon unified memory" --rounds 2 --breadth 10 --top-k 5 --trace

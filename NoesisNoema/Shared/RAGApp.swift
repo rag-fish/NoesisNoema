@@ -7,8 +7,8 @@ import Foundation
 
 
 class RAGApp {
-    
-    
+
+
     /**
         * Represents the RAG application with its core components.
         * - Properties:
@@ -31,13 +31,13 @@ class RAGApp {
         * - SeeAlso: `DocumentManager`, `ModelManager`, `Settings`
      */
     var documentManager: DocumentManager
-    
+
     /// The model manager used for managing models.
     var modelManager: ModelManager
-    
+
     /// The settings for the RAG application.
     var settings: Settings
-    
+
     /**
         * Initializes the RAGApp with the specified document manager, model manager, and settings.
         * - Parameters:
@@ -51,9 +51,9 @@ class RAGApp {
         self.documentManager = documentManager
         self.modelManager = modelManager
         self.settings = settings
-        
+
         // Additional setup can be done here if needed
     }
-            
+
 
 }

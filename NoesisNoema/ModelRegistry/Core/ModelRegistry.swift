@@ -8,16 +8,16 @@ import Foundation
 
 /// Registry for managing model specifications and auto-tuning parameters
 actor ModelRegistry {
-    
+
     /// Singleton instance
     static let shared = ModelRegistry()
-    
+
     /// Registered model specifications
     private var modelSpecs: [String: ModelSpec] = [:]
-    
+
     /// File paths being scanned
     private var scanningPaths: Set<String> = []
-    
+
     /// Predefined model specifications (fallbacks)
     private let predefinedSpecs: [ModelSpec] = [
         ModelSpec(
@@ -116,58 +116,58 @@ actor ModelRegistry {
             description: "GPT-OSS 20B parameter large language model"
         )
     ]
-    
+
     private init() {
         // Initialize with predefined specs
         for spec in predefinedSpecs {
             modelSpecs[spec.id] = spec
         }
     }
-    
+
     /// Register a model specification
     func register(_ spec: ModelSpec) {
         modelSpecs[spec.id] = spec
     }
-    
+
     /// Update runtime params for a given model id (if exists)
     func updateRuntimeParams(for id: String, params: RuntimeParams) {
         guard var spec = modelSpecs[id] else { return }
         spec.runtimeParams = params
         modelSpecs[id] = spec
     }
-    
+
     /// Get a model specification by ID
     func getModelSpec(id: String) -> ModelSpec? {
         return modelSpecs[id]
     }
-    
+
     /// Get all registered model specifications
     func getAllModelSpecs() -> [ModelSpec] {
         return Array(modelSpecs.values).sorted { $0.name < $1.name }
     }
-    
+
     /// Get available (file exists) model specifications
     func getAvailableModelSpecs() -> [ModelSpec] {
         return getAllModelSpecs().filter { $0.isAvailable }
     }
-    
+
     /// Find model specifications by tag
     func findModelSpecs(withTag tag: String) -> [ModelSpec] {
         return getAllModelSpecs().filter { spec in
             spec.tags.contains { $0.lowercased() == tag.lowercased() }
         }
     }
-    
+
     /// Find model specifications by architecture
     func findModelSpecs(withArchitecture architecture: String) -> [ModelSpec] {
         return getAllModelSpecs().filter { spec in
             spec.metadata.architecture.lowercased() == architecture.lowercased() }
     }
-    
+
     /// Scan for GGUF files in standard locations and register them
     func scanForModels() async {
         let searchPaths = getModelSearchPaths()
-        
+
         for path in searchPaths {
             if !scanningPaths.contains(path) {
                 scanningPaths.insert(path)
@@ -176,17 +176,17 @@ actor ModelRegistry {
             }
         }
     }
-    
+
     /// Scan for GGUF files in a specific directory
     func scanDirectory(_ directoryPath: String) async {
         guard FileManager.default.fileExists(atPath: directoryPath) else {
             return
         }
-        
+
         do {
             let contents = try FileManager.default.contentsOfDirectory(atPath: directoryPath)
             let ggufFiles = contents.filter { $0.lowercased().hasSuffix(".gguf") }
-            
+
             for fileName in ggufFiles {
                 let fullPath = "\(directoryPath)/\(fileName)"
                 await registerGGUFFile(at: fullPath)
@@ -195,22 +195,22 @@ actor ModelRegistry {
             print("[ModelRegistry] Error scanning directory \(directoryPath): \(error)")
         }
     }
-    
+
     /// Register a GGUF file by reading its metadata
     func registerGGUFFile(at filePath: String) async {
         guard GGUFReader.isValidGGUFFile(at: filePath) else {
             print("[ModelRegistry] Invalid GGUF file: \(filePath)")
             return
         }
-        
+
         do {
             let metadata = try await GGUFReader.readMetadata(from: filePath)
             let fileName = URL(fileURLWithPath: filePath).lastPathComponent
             let baseName = URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
-            
+
             // Generate ID from filename
             let id = generateModelId(from: baseName)
-            
+
             // Check if we already have this model registered
             if let existingSpec = modelSpecs[id] {
                 // Update existing spec with actual file path and availability
@@ -233,25 +233,25 @@ actor ModelRegistry {
                 )
                 modelSpecs[id] = spec
             }
-            
+
             print("[ModelRegistry] Registered model: \(id) at \(filePath)")
         } catch {
             print("[ModelRegistry] Error reading GGUF metadata from \(filePath): \(error)")
         }
     }
-    
+
     /// Update model availability by checking file paths
     func updateModelAvailability() async {
         for (id, spec) in modelSpecs {
             var updatedSpec = spec
-            
+
             if let filePath = spec.filePath {
                 updatedSpec.isAvailable = FileManager.default.fileExists(atPath: filePath)
             } else {
                 // Try to find the model file in standard locations
                 let searchPaths = getModelSearchPaths()
                 updatedSpec.isAvailable = false
-                
+
                 for searchPath in searchPaths {
                     let candidatePath = "\(searchPath)/\(spec.modelFile)"
                     if FileManager.default.fileExists(atPath: candidatePath) {
@@ -261,22 +261,22 @@ actor ModelRegistry {
                     }
                 }
             }
-            
+
             modelSpecs[id] = updatedSpec
         }
     }
-    
+
     /// Get model information formatted for CLI display
     func getModelInfo(id: String) -> String? {
         guard let spec = modelSpecs[id] else {
             return nil
         }
-        
+
         let availabilityStatus = spec.isAvailable ? "✓ Available" : "✗ Not Found"
         let fileLocation = spec.filePath ?? "Unknown"
         let sizeGB = String(format: "%.1f GB", Double(spec.metadata.modelSizeBytes) / (1024 * 1024 * 1024))
         let paramStr = String(format: "%.1fB", spec.metadata.parameterCount)
-        
+
         return """
         Model ID: \(spec.id)
         Name: \(spec.name)
@@ -284,7 +284,7 @@ actor ModelRegistry {
         Status: \(availabilityStatus)
         File: \(spec.modelFile)
         Location: \(fileLocation)
-        
+
         Architecture: \(spec.metadata.architecture)
         Parameters: \(paramStr)
         Quantization: \(spec.metadata.quantization)
@@ -296,7 +296,7 @@ actor ModelRegistry {
         FF Dim: \(spec.metadata.feedForwardDimension)
         Attention Heads: \(spec.metadata.attentionHeads)
         Flash Attention: \(spec.metadata.supportsFlashAttention ? "Yes" : "No")
-        
+
         Runtime Parameters:
         - Threads: \(spec.runtimeParams.nThreads)
         - GPU Layers: \(spec.runtimeParams.nGpuLayers)
@@ -306,39 +306,39 @@ actor ModelRegistry {
         - Temperature: \(spec.runtimeParams.temperature)
         - Top-K: \(spec.runtimeParams.topK)
         - Top-P: \(spec.runtimeParams.topP)
-        
+
         Tags: \(spec.tags.joined(separator: ", "))
         Description: \(spec.description)
         """
     }
-    
+
     /// Auto-tune runtime parameters based on metadata and system capabilities
     private func autoTuneParameters(metadata: GGUFMetadata, baseParams: RuntimeParams) -> RuntimeParams {
         return ModelSpec.autoTuneParameters(metadata: metadata, baseParams: baseParams)
     }
-    
+
     /// Get standard model search paths
     private func getModelSearchPaths() -> [String] {
         let fileManager = FileManager.default
         var paths: [String] = []
-        
+
         // Current working directory
         paths.append(fileManager.currentDirectoryPath)
-        
+
         // Executable directory
         let exePath = CommandLine.arguments[0]
         let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
         if !paths.contains(exeDir) {
             paths.append(exeDir)
         }
-        
+
         // App bundle resources
         if let resourcePath = Bundle.main.resourcePath {
             paths.append(resourcePath)
             paths.append("\(resourcePath)/Models")
             paths.append("\(resourcePath)/Resources/Models")
         }
-        
+
         // User directories (platform-aware)
         let homeDirPath: String? = {
             #if os(iOS)
@@ -352,14 +352,14 @@ actor ModelRegistry {
             paths.append("\(homeDir)/Documents/Models")
             paths.append("\(homeDir)/.noesisnoema/models")
         }
-        
+
         // System-wide model directories (desktop-oriented; filtered by existence below)
         paths.append("/usr/local/share/noesisnoema/models")
         paths.append("/opt/noesisnoema/models")
-        
+
         return paths.filter { fileManager.fileExists(atPath: $0) }
     }
-    
+
     /// Generate a model ID from filename
     private func generateModelId(from baseName: String) -> String {
         return baseName.lowercased()
@@ -367,7 +367,7 @@ actor ModelRegistry {
             .replacingOccurrences(of: " ", with: "_")
             .replacingOccurrences(of: ".", with: "_")
     }
-    
+
     /// Generate a human-readable model name from filename
     private func generateModelName(from baseName: String) -> String {
         // Convert common patterns to readable names
@@ -377,12 +377,12 @@ actor ModelRegistry {
             .replacingOccurrences(of: "-q4-k-s", with: "")
             .replacingOccurrences(of: "-q8-0", with: "")
             .replacingOccurrences(of: "-gguf", with: "")
-        
+
         return name.split(separator: "-")
             .map { $0.capitalized }
             .joined(separator: " ")
     }
-    
+
     /// Extract version from filename
     private func extractVersion(from baseName: String) -> String {
         let patterns = [
@@ -390,18 +390,18 @@ actor ModelRegistry {
             "\\d+\\.\\d+b", // 3.8b, etc.
             "mini",
             "small",
-            "medium", 
+            "medium",
             "large",
             "xl"
         ]
-        
+
         let lowercased = baseName.lowercased()
         for pattern in patterns {
             if let range = lowercased.range(of: pattern, options: .regularExpression) {
                 return String(lowercased[range]).uppercased()
             }
         }
-        
+
         return "unknown"
     }
 }

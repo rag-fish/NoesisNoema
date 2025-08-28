@@ -9,7 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    
+
     @StateObject private var documentManager = DocumentManager()
 
     @State private var question: String = ""

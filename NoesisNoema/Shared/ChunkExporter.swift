@@ -6,15 +6,15 @@
 import Foundation
 
 class ChunkExporter {
-    
-    
+
+
     var embeddingModel: EmbeddingModel
     var filename: String
     var metadata: [String: Any]
     var isEmbedded: Bool
-    
-    
-    
+
+
+
     /// Initializes a ChunkExporter with the specified properties.
     /// - Parameters:
     ///   - embeddingModel: The embedding model used for generating embeddings.
@@ -27,7 +27,7 @@ class ChunkExporter {
         self.metadata = metadata
         self.isEmbedded = isEmbedded
     }
-    
+
     /**
         * Exports the given chunks to an LLMRagFile.
         * - Parameter chunks: An array of Chunk objects to be exported.
@@ -49,6 +49,6 @@ class ChunkExporter {
             isEmbedded: isEmbedded
         )
     }
-    
-    
+
+
 }

@@ -19,7 +19,7 @@ struct ContentView: View {
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
     @State private var showRAGpackManager: Bool = false
     @StateObject private var documentManager = DocumentManager()
-    
+
     @State private var qaHistory: [QAPair] = []
     @State private var selectedQAPair: QAPair? = nil
 
@@ -172,7 +172,7 @@ struct ContentView: View {
                                         if newValue == .recommended { recommendedReady = true }
                                     }
                                     .accessibilityLabel(Text("Runtime parameters mode"))
-                                    
+
                                     Button("Reset") {
                                         ModelManager.shared.resetToRecommended()
                                         runtimeMode = .recommended

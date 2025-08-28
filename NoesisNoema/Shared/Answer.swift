@@ -18,7 +18,7 @@ class Answer: CustomStringConvertible
     var text: String
     var score: Float
     var metadata: [String: Any]?
-    
+
     /**
      * Initializes an Answer with the specified properties.
      * - Parameter text: The text of the answer.
@@ -38,5 +38,5 @@ class Answer: CustomStringConvertible
     var description: String {
         return "Answer(text: \(text), score: \(score), metadata: \(String(describing: metadata)))"
     }
-    
+
 }

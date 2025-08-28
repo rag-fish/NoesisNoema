@@ -12,45 +12,45 @@ struct QueryIterator {
         var enableStopwordDrop: Bool = true
         var enableStemmingLite: Bool = true
     }
-    
+
     var config: Config = .init()
-    
+
     private let stopwords: Set<String> = [
         "the","a","an","of","to","and","or","in","on","for","with","is","are",
         // 日本語の簡易ストップワード
         "の","に","は","を","が","と","で","も","へ"
     ]
-    
+
     func variants(for rawQuery: String) -> [String] {
         let q0 = normalize(rawQuery)
         guard !q0.isEmpty else { return [] }
         var out: [String] = []
         out.append(q0)
-        
+
         // 1) stopword drop
         if config.enableStopwordDrop {
             let dropped = q0.splitOnWords().filter { !stopwords.contains($0) }.joined(separator: " ")
             if !dropped.isEmpty && dropped != q0 { out.append(dropped) }
         }
-        
+
         // 2) stemming-lite (very naive: remove plural 's' or 'es', common suffixes)
         if config.enableStemmingLite {
             let toks = q0.splitOnWords().map { stemLite($0) }
             let s = toks.joined(separator: " ")
             if !s.isEmpty && s != q0 { out.append(s) }
         }
-        
+
         // 3) deduplicate & cap
         let unique = OrderedSet(out)
         return Array(unique).prefix(config.maxVariants).map { $0 }
     }
-    
+
     private func normalize(_ s: String) -> String {
         let lowered = s.lowercased()
         let collapsed = lowered.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         return collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
     private func stemLite(_ t: String) -> String {
         var s = t
         if s.hasSuffix("es") { s = String(s.dropLast(2)) }

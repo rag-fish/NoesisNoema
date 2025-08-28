@@ -48,7 +48,7 @@ The system provides memory-safe defaults that prevent out-of-memory crashes:
 
 ### iOS Devices
 - **8GB+ RAM**: ctx=4096, batch=512, memory_limit=2GB, gpu_layers=999
-- **6GB RAM**: ctx=2048, batch=256, memory_limit=1.5GB, gpu_layers=64  
+- **6GB RAM**: ctx=2048, batch=256, memory_limit=1.5GB, gpu_layers=64
 - **<6GB RAM**: ctx=1024, batch=128, memory_limit=1GB, gpu_layers=32
 
 ### macOS Devices

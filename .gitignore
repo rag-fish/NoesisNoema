@@ -133,8 +133,36 @@ xcuserdata/
 *.xcplaygroundbooksettingsdatauser
 
 # LLM model weights and frameworks
+# Local frameworks (do not commit vendored xcframeworks)
 llama.xcframework/
-llama.xcframework/*
+**/llama.xcframework/
+
+# Common local/large model artifacts
+NoesisNoema/Resources/Models/*.gguf
+NoesisNoema/Resources/Models/**/*.gguf
+NoesisNoema/Resources/Models/*.ggml*
+NoesisNoema/Resources/Models/*.safetensors
+NoesisNoema/Resources/Models/*.bin
+NoesisNoema/Resources/Models/*.onnx
+NoesisNoema/Resources/Models/*.mlmodel
+NoesisNoema/Resources/Models/*.mlmodelc
+NoesisNoema/Resources/Models/*.mlpackage
+
+# RAGpack & cache artifacts
+NoesisNoema/Resources/RAGpacks/
+NoesisNoema/Resources/Chunks/
+NoesisNoema/Resources/Embeddings/
+NoesisNoema/Resources/Config/
+NoesisNoema/Resources/Tokenizers/
+
+# Video/editing assets (keep repo lean)
+*.mov
+*.mp4
+*.m4v
+*.gif
+*.aep
+*.prproj
+*.aegraphic
 
 # General large files (add more as needed)
 *.bin
