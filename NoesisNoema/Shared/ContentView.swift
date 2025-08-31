@@ -302,8 +302,13 @@ struct ContentView: View {
         isLoading = false
 
         // Build citations mapping from answer text and last retrieved chunks
-        let perParagraph = CitationExtractor.extractParagraphLabels(from: result)
+        var perParagraph = CitationExtractor.extractParagraphLabels(from: result)
         let chunks = ModelManager.shared.lastRetrievedChunks
+        // Fallback: if no labels found but we have sources, attach all sources to first paragraph
+        let hasAnyLabel = perParagraph.contains { !$0.isEmpty }
+        if !hasAnyLabel && !chunks.isEmpty {
+            perParagraph = [Array(1...chunks.count)]
+        }
         // Build catalog with 1-based index
         let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
             CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)

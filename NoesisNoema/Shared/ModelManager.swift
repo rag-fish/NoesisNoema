@@ -288,13 +288,8 @@ class ModelManager {
 
     /// Generates an answer to a question using the LLM model (asynchronous)
     func generateAsyncAnswer(question: String) async -> String {
-        // 0) Semantic Answer Cache fast-path (with verification)
-        if let hit = SemanticAnswerCache.shared.lookup(question: question, embedder: self.currentEmbeddingModel, store: VectorStore.shared, topK: 3, trace: false) {
-            // Update lastRetrievedChunks for citation UI even on cache hit
-            self.lastRetrievedChunks = hit.sources
-            return hit.answer
-        }
-        // 1) RAG文脈を構築（従来フロー）
+        // キャッシュは使用しない: 毎回最新のRAGとモデルで生成する
+        // 1) RAG文脈を構築
         let embedding = self.currentEmbeddingModel.embed(text: question)
         let topChunks = VectorStore.shared.findRelevant(queryEmbedding: embedding, topK: 6)
         self.lastRetrievedChunks = topChunks
