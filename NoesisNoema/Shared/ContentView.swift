@@ -292,6 +292,13 @@ struct ContentView: View {
     }
 
     func askRAG() async {
+        let _log = SystemLog()
+        let _t0 = Date()
+        _log.logEvent(event: "[UI] askRAG enter qLen=\(question.count)")
+        defer {
+            let dt = Date().timeIntervalSince(_t0)
+            _log.logEvent(event: String(format: "[UI] askRAG exit (%.2f ms)", dt*1000))
+        }
         guard !question.isEmpty else { return }
         guard !isLoading else { return }
         isLoading = true

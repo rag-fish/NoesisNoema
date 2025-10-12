@@ -4,6 +4,8 @@
 // Description: Two-stage local retriever (BM25 + embedding hybrid) with query iteration and MMR rerank.
 // License: MIT License
 
+// Responsibility: ローカル VectorStore に対するBM25＋埋め込みハイブリッド検索とMMR再ランク、クエリ反復を提供。
+// Depends on: VectorStore, EmbeddingModel, QueryIterator, MMR, Foundation
 import Foundation
 
 final class LocalRetriever {
@@ -28,6 +30,13 @@ final class LocalRetriever {
 
     // MARK: - Public API
     func retrieve(query: String, k: Int? = nil, lambda: Float? = nil, trace: Bool = false) -> [Chunk] {
+        let _log = SystemLog()
+        let _t0 = Date()
+        _log.logEvent(event: "[Retriever] retrieve enter qLen=\(query.count) k=\(k ?? config.topK) lambda=\(lambda ?? config.mmrLambda) docs=\(store.chunks.count)")
+        defer {
+            let dt = Date().timeIntervalSince(_t0)
+            _log.logEvent(event: String(format: "[Retriever] retrieve exit (%.2f ms)", dt*1000))
+        }
         let K = k ?? config.topK
         let L = lambda ?? config.mmrLambda
         let allChunks = store.chunks

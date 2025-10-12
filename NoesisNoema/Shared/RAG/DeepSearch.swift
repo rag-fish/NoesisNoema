@@ -4,6 +4,8 @@
 // Description: Multi-round local deep search over VectorStore using LocalRetriever + keyword expansion.
 // License: MIT License
 
+// Responsibility: ローカル VectorStore に対する多段クエリ拡張＋MMR再ランクでのディープサーチを提供。
+// Depends on: VectorStore, LocalRetriever, MMR, EmbeddingModel, Foundation
 import Foundation
 
 /// DeepSearch performs multi-round retrieval with lightweight query expansion from top results.
@@ -35,6 +37,13 @@ struct DeepSearch {
 
     /// Run deep retrieval for a query.
     func retrieve(query: String) -> [Chunk] {
+        let _log = SystemLog()
+        let _t0 = Date()
+        _log.logEvent(event: "[DeepSearch] retrieve enter qLen=\(query.count) rounds=\(config.rounds) breadth=\(config.breadth) topK=\(config.topK)")
+        defer {
+            let dt = Date().timeIntervalSince(_t0)
+            _log.logEvent(event: String(format: "[DeepSearch] retrieve exit (%.2f ms)", dt*1000))
+        }
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         var pool: [Chunk] = []
         var seen = Set<String>() // dedupe by content
