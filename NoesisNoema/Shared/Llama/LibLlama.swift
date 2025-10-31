@@ -22,21 +22,34 @@ func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama
         return
     }
 
-    batch.token   [Int(batch.n_tokens)] = id
-    batch.pos     [Int(batch.n_tokens)] = pos
-    // 既定: 単一シーケンス（seq_id=0）として扱う。nil の可能性があるため強制アンラップは行わない
-    // n_seq_id バッファは存在しない可能性がある環境もあるため保護
-    if batch.n_seq_id != nil {
-        batch.n_seq_id[Int(batch.n_tokens)] = 0
-    }
-    // もしバッファが確保されていれば書き込む（任意）
-    if !seq_ids.isEmpty, let seqBase = batch.seq_id, let dst = seqBase[Int(batch.n_tokens)] {
-        let n = min(seq_ids.count, 1)
-        for i in 0..<n { dst[Int(i)] = seq_ids[i] }
-        if batch.n_seq_id != nil { batch.n_seq_id[Int(batch.n_tokens)] = Int32(n) }
-    }
-    batch.logits  [Int(batch.n_tokens)] = logits ? 1 : 0
+    let idx = Int(batch.n_tokens)
 
+    // core fields
+    batch.token [idx] = id
+    batch.pos   [idx] = pos
+
+    // default: single sequence (seq_id = 0) unless caller provided otherwise
+    if let nSeqBuf = batch.n_seq_id {
+        nSeqBuf[idx] = 0
+    }
+
+    // Write seq_ids safely when buffers are present.
+    // `seq_id` is a **pointer to pointer** in C; in Swift it is Optional-to-Optional.
+    if !seq_ids.isEmpty, let seqBase = batch.seq_id {
+        // get row pointer for this token: seqBase[idx]
+        let rowOpt = seqBase.advanced(by: idx).pointee
+        if let row = rowOpt {
+            let n = min(seq_ids.count, 1) // llama.cpp expects up to n_seq_max per token; we use 1 here
+            for i in 0..<n {
+                row.advanced(by: i).pointee = seq_ids[i]
+            }
+            if let nSeqBuf = batch.n_seq_id {
+                nSeqBuf[idx] = Int32(n)
+            }
+        }
+    }
+
+    batch.logits[idx] = logits ? 1 : 0
     batch.n_tokens += 1
 }
 
@@ -97,17 +110,21 @@ actor LlamaContext {
         #if os(iOS)
         setenv("LLAMA_NO_METAL", "1", 1)
         #endif
+        #if targetEnvironment(simulator)
+        setenv("LLAMA_NO_METAL", "1", 1)
+        #endif
         llama_backend_init()
         var model_params = llama_model_default_params()
 
         #if targetEnvironment(simulator)
         model_params.n_gpu_layers = 0
-        print("Running on simulator, force use n_gpu_layers = 0")
+        print("Running on iOS simulator, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
         #endif
         #if os(iOS)
         model_params.n_gpu_layers = 0
-        print("Running on iOS device, force CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
+        print("Running on iOS device, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
         #endif
+
         let model = llama_model_load_from_file(path, model_params)
         guard let model else {
             print("Could not load model at \(path)")
@@ -121,9 +138,11 @@ actor LlamaContext {
         #endif
         print("Using \(n_threads) threads")
 
+        // 修正箇所：Never型 → 実際の構造体に置換
         var ctx_params = llama_context_default_params()
-        #if os(iOS)
-        ctx_params.n_ctx = 1024 // 軽量化
+
+        #if os(iOS) || targetEnvironment(simulator)
+        ctx_params.n_ctx = 1024
         #else
         ctx_params.n_ctx = 2048
         #endif

@@ -1,290 +1,91 @@
+// filepath: NoesisNoema/ModelRegistry/IO/GGUFReader.swift
 // Project: NoesisNoema
-// File: GGUFReader.swift
-// Created by Copilot on 2025/08/23
-// Description: GGUF file metadata reader for auto-tuning model parameters
-// License: MIT License
+// Description: GGUF metadata reader (Swift-only)
 
 import Foundation
-import llama
 
-/// GGUF file reader for extracting model metadata
-class GGUFReader {
-
-    /// Error types for GGUF reading operations
+enum GGUFReader {
     enum GGUFError: Error, LocalizedError {
-        case fileNotFound(String)
-        case invalidGGUFFile(String)
-        case readError(String)
-        case keyNotFound(String)
+        case invalidFile
+        case ioError(String)
 
         var errorDescription: String? {
             switch self {
-            case .fileNotFound(let path):
-                return "GGUF file not found at path: \(path)"
-            case .invalidGGUFFile(let path):
-                return "Invalid GGUF file format: \(path)"
-            case .readError(let message):
-                return "Error reading GGUF file: \(message)"
-            case .keyNotFound(let key):
-                return "Required key not found in GGUF metadata: \(key)"
+            case .invalidFile: return "Invalid GGUF file"
+            case .ioError(let msg): return "I/O error: \(msg)"
             }
         }
     }
 
-    /// Read GGUF metadata from a file path
-    static func readMetadata(from filePath: String) async throws -> GGUFMetadata {
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let metadata = try readMetadataSync(from: filePath)
-                    continuation.resume(returning: metadata)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
+    /// Check GGUF magic (ASCII "GGUF" -> 0x47 0x47 0x55 0x46); little-endian UInt32 = 0x4655_4747
+    static func isValidGGUFFile(at path: String) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? handle.close() }
+        do {
+            let data = try handle.read(upToCount: 4) ?? Data()
+            if data.count < 4 { return false }
+            let magic = data.withUnsafeBytes { $0.load(as: UInt32.self) }
+            return magic == 0x4655_4747
+        } catch {
+            return false
         }
     }
 
-    /// Synchronous version of metadata reading
-    private static func readMetadataSync(from filePath: String) throws -> GGUFMetadata {
-        // Check if file exists
-        guard FileManager.default.fileExists(atPath: filePath) else {
-            throw GGUFError.fileNotFound(filePath)
-        }
+    /// Read GGUF metadata via header validation and filename heuristics
+    static func readMetadata(from path: String) async throws -> GGUFMetadata {
+        guard isValidGGUFFile(at: path) else { throw GGUFError.invalidFile }
+        let url = URL(fileURLWithPath: path)
+        let fileName = url.lastPathComponent
+        let lower = fileName.lowercased()
 
-        // Initialize GGUF context with no_alloc=true to avoid loading tensor data
-        var initParams = gguf_init_params()
-        initParams.no_alloc = true
-        initParams.ctx = nil
+        // File size
+        let sizeBytes: UInt64 = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? UInt64) ?? 0
 
-        // Load GGUF file
-        guard let ggufContext = gguf_init_from_file(filePath, initParams) else {
-            throw GGUFError.invalidGGUFFile(filePath)
-        }
+        // Architecture inference
+        let arch: String = {
+            if lower.contains("llama") { return "llama" }
+            if lower.contains("qwen") { return "qwen" }
+            if lower.contains("phi") { return "phi" }
+            if lower.contains("gemma") { return "gemma" }
+            if lower.contains("mistral") { return "mistral" }
+            if lower.contains("gpt") { return "gpt" }
+            return "unknown"
+        }()
 
-        defer {
-            gguf_free(ggufContext)
-        }
+        // Quantization inference
+        let quant: String = {
+            let patterns = ["q2_k","q3_k_s","q3_k_m","q3_k_l","q4_0","q4_1","q4_k_s","q4_k_m","q4_k_xl","q5_0","q5_1","q5_k_s","q5_k_m","q6_k","q8_0","f16","f32"]
+            for p in patterns { if lower.contains(p) { return p.uppercased() } }
+            return "unknown"
+        }()
 
-        // Get file size
-        let fileAttributes = try FileManager.default.attributesOfItem(atPath: filePath)
-        let modelSizeBytes = fileAttributes[.size] as? UInt64 ?? 0
+        // Parameter count (e.g., 4b, 20b, 70b) from filename
+        let paramB: Double = {
+            let seps = CharacterSet(charactersIn: "-_ .")
+            let tokens = lower.components(separatedBy: seps)
+            for t in tokens where t.hasSuffix("b") {
+                if let num = Double(t.dropLast()) { return num }
+            }
+            // rough fallback from size (Q4 ≈ 0.5 byte/param)
+            let approxParams = sizeBytes > 0 ? Double(sizeBytes) / 0.5 : 0
+            return max(1.0, approxParams / 1e9)
+        }()
 
-        // Extract metadata using helper functions
-        let architecture = try getString(from: ggufContext, key: "general.architecture", defaultValue: "unknown")
-        let contextLength = try getUInt32(from: ggufContext, key: "\(architecture).context_length", defaultValue: 2048)
-        let vocabSize = try getUInt32(from: ggufContext, key: "\(architecture).vocab_size", defaultValue: 32000)
-        let layerCount = try getUInt32(from: ggufContext, key: "\(architecture).block_count", defaultValue: 32)
-        let embeddingDimension = try getUInt32(from: ggufContext, key: "\(architecture).embedding_length", defaultValue: 4096)
-        let feedForwardDimension = try getUInt32(from: ggufContext, key: "\(architecture).feed_forward_length", defaultValue: 11008)
-        let attentionHeads = try getUInt32(from: ggufContext, key: "\(architecture).attention.head_count", defaultValue: 32)
-
-        // Estimate parameter count based on architecture and dimensions
-        let parameterCount = estimateParameterCount(
-            architecture: architecture,
-            layers: layerCount,
-            embeddingDim: embeddingDimension,
-            ffDim: feedForwardDimension,
-            vocabSize: vocabSize
-        )
-
-        // Detect quantization from filename or metadata
-        let quantization = detectQuantization(from: filePath, ggufContext: ggufContext)
-
-        // Check flash attention support (architecture-dependent)
-        let supportsFlashAttention = checkFlashAttentionSupport(architecture: architecture)
+        // Context length guess
+        let nCtx: UInt32 = lower.contains("32768") ? 32768 : (lower.contains("8192") ? 8192 : (lower.contains("4096") ? 4096 : 2048))
 
         return GGUFMetadata(
-            architecture: architecture,
-            parameterCount: parameterCount,
-            contextLength: contextLength,
-            modelSizeBytes: modelSizeBytes,
-            quantization: quantization,
-            vocabSize: vocabSize,
-            layerCount: layerCount,
-            embeddingDimension: embeddingDimension,
-            feedForwardDimension: feedForwardDimension,
-            attentionHeads: attentionHeads,
-            supportsFlashAttention: supportsFlashAttention
+            architecture: arch,
+            parameterCount: paramB,
+            contextLength: nCtx,
+            modelSizeBytes: sizeBytes,
+            quantization: quant,
+            vocabSize: 32000,
+            layerCount: 32,
+            embeddingDimension: 4096,
+            feedForwardDimension: 11008,
+            attentionHeads: 32,
+            supportsFlashAttention: false
         )
-    }
-
-    /// Get string value from GGUF context
-    private static func getString(from context: OpaquePointer, key: String, defaultValue: String) throws -> String {
-        let keyCount = gguf_get_n_kv(context)
-
-        for i in 0..<keyCount {
-            guard let keyPtr = gguf_get_key(context, i) else { continue }
-            let currentKey = String(cString: keyPtr)
-
-            if currentKey == key {
-                let valueType = gguf_get_kv_type(context, i)
-                if valueType == GGUF_TYPE_STRING {
-                    guard let valuePtr = gguf_get_val_str(context, i) else {
-                        return defaultValue
-                    }
-                    return String(cString: valuePtr)
-                }
-            }
-        }
-
-        return defaultValue
-    }
-
-    /// Get UInt32 value from GGUF context
-    private static func getUInt32(from context: OpaquePointer, key: String, defaultValue: UInt32) throws -> UInt32 {
-        let keyCount = gguf_get_n_kv(context)
-
-        for i in 0..<keyCount {
-            guard let keyPtr = gguf_get_key(context, i) else { continue }
-            let currentKey = String(cString: keyPtr)
-
-            if currentKey == key {
-                let valueType = gguf_get_kv_type(context, i)
-                switch valueType {
-                case GGUF_TYPE_UINT32:
-                    return gguf_get_val_u32(context, i)
-                case GGUF_TYPE_INT32:
-                    let val = gguf_get_val_i32(context, i)
-                    return val >= 0 ? UInt32(val) : defaultValue
-                case GGUF_TYPE_UINT64:
-                    let val = gguf_get_val_u64(context, i)
-                    return UInt32(min(val, UInt64(UInt32.max)))
-                case GGUF_TYPE_INT64:
-                    let val = gguf_get_val_i64(context, i)
-                    return val >= 0 ? UInt32(min(UInt64(val), UInt64(UInt32.max))) : defaultValue
-                default:
-                    break
-                }
-            }
-        }
-
-        return defaultValue
-    }
-
-    /// Estimate parameter count based on model architecture
-    private static func estimateParameterCount(
-        architecture: String,
-        layers: UInt32,
-        embeddingDim: UInt32,
-        ffDim: UInt32,
-        vocabSize: UInt32
-    ) -> Double {
-        let layersF = Double(layers)
-        let embeddingDimF = Double(embeddingDim)
-        let ffDimF = Double(ffDim)
-        let vocabSizeF = Double(vocabSize)
-
-        // Token embeddings: vocab_size * embedding_dim
-        let embeddingParams = vocabSizeF * embeddingDimF
-
-        // Per-layer parameters (approximate)
-        var layerParams: Double = 0
-
-        switch architecture.lowercased() {
-        case "llama", "llama2":
-            // Self-attention: 4 * embedding_dim^2 (Q, K, V, O projections)
-            let attentionParams = 4.0 * embeddingDimF * embeddingDimF
-            // Feed-forward: 3 * embedding_dim * ff_dim (gate, up, down)
-            let ffParams = 3.0 * embeddingDimF * ffDimF
-            // Layer norms: 2 * embedding_dim
-            let normParams = 2.0 * embeddingDimF
-
-            layerParams = attentionParams + ffParams + normParams
-
-        case "qwen", "qwen2":
-            // Similar to LLaMA but with some variations
-            let attentionParams = 4.0 * embeddingDimF * embeddingDimF
-            let ffParams = 3.0 * embeddingDimF * ffDimF
-            let normParams = 2.0 * embeddingDimF
-
-            layerParams = attentionParams + ffParams + normParams
-
-        case "phi", "phi3":
-            // Phi models have different architecture
-            let attentionParams = 4.0 * embeddingDimF * embeddingDimF
-            let ffParams = 2.0 * embeddingDimF * ffDimF // Different FF structure
-            let normParams = 2.0 * embeddingDimF
-
-            layerParams = attentionParams + ffParams + normParams
-
-        default:
-            // Generic estimation
-            let attentionParams = 4.0 * embeddingDimF * embeddingDimF
-            let ffParams = 3.0 * embeddingDimF * ffDimF
-            let normParams = 2.0 * embeddingDimF
-
-            layerParams = attentionParams + ffParams + normParams
-        }
-
-        // Total parameters
-        let totalParams = embeddingParams + layersF * layerParams + embeddingDimF // final norm
-
-        // Convert to billions
-        return totalParams / 1_000_000_000.0
-    }
-
-    /// Detect quantization type from filename or metadata
-    private static func detectQuantization(from filePath: String, ggufContext: OpaquePointer) -> String {
-        let fileName = URL(fileURLWithPath: filePath).lastPathComponent
-
-        // Try to detect from filename first
-        let quantPatterns = [
-            "Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L", "Q4_0", "Q4_1",
-            "Q4_K_S", "Q4_K_M", "Q5_0", "Q5_1", "Q5_K_S", "Q5_K_M",
-            "Q6_K", "Q8_0", "F16", "F32"
-        ]
-
-        for pattern in quantPatterns {
-            if fileName.uppercased().contains(pattern) {
-                return pattern
-            }
-        }
-
-        // Try to get from GGUF metadata
-        if let quantFromMetadata = try? getString(from: ggufContext, key: "general.quantization_version", defaultValue: "") {
-            if !quantFromMetadata.isEmpty {
-                return quantFromMetadata
-            }
-        }
-
-        return "unknown"
-    }
-
-    /// Check if architecture supports flash attention
-    private static func checkFlashAttentionSupport(architecture: String) -> Bool {
-        switch architecture.lowercased() {
-        case "llama", "llama2", "qwen", "qwen2":
-            return true
-        case "phi", "phi3":
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Quickly check if a file is a valid GGUF file without full parsing
-    static func isValidGGUFFile(at path: String) -> Bool {
-        guard FileManager.default.fileExists(atPath: path) else {
-            return false
-        }
-
-        guard let fileHandle = FileHandle(forReadingAtPath: path) else {
-            return false
-        }
-
-        defer {
-            fileHandle.closeFile()
-        }
-
-        // Read first 4 bytes to check magic number
-        let magicData = fileHandle.readData(ofLength: 4)
-        guard magicData.count == 4 else {
-            return false
-        }
-
-        // GGUF magic number is "GGUF" (0x47474955)
-        let magic = String(data: magicData, encoding: .ascii)
-        return magic == "GGUF"
     }
 }

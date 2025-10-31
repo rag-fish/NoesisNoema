@@ -1,789 +1,224 @@
-//
-//  ModelManager.swift
-//  NoesisNoema
-//
-//  Created by [Your Name] on [Date].
-//
+// filepath: NoesisNoema/Shared/ModelManager.swift
+// Project: NoesisNoema
+// Description: Dynamic model management - multi-GGUF model loading/switching/inference
+// License: MIT License
 
 import Foundation
 
-class ModelManager {
-    // TODO: Implement model management functionality
-}
-/* Begin PBXCopyFilesBuildPhase section */
-        F4C581A12E4F900000E64194 /* Embed Frameworks */ = {
-            isa = PBXCopyFilesBuildPhase;
-            buildActionMask = 2147483647;
-            dstPath = "";
-            dstSubfolderSpec = 10;
-            files = (
-                F409DFD62E4F88020010AB03 /* NoesisNoema/Frameworks/llama_ios.xcframework in Embed Frameworks */,
-            );
-            name = "Embed Frameworks";
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-/* End PBXCopyFilesBuildPhase section */
+// Expose runtime mode globally for UI usage
+enum LLMRuntimeMode { case auto, cpuOnly }
 
-/* Begin PBXFileReference section */
-        AACE11E69B298876180AD693 /* PULL_REQUEST_TEMPLATE.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; name = PULL_REQUEST_TEMPLATE.md; path = .github/PULL_REQUEST_TEMPLATE.md; sourceTree = "<group>"; };
-        AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
-        F41611E22E4F41B800B6B88C /* NoesisNoema/Frameworks/llama_macos.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = NoesisNoema/Frameworks/llama_macos.xcframework; sourceTree = "<group>"; };
-        F41611E52E4F41C400B6B88C /* NoesisNoema/Frameworks/llama_ios.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = NoesisNoema/Frameworks/llama_ios.xcframework; sourceTree = "<group>"; };
-        F41611E82E4F4F5800B6B88C /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk/System/Library/Frameworks/MetalKit.framework; sourceTree = DEVELOPER_DIR; };
-        F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
-        F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
-        F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
-        F4607E7A2E2CCDB900D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
-        F46088492E2CD45000D4C555 /* LlamaBridgeTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = LlamaBridgeTest; sourceTree = BUILT_PRODUCTS_DIR; };
-        F4C580FD2E4F006000E64194 /* NoesisNoemaMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoemaMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
-        F4C5811C2E4F036E00E64194 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-        F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-        F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
-/* End PBXFileReference section */
+/// 動的モデル管理 - 複数GGUFモデルのロード/切り替え/推論を統括
+@MainActor
+class ModelManager: ObservableObject {
+    static let shared = ModelManager()
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-        F4C581272E4F06A100E64194 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-            membershipExceptions = (
-                Assets.xcassets,
-                Frameworks/llama_macos.xcframework,
-                "Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
-                "Resources/Models/llama3-8b.gguf",
-                Shared/ContentView.swift,
-                Shared/NoesisNoemaApp.swift,
-                Shared/RAG/RewardBus.swift,
-            );
-            target = F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */;
-        };
-        F4ED32C42E37A18400CCE0DE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-            membershipExceptions = (
-                ModelRegistry/Autotune/AutotuneService.swift,
-                ModelRegistry/CLI/ModelCLI.swift,
-                ModelRegistry/Core/HardwareProfile.swift,
-                ModelRegistry/Core/ModelRegistry.swift,
-                ModelRegistry/Core/ModelSpec.swift,
-                ModelRegistry/IO/GGUFReader.swift,
-                ModelRegistry/IO/RegistryJSON.swift,
-                ModelRegistry/IO/RegistryPersistence.swift,
-                ModelRegistry/Tests/TestRunner.swift,
-                "Resources/Models/gpt-oss-20b-Q4_K_S.gguf",
-                "Resources/Models/Jan-v1-4B-Q4_K_M.gguf",
-                "Resources/Models/llama3-8b.gguf",
-                Shared/CLI/RagCLI.swift,
-                Shared/Llama/LibLlama.swift,
-                Shared/Llama/LlamaRuntimeCheck.swift,
-                Shared/Llama/LlamaState.swift,
-                Shared/RAG/Chunk.swift,
-                Shared/RAG/EmbeddingModel.swift,
-                Shared/RAG/LocalRetriever.swift,
-                Shared/RAG/MMR.swift,
-                Shared/RAG/QueryIterator.swift,
-                Shared/RAG/VectorStore.swift,
-                Shared/Utils/SystemLog.swift,
-            );
-            target = F46088482E2CD45000D4C555 /* LlamaBridgeTest */;
-        };
-        F4EEEAAA2E50099900E64194 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-            membershipExceptions = (
-                Frameworks/llama_ios.xcframework,
-                Shared/RAG/RewardBus.swift,
-            );
-            target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
-        };
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+    @Published var loadedModels: [String: any InferenceEngine] = [:]
+    @Published var currentModelID: String?
+    @Published var availableModels: [ModelSpec] = []
+    @Published var isLoading = false
+    @Published var errorMessage: String?
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-        F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */ = {
-            isa = PBXFileSystemSynchronizedRootGroup;
-            exceptions = (
-                F4EEEAAA2E50099900E64194 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-                F4ED32C42E37A18400CCE0DE /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-                F4C581272E4F06A100E64194 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-            );
-            path = NoesisNoema;
-            sourceTree = "<group>";
-        };
-        F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */ = {
-            isa = PBXFileSystemSynchronizedRootGroup;
-            path = LlamaBridgeTest;
-            sourceTree = "<group>";
-        };
-        F4C580FE2E4F006000E64194 /* PBXFileSystemSynchronizedRootGroup */ = {
-            isa = PBXFileSystemSynchronizedRootGroup;
-            path = NoesisNoemaMobile;
-            sourceTree = "<group>";
-        };
-/* End PBXFileSystemSynchronizedRootGroup section */
+    // MARK: - UI-facing additions
+    @Published private(set) var currentEmbeddingModel: EmbeddingModel = EmbeddingModel(name: "nomic-embed-text")
+    @Published private(set) var currentLLMModel: LLMModel = LLMModel(name: "Jan-V1-4B", modelFile: "Jan-v1-4B-Q4_K_M.gguf", version: "v1", isEmbedded: true)
+    @Published private(set) var currentLLMPreset: String = "auto"
+    @Published private(set) var runtimeMode: LLMRuntimeMode = .auto
 
-/* Begin PBXFrameworksBuildPhase section */
-        F41FD0182E2A466F00909132 /* Frameworks */ = {
-            isa = PBXFrameworksBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-                F4C581542E4F12E000E64194 /* Metal.framework in Frameworks */,
-                F41611E42E4F41B800B6B88C /* NoesisNoema/Frameworks/llama_macos.xcframework in Frameworks */,
-                F4C581532E4F12D700E64194 /* Accelerate.framework in Frameworks */,
-                F4C581552E4F12E000E64194 /* MetalKit.framework in Frameworks */,
-                F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */,
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F46088462E2CD45000D4C555 /* Frameworks */ = {
-            isa = PBXFrameworksBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-                F41611E92E4F4F5800B6B88C /* MetalKit.framework in Frameworks */,
-                F4C581602E4F13EC00E64194 /* Accelerate.framework in Frameworks */,
-                F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */,
-                F41FAA922E4F55510077738B /* NoesisNoema/Frameworks/llama_macos.xcframework in Frameworks */,
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4C580FA2E4F006000E64194 /* Frameworks */ = {
-            isa = PBXFrameworksBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-                F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */,
-                F409DFD52E4F88020010AB03 /* NoesisNoema/Frameworks/llama_ios.xcframework in Frameworks */,
-                F4C5811E2E4F036E00E64194 /* Metal.framework in Frameworks */,
-                F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */,
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-/* End PBXFrameworksBuildPhase section */
+    // Simple memory of last retrieved chunks for citation UI
+    @Published private(set) var lastRetrievedChunks: [Chunk] = []
 
-/* Begin PBXGroup section */
-        F408F3402E35C1C700F621C5 /* Frameworks */ = {
-            isa = PBXGroup;
-            children = (
-                F41611E82E4F4F5800B6B88C /* MetalKit.framework */,
-                F41611E52E4F41C400B6B88C /* NoesisNoema/Frameworks/llama_ios.xcframework */,
-                F41611E22E4F41B800B6B88C /* NoesisNoema/Frameworks/llama_macos.xcframework */,
-                F4C581202E4F037500E64194 /* Accelerate.framework */,
-                F4C5811C2E4F036E00E64194 /* Metal.framework */,
-                F4C5811D2E4F036E00E64194 /* MetalKit.framework */,
-                AACE11E69B298876180AD693 /* PULL_REQUEST_TEMPLATE.md */,
-            );
-            name = Frameworks;
-            sourceTree = "<group>";
-        };
-        F41D04C72E30FCD40023545E /* Products */ = {
-            isa = PBXGroup;
-            children = (
-            );
-            name = Products;
-            sourceTree = "<group>";
-        };
-        F41FD0122E2A466F00909132 = {
-            isa = PBXGroup;
-            children = (
-                F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */,
-                F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */,
-                F4C580FE2E4F006000E64194 /* PBXFileSystemSynchronizedRootGroup */,
-                F41FD01C2E2A466F00909132 /* Products */,
-                F408F3402E35C1C700F621C5 /* Frameworks */,
-                AACE160730FAA9CB4526C2D7 /* README.md */,
-            );
-            sourceTree = "<group>";
-        };
-        F41FD01C2E2A466F00909132 /* Products */ = {
-            isa = PBXGroup;
-            children = (
-                F41FD01B2E2A466F00909132 /* NoesisNoema.app */,
-                F46088492E2CD45000D4C555 /* LlamaBridgeTest */,
-                F4C580FD2E4F006000E64194 /* NoesisNoemaMobile.app */,
-            );
-            name = Products;
-            sourceTree = "<group>";
-        };
-        F46060D62E2CAA5E00D4C555 /* Products */ = {
-            isa = PBXGroup;
-            children = (
-            );
-            name = Products;
-            sourceTree = "<group>";
-        };
-        F46083782E2CCDB900D4C555 /* Products */ = {
-            isa = PBXGroup;
-            children = (
-            );
-            name = Products;
-            sourceTree = "<group>";
-        };
-/* End PBXGroup section */
+    let registry = ModelRegistry.shared
+    private let hwProfile = HardwareProbe.probe()
 
-/* Begin PBXNativeTarget section */
-        F41FD01A2E2A466F00909132 /* NoesisNoema */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */;
-            buildPhases = (
-                F41FD0172E2A466F00909132 /* Sources */,
-                F41FD0182E2A466F00909132 /* Frameworks */,
-                F41FD0192E2A466F00909132 /* Resources */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */,
-            );
-            name = NoesisNoema;
-            packageProductDependencies = (
-                F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */,
-            );
-            productName = NoesisNoema;
-            productReference = F41FD01B2E2A466F00909132 /* NoesisNoema.app */;
-            productType = "com.apple.product-type.application";
-        };
-        F46088482E2CD45000D4C555 /* LlamaBridgeTest */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */;
-            buildPhases = (
-                F46088452E2CD45000D4C555 /* Sources */,
-                F46088462E2CD45000D4C555 /* Frameworks */,
-                F4F7BAB72E37A7A40018DE75 /* Resources */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F460884A2E2CD45000D4C555 /* PBXFileSystemSynchronizedRootGroup */,
-            );
-            name = LlamaBridgeTest;
-            packageProductDependencies = (
-            );
-            productName = LlamaBridgeTest;
-            productReference = F46088492E2CD45000D4C555 /* LlamaBridgeTest */;
-            productType = "com.apple.product-type.tool";
-        };
-        F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */ = {
-            isa = PBXNativeTarget;
-            buildConfigurationList = F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */;
-            buildPhases = (
-                F4C580F92E4F006000E64194 /* Sources */,
-                F4C580FA2E4F006000E64194 /* Frameworks */,
-                F4C580FB2E4F006000E64194 /* Resources */,
-                F4C581A12E4F900000E64194 /* Embed Frameworks */,
-            );
-            buildRules = (
-            );
-            dependencies = (
-            );
-            fileSystemSynchronizedGroups = (
-                F41FD01D2E2A466F00909132 /* PBXFileSystemSynchronizedRootGroup */,
-                F4C580FE2E4F006000E64194 /* PBXFileSystemSynchronizedRootGroup */,
-            );
-            name = NoesisNoemaMobile;
-            packageProductDependencies = (
-                F4D1DB532E4F18ED006B902C /* ZIPFoundation */,
-            );
-            productName = NoesisNoemaMobile;
-            productReference = F4C580FD2E4F006000E64194 /* NoesisNoemaMobile.app */;
-            productType = "com.apple.product-type.application";
-        };
-/* End PBXNativeTarget section */
+    init() {
+        Task {
+            await scanAvailableModels()
+        }
+    }
 
-/* Begin PBXProject section */
-        F41FD0132E2A466F00909132 /* Project object */ = {
-            isa = PBXProject;
-            attributes = {
-                BuildIndependentTargetsInParallel = 1;
-                LastSwiftUpdateCheck = 1640;
-                LastUpgradeCheck = 1640;
-                TargetAttributes = {
-                    F41FD01A2E2A466F00909132 = {
-                        CreatedOnToolsVersion = 16.4;
-                    };
-                    F46088482E2CD45000D4C555 = {
-                        CreatedOnToolsVersion = 16.4;
-                        LastSwiftMigration = 1640;
-                    };
-                    F4C580FC2E4F006000E64194 = {
-                        CreatedOnToolsVersion = 16.4;
-                    };
-                };
-            };
-            buildConfigurationList = F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */;
-            developmentRegion = en;
-            hasScannedForEncodings = 0;
-            knownRegions = (
-                en,
-                Base,
-            );
-            mainGroup = F41FD0122E2A466F00909132;
-            minimizedProjectReferenceProxies = 1;
-            packageReferences = (
-                F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
-            );
-            preferredProjectObjectVersion = 77;
-            productRefGroup = F41FD01C2E2A466F00909132 /* Products */;
-            projectDirPath = "";
-            projectReferences = (
-                {
-                    ProductGroup = F46083782E2CCDB900D4C555 /* Products */;
-                    ProjectRef = F4607E7A2E2CCDB900D4C555 /* llama.swiftui.xcodeproj */;
-                },
-                {
-                    ProductGroup = F46060D62E2CAA5E00D4C555 /* Products */;
-                    ProjectRef = F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */;
-                },
-                {
-                    ProductGroup = F41D04C72E30FCD40023545E /* Products */;
-                    ProjectRef = F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */;
-                },
-            );
-            projectRoot = "";
-            targets = (
-                F41FD01A2E2A466F00909132 /* NoesisNoema */,
-                F46088482E2CD45000D4C555 /* LlamaBridgeTest */,
-                F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */,
-            );
-        };
-/* End PBXProject section */
+    /// Resources/ModelsディレクトリとRegistryをスキャン
+    func scanAvailableModels() async {
+        await registry.scanForModels()
+        availableModels = await registry.getAvailableModelSpecs()
+        SystemLog().logEvent(event: "[ModelManager] Found \(availableModels.count) models")
+    }
 
-/* Begin PBXResourcesBuildPhase section */
-        F41FD0192E2A466F00909132 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4C580FB2E4F006000E64194 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4F7BAB72E37A7A40018DE75 /* Resources */ = {
-            isa = PBXResourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-/* End PBXResourcesBuildPhase section */
+    /// モデルをロード（既にロード済みならスキップ）
+    func loadModel(id: String) async throws {
+        guard loadedModels[id] == nil else {
+            currentModelID = id
+            SystemLog().logEvent(event: "[ModelManager] Model already loaded: \(id)")
+            return
+        }
 
-/* Begin PBXSourcesBuildPhase section */
-        F41FD0172E2A466F00909132 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F46088452E2CD45000D4C555 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-        F4C580F92E4F006000E64194 /* Sources */ = {
-            isa = PBXSourcesBuildPhase;
-            buildActionMask = 2147483647;
-            files = (
-            );
-            runOnlyForDeploymentPostprocessing = 0;
-        };
-/* End PBXSourcesBuildPhase section */
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
 
-/* Begin XCBuildConfiguration section */
-        F41FD0242E2A467000909132 /* Debug */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ALWAYS_SEARCH_USER_PATHS = NO;
-                ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-                CLANG_ANALYZER_NONNULL = YES;
-                CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-                CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-                CLANG_ENABLE_MODULES = YES;
-                CLANG_ENABLE_OBJC_ARC = YES;
-                CLANG_ENABLE_OBJC_WEAK = YES;
-                CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-                CLANG_WARN_BOOL_CONVERSION = YES;
-                CLANG_WARN_COMMA = YES;
-                CLANG_WARN_CONSTANT_CONVERSION = YES;
-                CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-                CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-                CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-                CLANG_WARN_EMPTY_BODY = YES;
-                CLANG_WARN_ENUM_CONVERSION = YES;
-                CLANG_WARN_INFINITE_RECURSION = YES;
-                CLANG_WARN_INT_CONVERSION = YES;
-                CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-                CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-                CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-                CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-                CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-                CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-                CLANG_WARN_STRICT_PROTOTYPES = YES;
-                CLANG_WARN_SUSPICIOUS_MOVE = YES;
-                CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-                CLANG_WARN_UNREACHABLE_CODE = YES;
-                CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-                COPY_PHASE_STRIP = NO;
-                DEBUG_INFORMATION_FORMAT = dwarf;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_STRICT_OBJC_MSGSEND = YES;
-                ENABLE_TESTABILITY = YES;
-                ENABLE_USER_SCRIPT_SANDBOXING = YES;
-                GCC_C_LANGUAGE_STANDARD = gnu17;
-                GCC_DYNAMIC_NO_PIC = NO;
-                GCC_NO_COMMON_BLOCKS = YES;
-                GCC_OPTIMIZATION_LEVEL = 0;
-                GCC_PREPROCESSOR_DEFINITIONS = (
-                    "DEBUG=1",
-                    "$(inherited)",
-                );
-                GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-                GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-                GCC_WARN_UNDECLARED_SELECTOR = YES;
-                GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-                GCC_WARN_UNUSED_FUNCTION = YES;
-                GCC_WARN_UNUSED_VARIABLE = YES;
-                IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-                LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-                MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-                MTL_FAST_MATH = YES;
-                ONLY_ACTIVE_ARCH = YES;
-                SDKROOT = iphoneos;
-                SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-                SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-            };
-            name = Debug;
-        };
-        F41FD0252E2A467000909132 /* Release */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ALWAYS_SEARCH_USER_PATHS = NO;
-                ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-                CLANG_ANALYZER_NONNULL = YES;
-                CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-                CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-                CLANG_ENABLE_MODULES = YES;
-                CLANG_ENABLE_OBJC_ARC = YES;
-                CLANG_ENABLE_OBJC_WEAK = YES;
-                CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-                CLANG_WARN_BOOL_CONVERSION = YES;
-                CLANG_WARN_COMMA = YES;
-                CLANG_WARN_CONSTANT_CONVERSION = YES;
-                CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-                CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-                CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-                CLANG_WARN_EMPTY_BODY = YES;
-                CLANG_WARN_ENUM_CONVERSION = YES;
-                CLANG_WARN_INFINITE_RECURSION = YES;
-                CLANG_WARN_INT_CONVERSION = YES;
-                CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-                CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-                CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-                CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-                CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-                CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-                CLANG_WARN_STRICT_PROTOTYPES = YES;
-                CLANG_WARN_SUSPICIOUS_MOVE = YES;
-                CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-                CLANG_WARN_UNREACHABLE_CODE = YES;
-                CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-                COPY_PHASE_STRIP = NO;
-                DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_NS_ASSERTIONS = NO;
-                ENABLE_STRICT_OBJC_MSGSEND = YES;
-                ENABLE_USER_SCRIPT_SANDBOXING = YES;
-                GCC_C_LANGUAGE_STANDARD = gnu17;
-                GCC_NO_COMMON_BLOCKS = YES;
-                GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-                GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-                GCC_WARN_UNDECLARED_SELECTOR = YES;
-                GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-                GCC_WARN_UNUSED_FUNCTION = YES;
-                GCC_WARN_UNUSED_VARIABLE = YES;
-                IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-                LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-                MTL_ENABLE_DEBUG_INFO = NO;
-                MTL_FAST_MATH = YES;
-                SDKROOT = iphoneos;
-                SWIFT_COMPILATION_MODE = wholemodule;
-                VALIDATE_PRODUCT = YES;
-            };
-            name = Release;
-        };
-        F41FD0272E2A467000909132 /* Debug */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-                ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-                CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 1;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_PREVIEWS = YES;
-                FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
-                GENERATE_INFOPLIST_FILE = YES;
-                HEADER_SEARCH_PATHS = "";
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                LD_RUNPATH_SEARCH_PATHS = "";
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MARKETING_VERSION = 1.0;
-                PRODUCT_BUNDLE_IDENTIFIER = com.tokyoyanbanjin.noesisnoema.NoesisNoema;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                REGISTER_APP_GROUPS = YES;
-                SDKROOT = macosx;
-                SUPPORTED_PLATFORMS = macosx;
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_EMIT_LOC_STRINGS = YES;
-                SWIFT_VERSION = 5.0;
-            };
-            name = Debug;
-        };
-        F41FD0282E2A467000909132 /* Release */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-                ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-                CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 1;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_PREVIEWS = YES;
-                FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
-                GENERATE_INFOPLIST_FILE = YES;
-                HEADER_SEARCH_PATHS = "";
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                LD_RUNPATH_SEARCH_PATHS = "";
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MARKETING_VERSION = 1.0;
-                PRODUCT_BUNDLE_IDENTIFIER = com.tokyoyanbanjin.noesisnoema.NoesisNoema;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                REGISTER_APP_GROUPS = YES;
-                SDKROOT = macosx;
-                SUPPORTED_PLATFORMS = macosx;
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_EMIT_LOC_STRINGS = YES;
-                SWIFT_VERSION = 5.0;
-            };
-            name = Release;
-        };
-        F460884E2E2CD45000D4C555 /* Debug */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
-                CLANG_ENABLE_MODULES = YES;
-                CODE_SIGN_STYLE = Automatic;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_HARDENED_RUNTIME = NO;
-                FRAMEWORK_SEARCH_PATHS = (
-                    "$(PROJECT_DIR)/Frameworks",
-                );
-                LD_RUNPATH_SEARCH_PATHS = (
-                    "$(inherited)",
-                    "@loader_path",
-                    "@executable_path",
-                    "@rpath",
-                );
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MACOSX_DEPLOYMENT_TARGET = 15.5;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                REGISTER_APP_GROUPS = YES;
-                SDKROOT = macosx;
-                SUPPORTED_PLATFORMS = macosx;
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG BRIDGE_TEST";
-                SWIFT_OBJC_BRIDGING_HEADER = "";
-                SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-                SWIFT_VERSION = 5.0;
-                TARGETED_DEVICE_FAMILY = 6;
-            };
-            name = Debug;
-        };
-        F460884F2E2CD45000D4C555 /* Release */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
-                CLANG_ENABLE_MODULES = YES;
-                CODE_SIGN_STYLE = Automatic;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_HARDENED_RUNTIME = NO;
-                FRAMEWORK_SEARCH_PATHS = (
-                    "$(PROJECT_DIR)/Frameworks",
-                );
-                LD_RUNPATH_SEARCH_PATHS = (
-                    "$(inherited)",
-                    "@loader_path",
-                    "@executable_path",
-                    "@rpath",
-                );
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MACOSX_DEPLOYMENT_TARGET = 15.5;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                REGISTER_APP_GROUPS = YES;
-                SDKROOT = macosx;
-                SUPPORTED_PLATFORMS = macosx;
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_ACTIVE_COMPILATION_CONDITIONS = BRIDGE_TEST;
-                SWIFT_OBJC_BRIDGING_HEADER = "";
-                SWIFT_VERSION = 5.0;
-                TARGETED_DEVICE_FAMILY = 6;
-            };
-            name = Release;
-        };
-        F4C581062E4F006800E64194 /* Debug */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-                ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-                CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 1;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_PREVIEWS = YES;
-                FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
-                GENERATE_INFOPLIST_FILE = YES;
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                LD_RUNPATH_SEARCH_PATHS = (
-                    "$(inherited)",
-                    "@executable_path/Frameworks",
-                    "@loader_path/Frameworks",
-                );
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MARKETING_VERSION = 1.0;
-                OTHER_LDFLAGS = "";
-                PRODUCT_BUNDLE_IDENTIFIER = com.tokyoyanbanjin.noesisnoema.NoesisNoemaMobile;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_EMIT_LOC_STRINGS = NO;
-                SWIFT_VERSION = 5.0;
-                TARGETED_DEVICE_FAMILY = 1;
-            };
-            name = Debug;
-        };
-        F4C581072E4F006800E64194 /* Release */ = {
-            isa = XCBuildConfiguration;
-            buildSettings = {
-                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-                ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-                CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 1;
-                DEVELOPMENT_TEAM = 7NKX7G7LV3;
-                ENABLE_PREVIEWS = YES;
-                FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
-                GENERATE_INFOPLIST_FILE = YES;
-                INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-                INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-                INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-                LD_RUNPATH_SEARCH_PATHS = (
-                    "$(inherited)",
-                    "@executable_path/Frameworks",
-                    "@loader_path/Frameworks",
-                );
-                LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/**";
-                MARKETING_VERSION = 1.0;
-                OTHER_LDFLAGS = "";
-                PRODUCT_BUNDLE_IDENTIFIER = com.tokyoyanbanjin.noesisnoema.NoesisNoemaMobile;
-                PRODUCT_NAME = "$(TARGET_NAME)";
-                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-                SUPPORTS_MACCATALYST = NO;
-                SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-                SWIFT_EMIT_LOC_STRINGS = NO;
-                SWIFT_VERSION = 5.0;
-                TARGETED_DEVICE_FAMILY = 1;
-            };
-            name = Release;
-        };
-/* End XCBuildConfiguration section */
+        guard let spec = await registry.getModelSpec(id: id) else {
+            let error = InferenceError.modelNotLoaded
+            errorMessage = error.localizedDescription
+            throw error
+        }
 
-/* Begin XCConfigurationList section */
-        F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F41FD0242E2A467000909132 /* Debug */,
-                F41FD0252E2A467000909132 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F41FD0272E2A467000909132 /* Debug */,
-                F41FD0282E2A467000909132 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F460884D2E2CD45000D4C555 /* Build configuration list for PBXNativeTarget "LlamaBridgeTest" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F460884E2E2CD45000D4C555 /* Debug */,
-                F460884F2E2CD45000D4C555 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-        F4C581052E4F006800E64194 /* Build configuration list for PBXNativeTarget "NoesisNoemaMobile" */ = {
-            isa = XCConfigurationList;
-            buildConfigurations = (
-                F4C581062E4F006800E64194 /* Debug */,
-                F4C581072E4F006800E64194 /* Release */,
-            );
-            defaultConfigurationIsVisible = 0;
-            defaultConfigurationName = Release;
-        };
-/* End XCConfigurationList section */
+        // ハードウェアプロファイルに基づいてランタイムパラメータを自動調整
+        let autoParams = await autotuneParams(for: spec.metadata)
 
-/* Begin XCRemoteSwiftPackageReference section */
-        F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
-            isa = XCRemoteSwiftPackageReference;
-            repositoryURL = "https://github.com/weichsel/ZIPFoundation";
-            requirement = {
-                kind = upToNextMajorVersion;
-                minimumVersion = 0.9.19;
-            };
-        };
-/* End XCRemoteSwiftPackageReference section */
+        // モデルファイルパスを解決
+        guard let modelPath = resolveModelPath(fileName: spec.modelFile) else {
+            let error = InferenceError.modelNotLoaded
+            errorMessage = "Model file not found: \(spec.modelFile)"
+            SystemLog().logEvent(event: "[ModelManager] \(errorMessage ?? "")")
+            throw error
+        }
 
-/* Begin XCSwiftPackageProductDependency section */
-        F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */ = {
-            isa = XCSwiftPackageProductDependency;
-            package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-            productName = ZIPFoundation;
-        };
-        F4D1DB532E4F18ED006B902C /* ZIPFoundation */ = {
-            isa = XCSwiftPackageProductDependency;
-            package = F4021E4D2E3DC3A2007A4236 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-            productName = ZIPFoundation;
-        };
-/* End XCSwiftPackageProductDependency section */
-    };
-    rootObject = F41FD0132E2A466F00909132 /* Project object */;
+        // Use ModelFactory to create appropriate engine
+        do {
+            let engine = try await ModelFactory.createEngine(
+                modelPath: modelPath,
+                metadata: spec.metadata,
+                runtimeParams: autoParams
+            )
+            loadedModels[id] = engine
+        } catch {
+            errorMessage = "Failed to initialize engine: \(error.localizedDescription)"
+            SystemLog().logEvent(event: "[ModelManager] \(errorMessage ?? "")")
+            throw error
+        }
+        currentModelID = id
+
+        SystemLog().logEvent(event: "[ModelManager] Loaded model: \(spec.name) (\(spec.metadata.architecture), \(spec.metadata.parameterCount)B params)")
+    }
+
+    /// 現在のモデルを取得
+    func getCurrentEngine() -> (any InferenceEngine)? {
+        guard let id = currentModelID else { return nil }
+        return loadedModels[id]
+    }
+
+    /// モデルをアンロード（メモリ解放）
+    func unloadModel(id: String) {
+        loadedModels.removeValue(forKey: id)
+        SystemLog().logEvent(event: "[ModelManager] Unloaded model: \(id)")
+
+        if currentModelID == id {
+            currentModelID = availableModels.first?.id
+        }
+    }
+
+    /// 全モデルをアンロード
+    func unloadAllModels() {
+        loadedModels.removeAll()
+        currentModelID = nil
+        SystemLog().logEvent(event: "[ModelManager] Unloaded all models")
+    }
+
+    /// ハードウェアプロファイルに基づく自動チューニング
+    private func autotuneParams(for metadata: GGUFMetadata) async -> RuntimeParams {
+        var params = RuntimeParams.oomSafeDefaults()
+
+        // コンテキスト長をモデルの能力に合わせて調整
+        params.nCtx = min(params.nCtx, metadata.contextLength)
+
+        // 大規模モデル（20B+）の場合はより保守的に
+        if metadata.parameterCount >= 20.0 {
+            params.nCtx = min(params.nCtx, 2048)
+            params.nBatch = min(params.nBatch, 256)
+            #if os(iOS)
+            params.nGpuLayers = 0 // iOS: CPU強制
+            #else
+            params.nGpuLayers = 0 // macOSでも大規模モデルはCPU
+            #endif
+        } else if metadata.parameterCount >= 8.0 {
+            // 中規模モデル（8B-20B）
+            #if os(iOS)
+            params.nGpuLayers = 0
+            params.nCtx = min(params.nCtx, 2048)
+            #else
+            params.nGpuLayers = 32 // 部分的GPU利用
+            #endif
+        } else {
+            // 小規模モデル（8B未満）
+            #if os(iOS)
+            params.nGpuLayers = 0
+            #else
+            params.nGpuLayers = 999 // GPU最大活用
+            #endif
+        }
+
+        // Flash Attention対応モデルは有効化
+        params.useFlashAttention = metadata.supportsFlashAttention
+
+        SystemLog().logEvent(event: "[ModelManager] Autotuned: nCtx=\(params.nCtx), nBatch=\(params.nBatch), GPU=\(params.nGpuLayers), FA=\(params.useFlashAttention)")
+
+        return params
+    }
+
+    /// モデルファイルパスの解決
+    private func resolveModelPath(fileName: String) -> String? {
+        let searchPaths = [
+            "Resources/Models",
+            "Models",
+            ""
+        ]
+
+        for subdir in searchPaths {
+            if let url = Bundle.main.url(forResource: (fileName as NSString).deletingPathExtension,
+                                        withExtension: (fileName as NSString).pathExtension,
+                                        subdirectory: subdir.isEmpty ? nil : subdir) {
+                return url.path
+            }
+        }
+
+        return nil
+    }
+
+    // MARK: - UI-facing additions
+
+    var availableEmbeddingModels: [String] { ["nomic-embed-text"] }
+    var availableLLMModels: [String] { availableModels.map { $0.name } }
+    var availableLLMPresets: [String] { ["auto", "balanced", "creative", "precise"] }
+
+    func switchEmbeddingModel(name: String) {
+        currentEmbeddingModel = EmbeddingModel(name: name)
+    }
+
+    func switchLLMModel(name: String) {
+        // Update current model selection; attempt to point to registry spec if present
+        if let spec = availableModels.first(where: { $0.name == name }) {
+            currentModelID = spec.id
+            currentLLMModel = LLMModel(name: spec.name, modelFile: spec.modelFile, version: spec.version, isEmbedded: true)
+        } else {
+            currentLLMModel = LLMModel(name: name, modelFile: "", version: "v1", isEmbedded: true)
+        }
+    }
+
+    func setLLMPreset(name: String) { currentLLMPreset = name }
+
+    func getRuntimeMode() -> LLMRuntimeMode { runtimeMode }
+    func setRuntimeMode(_ mode: LLMRuntimeMode) { runtimeMode = mode }
+
+    func resetToRecommended() {
+        runtimeMode = .auto
+        currentLLMPreset = "auto"
+    }
+
+    func isFullyLocal() -> Bool { true }
+
+    /// Minimal stub that produces a quick answer and records no sources
+    func generateAsyncAnswer(question: String) async -> String {
+        // In a real implementation, this would run RAG + inference. Keep it simple to unblock UI.
+        let prefix = currentLLMModel.name
+        return "[\(prefix)] \(question)"
+    }
+
+    /// Fire-and-forget autotune stub; calls completion with optional warning string
+    func autotuneCurrentModelAsync(trace: Bool, timeoutSeconds: Double, completion: @escaping (String) -> Void) {
+        Task { @MainActor in
+            // Simulate quick tuning and optional warning
+            try? await Task.sleep(nanoseconds: UInt64(0.2 * 1_000_000_000))
+            completion("")
+        }
+    }
 }

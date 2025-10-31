@@ -54,6 +54,10 @@ class LlamaState: ObservableObject {
 
     private var pendingConfig: SamplingConfig = SamplingConfig(temp: 0.5, topK: 60, topP: 0.9, seed: 1234, nLen: 512)
 
+    // 新規: ModelManager統合（既存コードとの互換性を保持）
+    private let modelManager = ModelManager.shared
+    private var useModelManager = false // フラグで新旧API切り替え
+
     init() {
         // ランタイムガード（壊れたFWを早期検知）
         if let err = LlamaRuntimeCheck.ensureLoadable() {
@@ -63,6 +67,39 @@ class LlamaState: ObservableObject {
         }
         loadModelsFromDisk()
         loadDefaultModels()
+    }
+
+    // 新規: ModelManager経由でモデルをロード
+    func loadModelViaManager(id: String) async throws {
+        try await modelManager.loadModel(id: id)
+        useModelManager = true
+        messageLog += "Loaded model via ModelManager: \(id)\n"
+        SystemLog().logEvent(event: "[LlamaState] Using ModelManager for model: \(id)")
+    }
+
+    // 新規: ModelManager経由の推論
+    func completeViaManager(text: String, maxTokens: Int32 = 512) async -> String {
+        guard useModelManager else {
+            return await complete(text: text) // フォールバック
+        }
+
+        guard let engine = modelManager.getCurrentEngine() else {
+            messageLog += "ERROR: No model loaded in ModelManager\n"
+            return ""
+        }
+
+        messageLog += "USER: \(text)\n"
+
+        do {
+            let result = try await engine.generate(prompt: text, maxTokens: maxTokens)
+            let normalized = normalizeOutput(result)
+            messageLog += "ASSISTANT: \(normalized)\n"
+            return normalized
+        } catch {
+            let err = "Generation failed: \(error.localizedDescription)"
+            messageLog += err + "\n"
+            return ""
+        }
     }
 
     // プリセット→SamplingConfig 変換

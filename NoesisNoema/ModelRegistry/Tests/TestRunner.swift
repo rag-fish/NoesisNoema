@@ -434,7 +434,7 @@ class TestRunner {
             return false
         }
 
-        // Read should throw invalidGGUFFile
+        // Read should throw invalidFile
         do {
             _ = try await GGUFReader.readMetadata(from: tmp.path)
             print("❌ Expected GGUFReader to throw for corrupted file")
@@ -442,8 +442,8 @@ class TestRunner {
         } catch {
             if let e = error as? GGUFReader.GGUFError {
                 switch e {
-                case .invalidGGUFFile:
-                    print("✅ Corrupted GGUF produced invalidGGUFFile as expected")
+                case .invalidFile:
+                    print("✅ Corrupted GGUF produced invalidFile as expected")
                     return true
                 default:
                     print("❌ Unexpected GGUFError: \(e)")
