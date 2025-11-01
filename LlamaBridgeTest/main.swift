@@ -206,10 +206,16 @@ func candidateModelPaths(fileName: String) -> [String] {
     paths.append("./NoesisNoema/Resources/Models/\(fileName)")
 
     // 5) User downloads (convenience)
+    #if !targetEnvironment(macCatalyst)
     if let home = FileManager.default.homeDirectoryForCurrentUser.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
         let decoded = home.removingPercentEncoding ?? home
         paths.append("\(decoded)/Downloads/\(fileName)")
     }
+    #else
+    // Catalyst fallback: use NSHomeDirectory()
+    let homeDir = NSHomeDirectory()
+    paths.append("\(homeDir)/Downloads/\(fileName)")
+    #endif
     return Array(LinkedHashSet(paths)) // preserve order, drop dups
 }
 

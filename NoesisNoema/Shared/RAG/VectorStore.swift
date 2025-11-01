@@ -170,11 +170,8 @@ class VectorStore {
         // In bridge test CLI builds we don't have ModelManager; return context echo.
         return context.isEmpty ? "" : "[RAG Context]\n" + context
         #else
-        // LLMへ文脈を注入して生成
-        let model = ModelManager.shared.currentLLMModel
-        let ctx = context.isEmpty ? nil : context
-        let answer = model.generate(prompt: query, context: ctx)
-        return answer
+        // RAG検索結果のコンテキストを返す（実際のLLM推論はModelManager経由で別途実行）
+        return context.isEmpty ? "" : "[RAG Context]\n" + context
         #endif
     }
 

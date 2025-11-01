@@ -273,3 +273,43 @@ fastlane/test_output
 iOSInjectionProject/
 .idea/
 docs/assets/Exported PNG image*.png
+
+# Local caches and build scripts
+.cache/
+tmp/
+logs/
+*.bak
+*.orig
+*.rej
+
+# Python, Ruby, and Shell helper files
+__pycache__/
+*.pyc
+*.pyo
+*.rb~
+*.sh~
+*.zsh~
+*.bash~
+*.env
+.env.*
+
+# macOS artifacts
+.AppleDouble
+.LSOverride
+
+# CLion and SwiftPM integration artifacts
+.clion/
+.swiftpm/
+Packages/
+Package.resolved
+
+# Framework & xcframework archives
+*.xcframework.zip
+*.framework.zip
+*.dSYM.zip
+*.xcarchive
+
+# Documentation build outputs
+docs/build/
+docs/tmp/
+docs/export/

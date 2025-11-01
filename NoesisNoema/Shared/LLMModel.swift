@@ -169,7 +169,7 @@ class LLMModel: @unchecked Sendable {
                     do {
                         try await llamaState.loadModel(modelUrl: URL(fileURLWithPath: path))
                         // 自動/手動プリセットの決定と適用
-                        let userPreset = ModelManager.shared.currentLLMPreset
+                        let userPreset = await ModelManager.shared.currentLLMPreset
                         if userPreset != "auto" {
                             await llamaState.setPreset(userPreset)
                         } else {

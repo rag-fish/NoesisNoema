@@ -38,249 +38,329 @@ struct ContentView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 12) {
-                // 上段: 設定＋質問入力＋RAGpackインポート
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Picker("Embedding", selection: $selectedEmbeddingModel) {
-                            ForEach(availableEmbeddingModels, id: \.self) { Text($0) }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                        .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
-                            ModelManager.shared.switchEmbeddingModel(name: newValue)
-                        }
+            mainContent
+        }
+    }
 
-                        Spacer(minLength: 16)
+    // MARK: - Main Content
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack(spacing: 12) {
+            topSettingsSection
+            Divider()
+            historySection
+        }
+        .frame(maxHeight: .infinity)
+        .disabled(isLoading)
+        .navigationTitle("Noesis Noema")
+        .toolbarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.regularMaterial, for: .navigationBar)
+        .overlay(overlayContent)
+    }
 
-                        HStack(spacing: 8) {
-                            Picker("LLM", selection: $selectedLLMModel) {
-                                ForEach(availableLLMModels, id: \.self) { Text($0) }
-                            }
-                            .pickerStyle(MenuPickerStyle())
-                            .onChange(of: selectedLLMModel) { oldValue, newValue in
-                                // UI: リセット→非同期オートチューン
-                                recommendedReady = false
-                                autotuneWarning = nil
-                                isAutotuningModel = true
-                                ModelManager.shared.switchLLMModel(name: newValue)
-                                runtimeMode = ModelManager.shared.getRuntimeMode()
-                                // モデル変更時はプリセットを auto に戻す
-                                selectedLLMPreset = "auto"
-                                ModelManager.shared.setLLMPreset(name: "auto")
-                                ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
-                                    isAutotuningModel = false
-                                    recommendedReady = true
-                                    if let w = outcome.warning { autotuneWarning = w }
-                                }
-                            }
-                            if isAutotuningModel {
-                                ProgressView().scaleEffect(0.8)
-                            } else {
-                                if runtimeMode == .override {
-                                    Text("Custom")
-                                        .font(.caption2)
-                                        .foregroundStyle(.orange)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.orange.opacity(0.12), in: Capsule())
-                                } else if recommendedReady {
-                                    Text("Recommended")
-                                        .font(.caption2)
-                                        .foregroundStyle(.green)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.green.opacity(0.12), in: Capsule())
-                                }
-                            }
-                        }
-                    }
+    // MARK: - Top Settings Section
+    @ViewBuilder
+    private var topSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            modelPickersRow
+            runtimeModeRow
+            presetPicker
+            autotuneWarningView
+            questionInputSection
+            actionButtonsRow
+        }
+        .padding(.horizontal)
+        .onAppear { runtimeMode = ModelManager.shared.getRuntimeMode() }
+        .contentShape(Rectangle())
+        .onTapGesture { questionFocused = false }
+    }
 
-                    // ランタイムモード（推奨/上書き） + リセット
-                    HStack(spacing: 12) {
-                        Picker("Runtime Params", selection: $runtimeMode) {
-                            Text("Use recommended").tag(RuntimeMode.recommended)
-                            Text("Override").tag(RuntimeMode.override)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .onChange(of: runtimeMode) { oldValue, newValue in
-                            ModelManager.shared.setRuntimeMode(newValue)
-                            if newValue == .recommended { recommendedReady = true }
-                        }
-                        .accessibilityLabel(Text("Runtime parameters mode"))
+    // MARK: - Model Pickers Row
+    @ViewBuilder
+    private var modelPickersRow: some View {
+        HStack {
+            Picker("Embedding", selection: $selectedEmbeddingModel) {
+                ForEach(availableEmbeddingModels, id: \.self) { Text($0) }
+            }
+            .pickerStyle(MenuPickerStyle())
+            .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
+                ModelManager.shared.switchEmbeddingModel(name: newValue)
+            }
 
-                        Button("Reset") {
-                            ModelManager.shared.resetToRecommended()
-                            runtimeMode = .recommended
-                            recommendedReady = true
-                        }
-                        .disabled(runtimeMode != .override)
-                        .accessibilityLabel(Text("Reset to recommended parameters"))
-                    }
+            Spacer(minLength: 16)
 
-                    // 新規: LLM Preset ピッカー（プルダウン）
-                    Picker("LLM Preset", selection: $selectedLLMPreset) {
-                        ForEach(availableLLMPresets, id: \.self) { p in
-                            Text(p)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .onChange(of: selectedLLMPreset) { oldValue, newValue in
-                        ModelManager.shared.setLLMPreset(name: newValue)
-                    }
-                    .disabled(isLoading)
+            llmPickerSection
+        }
+    }
 
-                    // 非ブロッキング警告
-                    if let warn = autotuneWarning {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                            Text(warn)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
+    // MARK: - LLM Picker Section
+    @ViewBuilder
+    private var llmPickerSection: some View {
+        HStack(spacing: 8) {
+            Picker("LLM", selection: $selectedLLMModel) {
+                ForEach(availableLLMModels, id: \.self) { Text($0) }
+            }
+            .pickerStyle(MenuPickerStyle())
+            .onChange(of: selectedLLMModel) { oldValue, newValue in
+                handleLLMModelChange(newValue)
+            }
 
-                    // 複数行入力: TextEditor + プレースホルダ + Rounded枠
-                    ZStack(alignment: .topLeading) {
-                        TextEditor(text: $question)
-                            .frame(height: 100)
-                            .padding(10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.regularMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.secondary.opacity(0.15))
-                            )
-                            .disabled(isLoading)
-                            .focused($questionFocused)
-                        if question.isEmpty {
-                            Text("Enter your question")
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 16)
-                        }
-                    }
+            llmStatusBadge
+        }
+    }
 
-                    HStack(spacing: 12) {
-                        Button(action: { startAsk() }) {
-                            Text(isLoading ? "Asking..." : "Ask")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .frame(minHeight: 52)
+    // MARK: - LLM Status Badge
+    @ViewBuilder
+    private var llmStatusBadge: some View {
+        if isAutotuningModel {
+            ProgressView().scaleEffect(0.8)
+        } else {
+            if runtimeMode == .override {
+                Text("Custom")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.12), in: Capsule())
+            } else if recommendedReady {
+                Text("Recommended")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.12), in: Capsule())
+            }
+        }
+    }
 
-                        Button {
-                            showImporter = true
-                        } label: {
-                            Text("Choose RAGpack")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .disabled(isLoading)
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .frame(minHeight: 52)
-                        .fileImporter(isPresented: $showImporter, allowedContentTypes: [UTType.zip]) { result in
-                            if case let .success(url) = result {
-                                documentManager.importDocument(file: url)
-                            }
-                        }
-                    }
+    // MARK: - Runtime Mode Row
+    @ViewBuilder
+    private var runtimeModeRow: some View {
+        HStack(spacing: 12) {
+            Picker("Runtime Params", selection: $runtimeMode) {
+                Text("Use recommended").tag(RuntimeMode.recommended)
+                Text("Override").tag(RuntimeMode.override)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .onChange(of: runtimeMode) { oldValue, newValue in
+                ModelManager.shared.setRuntimeMode(newValue)
+                if newValue == .recommended { recommendedReady = true }
+            }
+            .accessibilityLabel(Text("Runtime parameters mode"))
+
+            Button("Reset") {
+                ModelManager.shared.resetToRecommended()
+                runtimeMode = .recommended
+                recommendedReady = true
+            }
+            .disabled(runtimeMode != .override)
+            .accessibilityLabel(Text("Reset to recommended parameters"))
+        }
+    }
+
+    // MARK: - Preset Picker
+    @ViewBuilder
+    private var presetPicker: some View {
+        Picker("LLM Preset", selection: $selectedLLMPreset) {
+            ForEach(availableLLMPresets, id: \.self) { p in
+                Text(p)
+            }
+        }
+        .pickerStyle(MenuPickerStyle())
+        .onChange(of: selectedLLMPreset) { oldValue, newValue in
+            ModelManager.shared.setLLMPreset(name: newValue)
+        }
+        .disabled(isLoading)
+    }
+
+    // MARK: - Autotune Warning
+    @ViewBuilder
+    private var autotuneWarningView: some View {
+        if let warn = autotuneWarning {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                Text(warn)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Question Input
+    @ViewBuilder
+    private var questionInputSection: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $question)
+                .frame(height: 100)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.regularMaterial)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.secondary.opacity(0.15))
+                )
+                .disabled(isLoading)
+                .focused($questionFocused)
+            if question.isEmpty {
+                Text("Enter your question")
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 16)
+            }
+        }
+    }
+
+    // MARK: - Action Buttons
+    @ViewBuilder
+    private var actionButtonsRow: some View {
+        HStack(spacing: 12) {
+            Button(action: { startAsk() }) {
+                Text(isLoading ? "Asking..." : "Ask")
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(minHeight: 52)
+
+            Button {
+                showImporter = true
+            } label: {
+                Text("Choose RAGpack")
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(isLoading)
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .frame(minHeight: 52)
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [UTType.zip]) { result in
+                if case let .success(url) = result {
+                    documentManager.importDocument(file: url)
                 }
-                .padding(.horizontal)
-                .onAppear { runtimeMode = ModelManager.shared.getRuntimeMode() }
-                // 背景タップでキーボード閉じる
-                .contentShape(Rectangle())
-                .onTapGesture { questionFocused = false }
+            }
+        }
+    }
 
-                Divider()
+    // MARK: - History Section
+    @ViewBuilder
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("History").font(.headline)
 
-                // 下段: 履歴リスト + 詳細（オーバーレイ方式）
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("History").font(.headline)
-
-                    ZStack(alignment: .bottom) {
-                        // 背面: 履歴リスト（常にフル表示）
-                        List {
-                            ForEach(documentManager.qaHistory) { qa in
-                                VStack(alignment: .leading) {
-                                    Text(qa.question).font(.subheadline).bold()
-                                    Text(qa.answer).font(.caption).lineLimit(3).foregroundColor(.secondary)
-                                }
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if !isLoading {
-                                        questionFocused = false
-                                        documentManager.selectedQAPair = qa
-                                    }
-                                }
-                            }
-                            .onDelete { offsets in
-                                if !isLoading { documentManager.deleteQAPair(at: offsets) }
-                            }
-                        }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
-                        .background(.clear)
-                        .scrollDismissesKeyboard(.immediately)
-                        .disabled(documentManager.selectedQAPair != nil || isLoading)
-
-                        // 前面: QADetailオーバーレイ
-                        if let selected = documentManager.selectedQAPair {
-                            QADetailView(qapair: selected, onClose: { if !isLoading { documentManager.selectedQAPair = nil } })
-                                .padding(.horizontal)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                                .zIndex(1)
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
-                }
-                .padding(.horizontal)
-                .frame(maxHeight: .infinity)
+            ZStack(alignment: .bottom) {
+                historyList
+                qaDetailOverlay
             }
             .frame(maxHeight: .infinity)
-            .disabled(isLoading)
-            .navigationTitle("Noesis Noema")
-            .toolbarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(.regularMaterial, for: .navigationBar)
-            .overlay(
-                Group {
-                    if isLoading {
-                        ZStack {
-                            Color.black.opacity(0.05).ignoresSafeArea()
-                            VStack(spacing: 8) {
-                                ProgressView().scaleEffect(1.2)
-                                Text("Generating...")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .allowsHitTesting(true)
-                        .zIndex(2)
-                    }
-                    // 起動時スプラッシュ（簡易）
-                    if showSplash {
-                        ZStack {
-                            Color.clear.ignoresSafeArea()
-                            Text("Noesis Noema")
-                                .font(.largeTitle.bold())
-                                .foregroundColor(.primary)
-                                .padding(.bottom, 24)
-                        }
-                        .transition(.opacity)
-                        .zIndex(3)
-                        .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
-                            }
-                        }
-                        .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { showSplash = false } }
+        }
+        .padding(.horizontal)
+        .frame(maxHeight: .infinity)
+    }
+
+    // MARK: - History List
+    @ViewBuilder
+    private var historyList: some View {
+        List {
+            ForEach(documentManager.qaHistory) { qa in
+                VStack(alignment: .leading) {
+                    Text(qa.question).font(.subheadline).bold()
+                    Text(qa.answer).font(.caption).lineLimit(3).foregroundColor(.secondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if !isLoading {
+                        questionFocused = false
+                        documentManager.selectedQAPair = qa
                     }
                 }
-            )
+            }
+            .onDelete { offsets in
+                if !isLoading { documentManager.deleteQAPair(at: offsets) }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(.clear)
+        .scrollDismissesKeyboard(.immediately)
+        .disabled(documentManager.selectedQAPair != nil || isLoading)
+    }
+
+    // MARK: - QA Detail Overlay
+    @ViewBuilder
+    private var qaDetailOverlay: some View {
+        if let selected = documentManager.selectedQAPair {
+            QADetailView(qapair: selected, onClose: { if !isLoading { documentManager.selectedQAPair = nil } })
+                .padding(.horizontal)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(1)
+        }
+    }
+
+    // MARK: - Overlay Content
+    @ViewBuilder
+    private var overlayContent: some View {
+        Group {
+            loadingOverlay
+            splashScreen
+        }
+    }
+
+    // MARK: - Loading Overlay
+    @ViewBuilder
+    private var loadingOverlay: some View {
+        if isLoading {
+            ZStack {
+                Color.black.opacity(0.05).ignoresSafeArea()
+                VStack(spacing: 8) {
+                    ProgressView().scaleEffect(1.2)
+                    Text("Generating...")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .allowsHitTesting(true)
+            .zIndex(2)
+        }
+    }
+
+    // MARK: - Splash Screen
+    @ViewBuilder
+    private var splashScreen: some View {
+        if showSplash {
+            ZStack {
+                Color.clear.ignoresSafeArea()
+                Text("Noesis Noema")
+                    .font(.largeTitle.bold())
+                    .foregroundColor(.primary)
+                    .padding(.bottom, 24)
+            }
+            .transition(.opacity)
+            .zIndex(3)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
+                }
+            }
+            .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { showSplash = false } }
+        }
+    }
+
+    // MARK: - Helper Methods
+    private func handleLLMModelChange(_ newValue: String) {
+        recommendedReady = false
+        autotuneWarning = nil
+        isAutotuningModel = true
+        ModelManager.shared.switchLLMModel(name: newValue)
+        runtimeMode = ModelManager.shared.getRuntimeMode()
+        selectedLLMPreset = "auto"
+        ModelManager.shared.setLLMPreset(name: "auto")
+        ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { warningMessage in
+            isAutotuningModel = false
+            recommendedReady = true
+            if !warningMessage.isEmpty { autotuneWarning = warningMessage }
         }
     }
 
