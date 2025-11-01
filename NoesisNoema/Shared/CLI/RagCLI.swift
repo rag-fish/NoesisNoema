@@ -8,7 +8,7 @@ import Foundation
 
 #if BRIDGE_TEST
 // Minimal DeepSearch for CLI builds (LlamaBridgeTest) in case the shared file is not included in the target
-private struct _CLI_DeepSearch {
+struct _CLI_DeepSearch {
     struct Config {
         var rounds: Int = 2
         var breadth: Int = 8
@@ -64,8 +64,8 @@ private struct _CLI_DeepSearch {
         }
     }
 }
-// Typealias to keep CLI code unchanged
-private typealias DeepSearch = _CLI_DeepSearch
+// Typealias to keep CLI code unchanged for BRIDGE_TEST builds
+typealias DeepSearch = _CLI_DeepSearch
 #endif
 
 struct RagCLI {

@@ -29,7 +29,7 @@ struct ContentView: View {
     @State private var autotuneWarning: String? = nil
 
     // ランタイムモード（推奨/上書き）
-    @State private var runtimeMode: RuntimeMode = ModelManager.shared.getRuntimeMode()
+    @State private var runtimeMode: LLMRuntimeMode = .auto
 
     // これらは計算型プロパティにして初期化時の隔離制約を回避
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
@@ -39,256 +39,301 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            // Sidebar — 自動で Liquid Glass 外観
-            VStack(spacing: 0) {
-                HStack {
-                    Button("New Question") {
-                        selectedQAPair = nil
-                        question = ""
-                        answer = ""
-                    }
-                    .disabled(isLoading)
-                    Spacer()
-                    Button("Manage RAGpack") { showRAGpackManager.toggle() }
-                        .disabled(isLoading)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.regularMaterial) // 強度アップ
-
-                List(selection: $selectedQAPair) {
-                    ForEach(qaHistory, id: \.id) { qa in
-                        QAHistoryRow(qa: qa, isSelected: selectedQAPair?.id == qa.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture { if !isLoading { selectedQAPair = qa } }
-                    }
-                    .onDelete { indexSet in
-                        if !isLoading { qaHistory.remove(atOffsets: indexSet) }
-                        if let selected = selectedQAPair, !qaHistory.contains(where: { $0.id == selected.id }) {
-                            selectedQAPair = nil
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden) // 背景拡張
-            }
-            .background(.regularMaterial) // サイドバー全面ガラス
-            .navigationTitle("Noesis Noema")
-            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
+            sidebarContent
         } detail: {
-            // Detail — エッジトゥエッジ + Material
-            Group {
-                if let selected = selectedQAPair {
-                    QADetailView(qapair: selected, onClose: { if !isLoading { selectedQAPair = nil } })
-                        .padding()
-                } else {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // Offline toggle + Local Only badge row
-                            HStack(spacing: 12) {
-                                Toggle("Offline", isOn: $appSettings.offline)
-                                    .toggleStyle(.switch)
-                                    .help("When enabled, any remote calls are blocked.")
-                                    .disabled(isLoading)
-                                if appSettings.offline && ModelManager.shared.isFullyLocal() {
-                                    Text("Local Only")
-                                        .font(.caption2)
-                                        .foregroundStyle(.green)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.green.opacity(0.12), in: Capsule())
-                                        .help("All components are local and remote calls are disabled.")
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-
-                            Picker("Embedding Model", selection: $selectedEmbeddingModel) {
-                                ForEach(availableEmbeddingModels, id: \.self) { model in
-                                    Text(model)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .padding(.horizontal)
-                            .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
-                                ModelManager.shared.switchEmbeddingModel(name: newValue)
-                            }
-                            .disabled(isLoading)
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Picker("LLM Model", selection: $selectedLLMModel) {
-                                        ForEach(availableLLMModels, id: \.self) { model in
-                                            Text(model)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .onChange(of: selectedLLMModel) { oldValue, newValue in
-                                        // UI: リセットしてから非同期オートチューン
-                                        recommendedReady = false
-                                        autotuneWarning = nil
-                                        isAutotuningModel = true
-                                        ModelManager.shared.switchLLMModel(name: newValue)
-                                        runtimeMode = ModelManager.shared.getRuntimeMode()
-                                        selectedLLMPreset = "auto"
-                                        ModelManager.shared.setLLMPreset(name: "auto")
-                                        ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
-                                            isAutotuningModel = false
-                                            recommendedReady = true
-                                            if let w = outcome.warning { autotuneWarning = w }
-                                        }
-                                    }
-                                    // インラインスピナー/バッジ
-                                    if isAutotuningModel {
-                                        ProgressView().scaleEffect(0.7).padding(.leading, 8)
-                                    } else {
-                                        if runtimeMode == .override {
-                                            Text("Custom")
-                                                .font(.caption2)
-                                                .foregroundStyle(.orange)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.orange.opacity(0.12), in: Capsule())
-                                        } else if recommendedReady {
-                                            Text("Recommended")
-                                                .font(.caption2)
-                                                .foregroundStyle(.green)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.green.opacity(0.12), in: Capsule())
-                                        }
-                                    }
-                                }
-                                // ランタイムモード（推奨/上書き） + リセット
-                                HStack(spacing: 12) {
-                                    Picker("Runtime Params", selection: $runtimeMode) {
-                                        Text("Use recommended").tag(RuntimeMode.recommended)
-                                        Text("Override").tag(RuntimeMode.override)
-                                    }
-                                    .pickerStyle(.radioGroup)
-                                    .onChange(of: runtimeMode) { oldValue, newValue in
-                                        ModelManager.shared.setRuntimeMode(newValue)
-                                        // バッジ反映
-                                        if newValue == .recommended { recommendedReady = true }
-                                    }
-                                    .accessibilityLabel(Text("Runtime parameters mode"))
-
-                                    Button("Reset") {
-                                        ModelManager.shared.resetToRecommended()
-                                        runtimeMode = .recommended
-                                        recommendedReady = true
-                                    }
-                                    .disabled(runtimeMode != .override)
-                                    .keyboardShortcut(.init("r"), modifiers: [.command])
-                                    .accessibilityLabel(Text("Reset to recommended parameters"))
-                                }
-                                // 警告（非ブロッキング）
-                                if let warn = autotuneWarning {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                                        Text(warn)
-                                    }
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .disabled(isLoading)
-
-                            // 新規: LLM Preset
-                            Picker("LLM Preset", selection: $selectedLLMPreset) {
-                                ForEach(availableLLMPresets, id: \.self) { p in
-                                    Text(p)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .padding(.horizontal)
-                            .onChange(of: selectedLLMPreset) { oldValue, newValue in
-                                ModelManager.shared.setLLMPreset(name: newValue)
-                            }
-                            .disabled(isLoading)
-
-                            // RAGpack(.zip) upload UI
-                            HStack {
-                                Text("RAGpack(.zip) Upload:")
-                                    .font(.title3)
-                                    .bold()
-                                Spacer()
-                                Button(action: {
-                                    let panel = NSOpenPanel()
-                                    panel.allowedContentTypes = [UTType.zip]
-                                    panel.allowsMultipleSelection = false
-                                    panel.canChooseDirectories = false
-                                    if panel.runModal() == .OK {
-                                        documentManager.importDocument(file: panel.url!)
-                                    }
-                                }) {
-                                    Text("Choose File")
-                                        .font(.title3)
-                                }
-                                .disabled(isLoading)
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
-                            }
-                            .padding(.horizontal)
-
-                            TextField("Enter your question", text: $question)
-                                .textFieldStyle(.roundedBorder)
-                                .padding(.horizontal)
-                                .onSubmit {
-                                    Task { await askRAG() }
-                                }
-                                .disabled(isLoading)
-
-                            Button(action: { Task { await askRAG() } }) {
-                                Text("Ask")
-                            }
-                            .disabled(question.isEmpty || isLoading)
-                            .padding(.horizontal)
-
-                            if isLoading {
-                                ProgressView().padding()
-                            }
-
-                            // Answer
-                            Text(answer)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                .padding(.horizontal)
-                        }
-                        .padding(.vertical)
-                        .onAppear {
-                            runtimeMode = ModelManager.shared.getRuntimeMode()
-                        }
-                    }
-                    .background(.clear)
-                }
-            }
-            .background(.ultraThinMaterial) // ディテール面に広域でガラス
-            .toolbarBackground(.visible, for: .windowToolbar)
-            .toolbarBackground(.regularMaterial, for: .windowToolbar) // 強度アップ
+            detailContent
         }
         .sheet(isPresented: $showRAGpackManager) {
             RAGpackManagerView(documentManager: documentManager)
         }
         .disabled(isLoading)
-        .overlay(
-            Group {
-                if isLoading {
-                    ZStack {
-                        Color.black.opacity(0.05).ignoresSafeArea()
-                        VStack(spacing: 8) {
-                            ProgressView()
-                            Text("Generating...")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
+        .overlay(loadingOverlay)
+    }
+
+    // サイドバーコンテンツ
+    private var sidebarContent: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("New Question") {
+                    selectedQAPair = nil
+                    question = ""
+                    answer = ""
+                }
+                .disabled(isLoading)
+                Spacer()
+                Button("Manage RAGpack") { showRAGpackManager.toggle() }
+                    .disabled(isLoading)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.regularMaterial)
+
+            List(selection: $selectedQAPair) {
+                ForEach(qaHistory, id: \.id) { qa in
+                    QAHistoryRow(qa: qa, isSelected: selectedQAPair?.id == qa.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if !isLoading { selectedQAPair = qa } }
+                }
+                .onDelete { indexSet in
+                    if !isLoading { qaHistory.remove(atOffsets: indexSet) }
+                    if let selected = selectedQAPair, !qaHistory.contains(where: { $0.id == selected.id }) {
+                        selectedQAPair = nil
                     }
                 }
             }
-        )
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+        }
+        .background(.regularMaterial)
+        .navigationTitle("Noesis Noema")
+        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
+    }
+
+    // 詳細コンテンツ
+    private var detailContent: some View {
+        Group {
+            if let selected = selectedQAPair {
+                QADetailView(qapair: selected, onClose: { if !isLoading { selectedQAPair = nil } })
+                    .padding()
+            } else {
+                mainInputView
+            }
+        }
+        .background(.ultraThinMaterial)
+        .toolbarBackground(.visible, for: .windowToolbar)
+        .toolbarBackground(.regularMaterial, for: .windowToolbar)
+    }
+
+    // メイン入力ビュー
+    private var mainInputView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                offlineToggleRow
+                embeddingModelPicker
+                llmModelSection
+                llmPresetPicker
+                ragpackUploadSection
+                questionInputSection
+            }
+            .padding(.vertical)
+            .onAppear {
+                runtimeMode = ModelManager.shared.getLLMRuntimeMode()
+            }
+        }
+        .background(.clear)
+    }
+
+    // オフライントグル行
+    private var offlineToggleRow: some View {
+        HStack(spacing: 12) {
+            Toggle("Offline", isOn: $appSettings.offline)
+                .toggleStyle(.switch)
+                .help("When enabled, any remote calls are blocked.")
+                .disabled(isLoading)
+            if appSettings.offline && ModelManager.shared.isFullyLocal() {
+                Text("Local Only")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.12), in: Capsule())
+                    .help("All components are local and remote calls are disabled.")
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+    }
+
+    // 埋め込みモデルピッカー
+    private var embeddingModelPicker: some View {
+        Picker("Embedding Model", selection: $selectedEmbeddingModel) {
+            ForEach(availableEmbeddingModels, id: \.self) { model in
+                Text(model)
+            }
+        }
+        .pickerStyle(.menu)
+        .padding(.horizontal)
+        .onChange(of: selectedEmbeddingModel) { oldValue, newValue in
+            ModelManager.shared.switchEmbeddingModel(name: newValue)
+        }
+        .disabled(isLoading)
+    }
+
+    // LLMモデルセクション
+    private var llmModelSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Picker("LLM Model", selection: $selectedLLMModel) {
+                    ForEach(availableLLMModels, id: \.self) { model in
+                        Text(model)
+                    }
+                }
+                .pickerStyle(.menu)
+                .onChange(of: selectedLLMModel) { oldValue, newValue in
+                    recommendedReady = false
+                    autotuneWarning = nil
+                    isAutotuningModel = true
+                    ModelManager.shared.switchLLMModel(name: newValue)
+                    runtimeMode = ModelManager.shared.getLLMRuntimeMode()
+                    selectedLLMPreset = "auto"
+                    ModelManager.shared.setLLMPreset(name: "auto")
+                    ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
+                        isAutotuningModel = false
+                        recommendedReady = true
+                        // outcomeはString型なので直接表示
+                        if !outcome.isEmpty {
+                            autotuneWarning = outcome
+                        }
+                    }
+                }
+
+                if isAutotuningModel {
+                    ProgressView().scaleEffect(0.7).padding(.leading, 8)
+                } else {
+                    if runtimeMode == .cpuOnly {
+                        Text("Custom")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.12), in: Capsule())
+                    } else if recommendedReady {
+                        Text("Recommended")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.12), in: Capsule())
+                    }
+                }
+            }
+
+            runtimeParamsSection
+
+            if let warn = autotuneWarning {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                    Text(warn)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .disabled(isLoading)
+    }
+
+    // ランタイムパラメータセクション
+    private var runtimeParamsSection: some View {
+        HStack(spacing: 12) {
+            Picker("Runtime Params", selection: $runtimeMode) {
+                Text("Use recommended").tag(LLMRuntimeMode.auto)
+                Text("Override").tag(LLMRuntimeMode.cpuOnly)
+            }
+            .pickerStyle(.radioGroup)
+            .onChange(of: runtimeMode) { oldValue, newValue in
+                ModelManager.shared.setLLMRuntimeMode(newValue)
+                if newValue == .auto { recommendedReady = true }
+            }
+            .accessibilityLabel(Text("Runtime parameters mode"))
+
+            Button("Reset") {
+                ModelManager.shared.resetToRecommended()
+                runtimeMode = .auto
+                recommendedReady = true
+            }
+            .disabled(runtimeMode != .cpuOnly)
+            .keyboardShortcut(.init("r"), modifiers: [.command])
+            .accessibilityLabel(Text("Reset to recommended parameters"))
+        }
+    }
+
+    // LLMプリセットピッカー
+    private var llmPresetPicker: some View {
+        Picker("LLM Preset", selection: $selectedLLMPreset) {
+            ForEach(availableLLMPresets, id: \.self) { p in
+                Text(p)
+            }
+        }
+        .pickerStyle(.menu)
+        .padding(.horizontal)
+        .onChange(of: selectedLLMPreset) { oldValue, newValue in
+            ModelManager.shared.setLLMPreset(name: newValue)
+        }
+        .disabled(isLoading)
+    }
+
+    // RAGpackアップロードセクション
+    private var ragpackUploadSection: some View {
+        HStack {
+            Text("RAGpack(.zip) Upload:")
+                .font(.title3)
+                .bold()
+            Spacer()
+            Button(action: {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [UTType.zip]
+                panel.allowsMultipleSelection = false
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK {
+                    documentManager.importDocument(file: panel.url!)
+                }
+            }) {
+                Text("Choose File")
+                    .font(.title3)
+            }
+            .disabled(isLoading)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding(.horizontal)
+    }
+
+    // 質問入力セクション
+    private var questionInputSection: some View {
+        VStack(spacing: 12) {
+            TextField("Enter your question", text: $question)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+                .onSubmit {
+                    Task { await askRAG() }
+                }
+                .disabled(isLoading)
+
+            Button(action: { Task { await askRAG() } }) {
+                Text("Ask")
+            }
+            .disabled(question.isEmpty || isLoading)
+            .padding(.horizontal)
+
+            if isLoading {
+                ProgressView().padding()
+            }
+
+            Text(answer)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal)
+        }
+    }
+
+    // ローディングオーバーレイ
+    private var loadingOverlay: some View {
+        Group {
+            if isLoading {
+                ZStack {
+                    Color.black.opacity(0.05).ignoresSafeArea()
+                    VStack(spacing: 8) {
+                        ProgressView()
+                        Text("Generating...")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                }
+            }
+        }
     }
 
     func askRAG() async {
@@ -324,7 +369,8 @@ struct ContentView: View {
 
         let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
         // Cache: store QA context for potential thumbs-up capture
-        QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: ModelManager.shared.currentEmbeddingModel)
+        let embedder = EmbeddingModel(name: "nomic-embed-text") // デフォルトの埋め込みモデル
+        QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: embedder)
         qaHistory.append(newQAPair)
         selectedQAPair = newQAPair
         question = ""
