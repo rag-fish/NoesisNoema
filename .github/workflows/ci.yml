@@ -40,16 +40,3 @@ jobs:
         run: |
           set -euxo pipefail
           ./ci_build/Build/Products/Debug/LlamaBridgeTest model info jan-v1-4b --dry-run
-
-      - name: Run CLI Test
-        run: |
-          set -euxo pipefail
-          BIN_PATH=$(find ./ci_build/Build/Products -type f -name LlamaBridgeTest | head -n 1)
-          if [ -z "$BIN_PATH" ]; then
-            echo "❌ LlamaBridgeTest binary not found"
-            ls -R ./ci_build/Build/Products || true
-            exit 1
-          fi
-          echo "✅ Executable found at: $BIN_PATH"
-          chmod +x "$BIN_PATH"
-          "$BIN_PATH" model info jan-v1-4b --dry-run
