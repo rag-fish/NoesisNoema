@@ -14,7 +14,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F4C580FC2E4F006000E64194"
-               BuildableName = ".app"
+               BuildableName = "NoesisNoema.app"
                BlueprintName = "NoesisNoemaMobile"
                ReferencedContainer = "container:NoesisNoema.xcodeproj">
             </BuildableReference>
@@ -43,7 +43,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F4C580FC2E4F006000E64194"
-            BuildableName = ".app"
+            BuildableName = "NoesisNoema.app"
             BlueprintName = "NoesisNoemaMobile"
             ReferencedContainer = "container:NoesisNoema.xcodeproj">
          </BuildableReference>

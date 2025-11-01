@@ -117,7 +117,7 @@ struct ContentView: View {
             }
             .padding(.vertical)
             .onAppear {
-                runtimeMode = ModelManager.shared.getRuntimeMode()
+                runtimeMode = ModelManager.shared.getLLMRuntimeMode()
             }
         }
         .background(.clear)
@@ -174,7 +174,7 @@ struct ContentView: View {
                     autotuneWarning = nil
                     isAutotuningModel = true
                     ModelManager.shared.switchLLMModel(name: newValue)
-                    runtimeMode = ModelManager.shared.getRuntimeMode()
+                    runtimeMode = ModelManager.shared.getLLMRuntimeMode()
                     selectedLLMPreset = "auto"
                     ModelManager.shared.setLLMPreset(name: "auto")
                     ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
@@ -232,7 +232,7 @@ struct ContentView: View {
             }
             .pickerStyle(.radioGroup)
             .onChange(of: runtimeMode) { oldValue, newValue in
-                ModelManager.shared.setRuntimeMode(newValue)
+                ModelManager.shared.setLLMRuntimeMode(newValue)
                 if newValue == .auto { recommendedReady = true }
             }
             .accessibilityLabel(Text("Runtime parameters mode"))

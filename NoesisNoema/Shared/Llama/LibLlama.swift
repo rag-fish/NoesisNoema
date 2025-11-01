@@ -4,12 +4,16 @@
 // - If upstream changes break the build, fix here and add/adjust a unit test.
 
 import Foundation
-import llama
 
+#if !DISABLE_LLAMA
+import llama
+#endif
 
 enum LlamaError: Error {
     case couldNotInitializeContext
 }
+
+#if !DISABLE_LLAMA
 
 func llama_batch_clear(_ batch: inout llama_batch) {
     batch.n_tokens = 0
@@ -459,3 +463,74 @@ actor LlamaContext {
         }
     }
 }
+
+#else
+// MARK: - iOS Stub Implementation (DISABLE_LLAMA)
+
+// Stub LlamaContext for iOS when llama framework is disabled
+actor LlamaContext {
+    var is_done: Bool = false
+    var n_len: Int32 = 1024
+    private var n_cur: Int32 = 0
+    private var n_decode: Int32 = 0
+
+    init(model: OpaquePointer, context: OpaquePointer, initialNLen: Int32 = 1024) {
+        self.n_len = initialNLen
+        print("[LlamaContext Stub] Initialized with stub implementation (llama disabled for iOS)")
+    }
+
+    static func create_context(path: String) throws -> LlamaContext {
+        print("[LlamaContext Stub] create_context called - returning stub (llama disabled for iOS)")
+        // Return a dummy context - we can't actually create OpaquePointers, so this will fail
+        // Instead, throw an error
+        throw LlamaError.couldNotInitializeContext
+    }
+
+    func model_info() -> String {
+        return "[Stub] LLM functionality disabled for iOS"
+    }
+
+    func system_info() -> String {
+        return "[Stub] LLM functionality disabled for iOS"
+    }
+
+    func set_verbose(_ on: Bool) {
+        // No-op
+    }
+
+    func configure_sampling(temp: Float, top_k: Int32, top_p: Float, seed: UInt64 = 1234) {
+        // No-op
+    }
+
+    func set_n_len(_ value: Int32) {
+        self.n_len = value
+    }
+
+    func get_n_tokens() -> Int32 {
+        return 0
+    }
+
+    func completion_init(text: String) {
+        print("[LlamaContext Stub] completion_init called with: \(text.prefix(50))...")
+        is_done = true
+    }
+
+    func completion_loop() -> String {
+        is_done = true
+        return ""
+    }
+
+    func request_stop() {
+        is_done = true
+    }
+
+    func bench(pp: Int, tg: Int, pl: Int, nr: Int = 1) -> String {
+        return "[Stub] Benchmarking disabled for iOS"
+    }
+
+    func clear() {
+        // No-op
+    }
+}
+
+#endif

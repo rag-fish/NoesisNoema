@@ -14,7 +14,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F46088482E2CD45000D4C555"
-               BuildableName = "LlamaBridgeTest"
+               BuildableName = "NoesisNoema"
                BlueprintName = "LlamaBridgeTest"
                ReferencedContainer = "container:NoesisNoema.xcodeproj">
             </BuildableReference>
@@ -43,7 +43,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F46088482E2CD45000D4C555"
-            BuildableName = "LlamaBridgeTest"
+            BuildableName = "NoesisNoema"
             BlueprintName = "LlamaBridgeTest"
             ReferencedContainer = "container:NoesisNoema.xcodeproj">
          </BuildableReference>

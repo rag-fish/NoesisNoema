@@ -1,5 +1,31 @@
 import Foundation
 
+#if BRIDGE_TEST
+// Minimal ModelManager stub for CLI builds if not included in target
+@MainActor
+class _CLI_ModelManager {
+    static let shared = _CLI_ModelManager()
+    private var mockEngine: _MockInferenceEngine? = nil
+
+    func loadModel(id: String) async throws {
+        mockEngine = _MockInferenceEngine()
+    }
+
+    func getCurrentEngine() -> _MockInferenceEngine? {
+        return mockEngine
+    }
+}
+
+// Minimal InferenceEngine stub for CLI
+actor _MockInferenceEngine {
+    func generate(prompt: String, maxTokens: Int32) async throws -> String {
+        return "[BRIDGE_TEST stub response]"
+    }
+}
+
+typealias ModelManager = _CLI_ModelManager
+#endif
+
 struct Model: Identifiable {
     var id = UUID()
     var name: String

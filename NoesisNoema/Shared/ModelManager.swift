@@ -23,7 +23,12 @@ class ModelManager: ObservableObject {
     @Published private(set) var currentEmbeddingModel: EmbeddingModel = EmbeddingModel(name: "nomic-embed-text")
     @Published private(set) var currentLLMModel: LLMModel = LLMModel(name: "Jan-V1-4B", modelFile: "Jan-v1-4B-Q4_K_M.gguf", version: "v1", isEmbedded: true)
     @Published private(set) var currentLLMPreset: String = "auto"
-    @Published private(set) var runtimeMode: LLMRuntimeMode = .auto
+
+    // Hardware-level runtime mode (macOS UI)
+    @Published private(set) var llmRuntimeMode: LLMRuntimeMode = .auto
+
+    // Parameter-level runtime mode (iOS UI)
+    @Published private(set) var paramRuntimeMode: RuntimeMode = .recommended
 
     // Simple memory of last retrieved chunks for citation UI
     @Published private(set) var lastRetrievedChunks: [Chunk] = []
@@ -196,11 +201,17 @@ class ModelManager: ObservableObject {
 
     func setLLMPreset(name: String) { currentLLMPreset = name }
 
-    func getRuntimeMode() -> LLMRuntimeMode { runtimeMode }
-    func setRuntimeMode(_ mode: LLMRuntimeMode) { runtimeMode = mode }
+    // macOS API: hardware runtime mode
+    func getLLMRuntimeMode() -> LLMRuntimeMode { llmRuntimeMode }
+    func setLLMRuntimeMode(_ mode: LLMRuntimeMode) { llmRuntimeMode = mode }
+
+    // iOS API: parameter runtime mode
+    func getRuntimeMode() -> RuntimeMode { paramRuntimeMode }
+    func setRuntimeMode(_ mode: RuntimeMode) { paramRuntimeMode = mode }
 
     func resetToRecommended() {
-        runtimeMode = .auto
+        llmRuntimeMode = .auto
+        paramRuntimeMode = .recommended
         currentLLMPreset = "auto"
     }
 

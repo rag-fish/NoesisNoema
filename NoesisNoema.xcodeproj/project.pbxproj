@@ -121,21 +121,15 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		F4BFB4522EB356B000427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */ = {
+		F4BFB4522EB356B000427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			attributesByRelativePath = {
-				Frameworks/xcframeworks/llama_macos.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
-			};
 			buildPhase = F4F38B892EB265A600F3CEF3 /* Embed Frameworks */;
 			membershipExceptions = (
 				Frameworks/xcframeworks/llama_macos.xcframework,
 			);
 		};
-		F4BFB4572EB356C100427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoemaMobile" target */ = {
+		F4BFB4572EB356C100427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			attributesByRelativePath = {
-				Frameworks/xcframeworks/llama_ios.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
-			};
 			buildPhase = F4F38B852EB2659A00F3CEF3 /* Embed Frameworks */;
 			membershipExceptions = (
 				Frameworks/xcframeworks/llama_ios.xcframework,
@@ -148,21 +142,25 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				F4EEEAAA2E50099900E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
-				F4BFB4522EB356B000427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */,
+				F4BFB4522EB356B000427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */,
 				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
 				F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */,
-				F4BFB4572EB356C100427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoemaMobile" target */,
+				F4BFB4572EB356C100427CD3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */,
 			);
 			path = NoesisNoema;
 			sourceTree = "<group>";
 		};
 		F460884A2E2CD45000D4C555 /* LlamaBridgeTest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = LlamaBridgeTest;
 			sourceTree = "<group>";
 		};
 		F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = NoesisNoemaMobile;
 			sourceTree = "<group>";
 		};
@@ -302,8 +300,6 @@
 				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
 			);
 			name = LlamaBridgeTest;
-			packageProductDependencies = (
-			);
 			productName = LlamaBridgeTest;
 			productReference = F46088492E2CD45000D4C555 /* LlamaBridgeTest */;
 			productType = "com.apple.product-type.tool";
@@ -446,10 +442,6 @@
 		F41FD0242E2A467000909132 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -482,6 +474,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -505,6 +498,8 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -518,10 +513,6 @@
 		F41FD0252E2A467000909132 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -554,6 +545,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -570,6 +562,8 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -583,15 +577,12 @@
 		F41FD0272E2A467000909132 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -619,6 +610,8 @@
 					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				REGISTER_APP_GROUPS = YES;
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
@@ -634,15 +627,12 @@
 		F41FD0282E2A467000909132 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -670,6 +660,8 @@
 					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				REGISTER_APP_GROUPS = YES;
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
@@ -685,19 +677,18 @@
 		F460884E2E2CD45000D4C555 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_HARDENED_RUNTIME = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -709,16 +700,20 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
 				);
+				MACH_O_TYPE = mh_execute;
 				OTHER_CFLAGS = (
 					"-DDEBUG=1",
 					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
+				PRODUCT_TYPE = "com.apple.product-type.tool";
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited) BRIDGE_TEST";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
@@ -727,19 +722,18 @@
 		F460884F2E2CD45000D4C555 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_HARDENED_RUNTIME = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -751,15 +745,20 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
 				);
+				MACH_O_TYPE = mh_execute;
 				OTHER_CFLAGS = (
 					"-DNDEBUG=1",
 					"$(inherited)",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
+				PRODUCT_TYPE = "com.apple.product-type.tool";
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BRIDGE_TEST;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
@@ -769,44 +768,33 @@
 		F4C581062E4F006800E64194 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-				);
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = (
 					"-DDEBUG=1",
 					"$(inherited)",
 				);
+				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited) DISABLE_LLAMA";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				SYSTEM_FRAMEWORK_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator/**",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64/**",
-				);
+				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
@@ -814,43 +802,33 @@
 		F4C581072E4F006800E64194 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		PRODUCT_NAME = NoesisNoema;
-		PRODUCT_MODULE_NAME = NoesisNoema;
-		DEFINES_MODULE = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64",
-					"$(PROJECT_DIR)/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**",
-				);
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = (
 					"-DNDEBUG=1",
 					"$(inherited)",
 				);
+				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = fish.rag.NoesisNoema;
+				PRODUCT_MODULE_NAME = NoesisNoema;
+				PRODUCT_NAME = NoesisNoema;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DISABLE_LLAMA;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
-				SYSTEM_FRAMEWORK_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator/**",
-					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64/**",
-				);
+				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
