@@ -26,6 +26,8 @@ struct MobileHomeView: View {
     @State private var showSplash = true
 
     @FocusState private var questionFocused: Bool
+    
+    private let splashScreenDuration: TimeInterval = 1.2
 
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
@@ -379,7 +381,7 @@ struct MobileHomeView: View {
             .transition(.opacity)
             .zIndex(2)
             .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + splashScreenDuration) {
                     withAnimation(.easeOut(duration: 0.3)) {
                         showSplash = false
                     }
