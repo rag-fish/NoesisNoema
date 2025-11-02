@@ -1,195 +1,103 @@
-Title: iOS UI full-screen redesign for NoesisNoemaMobile (SwiftUI)
+Request: Fix macOS launch crash (“_abort_with_payload”) and wire xcframeworks correctly
 
+Repository: rag-fish/NoesisNoema
+Current branch: feature/macos-launch-fix (do all work here)
+Xcode: 26.x
+Targets:
+	•	NoesisNoema (macOS app) ← in scope
+	•	NoesisNoemaMobile (iOS app) ← out of scope; don’t modify
+	•	LlamaBridgeTest (CLI) ← out of scope for now
 
+Context & facts (do not contradict):
+	•	We do not build xcframeworks inside Xcode. They are built externally from llama.cpp via our CLion shell script and then imported.
+	•	Frameworks live in the project as files, not SwiftPM:
+	•	NoesisNoema/Frameworks/llama_macos.xcframework
+	•	NoesisNoema/Frameworks/llama_ios.xcframework (exists for iOS; don’t touch)
+	•	The macOS app crashes on launch with _abort_with_payload. Prior logs showed loader searching for libggml*.dylib and failing; we do not use ggml dylibs directly anymore—only the llama.framework inside the xcframework.
+	•	Swift wrapper is used (import llama in Shared/Llama/LibLlama.swift). iOS builds now succeed; macOS builds succeed but crash at launch.
+	•	We want a pure-Swift app; no Obj-C or C glue added to the Xcode project.
+	•	Keep code signing working and do not regress the iOS target.
 
-Context:
-	•	Project: NoesisNoema.xcodeproj
-	•	Target: NoesisNoemaMobile (iOS only)
-	•	Platform: Xcode 26 / iOS 18 SDK
-	•	Shared logic (Shared/, RAG/, etc.) must remain unchanged.
-	•	xcframeworks (llama_ios.xcframework, etc.) must not be modified.
-	•	macOS target (NoesisNoema) and CLI target (LlamaBridgeTest) are out of scope.
-	•	The current iOS UI works but is poorly scaled under iOS 18 — elements overlap and waste screen space.
+⸻
 
+Goals
+	1.	Fix macOS launch crash (remove/resolve any stale loader settings expecting libggml*.dylib; use the llama.framework slice from llama_macos.xcframework properly).
+	2.	Ensure the macOS target finds, links, copies, and codesigns llama.framework at runtime.
+	3.	Keep iOS target and CLI target untouched.
+	4.	Produce a single PR from feature/macos-launch-fix with a clean, minimal diff.
 
+⸻
 
-🎯 Goal
+Exact tasks
 
-Redesign the iOS UI layout in SwiftUI so it:
-	•	Uses the full screen area gracefully (safe areas respected).
-	•	Feels touch-friendly, readable, and consistent with iOS 18’s new design system.
-	•	Keeps all functional bindings intact (prompt input, mode switch, history).
-	•	Avoids breaking build for macOS or CLI.
+A. Project settings (macOS target only)
+	•	In NoesisNoema (macOS) Build Settings:
+	•	Framework Search Paths add (non-recursive):
+$(PROJECT_DIR)/Frameworks/
+$(PROJECT_DIR)/Frameworks/llama_macos.xcframework/macos-arm64/
+	•	Header Search Paths (if needed by Swift wrapper, non-recursive):
+$(PROJECT_DIR)/Frameworks/llama_macos.xcframework/macos-arm64/llama.framework/Headers
+	•	Library Search Paths: remove any paths pointing to libggml*.dylib or build-macos/*.dylib.
+	•	Runpath Search Paths must include:
+@executable_path/../Frameworks
+@loader_path/../Frameworks
+	•	Enable Modules (C and Objective-C): YES (modulemap is present).
+	•	Valid Architectures: arm64 only (no x86_64).
+	•	In Build Phases (macOS target):
+	•	Link Binary With Libraries: ensure llama.framework (the slice inside llama_macos.xcframework/macos-arm64) is linked, not any *.dylib.
+	•	Embed Frameworks: add llama.framework with Embed & Sign.
+	•	Remove any “Copy Files” step that tries to copy libggml*.dylib.
+	•	In General ▸ Frameworks, Libraries, and Embedded Content (macOS):
+	•	llama_macos.xcframework should appear; ensure the embedded artifact is llama.framework with Embed & Sign.
+	•	Confirm module.modulemap exists at
+NoesisNoema/Frameworks/llama_macos.xcframework/macos-arm64/llama.framework/Modules/module.modulemap
+and that the umbrella header is llama.h.
 
+B. Swift wrapper sanity
+	•	In Shared/Llama/LibLlama.swift and related files, ensure imports are just import llama (no import ggml).
+	•	If any references to ggml symbols linger, remove them and stick to the llama C API exposed by the module header.
 
+C. Runtime verification
+	•	Create a temporary smoke test in the macOS app launch path (e.g., inside @main or first ViewModel init) that:
+	•	Loads a tiny local model file path from Resources/Models (do not add large files or change resources; just try a “stat”/existence check and skip if not present).
+	•	Calls a minimal llama_backend_init() / context create-destroy via the Swift wrapper to verify the dynamic loader can resolve symbols. If a model is missing, skip gracefully but ensure the call to the library succeeds (or guard behind an #if DEBUG).
+	•	Remove or comment out the smoke test before final commit if it risks long startup; otherwise keep it behind a debug flag.
 
-✅ Requirements
-	1.	Navigation
-	•	Use NavigationStack with .navigationBarTitleDisplayMode(.inline).
-	•	Title: “Noesis Noema” (centered, compact header).
-	•	Remove unnecessary top padding or spacers.
-	2.	Layout hierarchy (vertical scrollable stack)
-	•	Mode switch (segmented control): “Use recommended” / “Override” + right-side “Reset” button.
-	•	Model selector row: shows current model (e.g. "auto") and a “Change model” button.
-	•	Multiline prompt editor with placeholder "Enter your question" and character counter.
-	•	Two primary buttons stacked:
-	•	Ask (primary, full width, height ≥ 48pt)
-	•	Choose RAG… (secondary)
-	•	“History” heading followed by the scrollable history list.
-	3.	Layout and spacing
-	•	Horizontal padding: 16–20pt
-	•	Vertical spacing between sections: 12–16pt
-	•	Dynamic type ready (.minimumScaleFactor(0.9))
-	•	Works correctly on iPhone SE (3rd gen) and iPhone 16 Pro Max.
-	•	Input field and buttons remain visible when keyboard is open
-(.ignoresSafeArea(.keyboard) and ScrollView adjustments).
-	4.	Accessibility
-	•	Buttons and toggles include accessibilityLabels.
-	•	Support both dark and light mode with readable contrast.
-	5.	Code constraints
-	•	Create new iOS-specific view under:
-NoesisNoemaMobile/Views/MobileHomeView.swift
-	•	Modify NoesisNoemaMobileApp.swift so the app loads this new view.
-	•	Keep Shared/ContentView.swift intact (macOS version still uses it).
-	•	Optionally use #if os(iOS) guards if shared files must import the new layout.
-	•	Do not modify or rename existing business logic or models.
+D. Tooling to edit project safely
+	•	Prefer editing project.pbxproj using a small Ruby script with the xcodeproj gem placed under scripts/fix_macos_launch.rb.
+	•	The script should idempotently:
+	•	Add/ensure the above Framework Search Paths and Runpath Search Paths.
+	•	Ensure llama.framework is linked and embedded for the macOS target.
+	•	Remove any build settings referencing libggml*.dylib.
+	•	Log a dry-run diff, then apply. Commit both the script and the change.
 
+⸻
 
+Constraints
+	•	Don’t touch iOS target (NoesisNoemaMobile) or LlamaBridgeTest.
+	•	Don’t add SPM packages or pods.
+	•	Don’t move the xcframeworks; their paths are as stated.
+	•	Keep commits small and descriptive. No mass reformatting.
+	•	If you must create a helper file, place it under scripts/ and document it in docs/.
 
-🧩 Suggested structure
+⸻
 
-```swift
-// NoesisNoemaMobile/Views/MobileHomeView.swift
-import SwiftUI
+Acceptance criteria
+	•	xcodebuild -project NoesisNoema.xcodeproj -scheme NoesisNoema -configuration Debug -destination 'platform=macOS' build succeeds.
+	•	Running the app no longer aborts at launch; main window appears.
+	•	Runtime loader errors about libggml*.dylib disappear.
+	•	import llama compiles; no No such module 'llama'.
+	•	iOS target still builds and runs as before (spot-check compile only).
+	•	PR created from feature/macos-launch-fix with title:
+“fix(macOS): resolve launch crash by correct llama.xcframework linkage & runtime paths”
+and a checklist in the description referencing this task.
 
-struct MobileHomeView: View {
-    @State private var mode: Mode = .recommended
-    @State private var modelName = "auto"
-    @State private var prompt = ""
-    @FocusState private var focused: Bool
+⸻
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+What to output
+	1.	A short plan of detected problems and the changes you’ll apply.
+	2.	The scripts/fix_macos_launch.rb (or equivalent) if you choose that route.
+	3.	The exact xcodebuild commands you ran and their logs saved under build-macos-*.log.
+	4.	A final summary and open a PR.
 
-                    // Mode Picker
-                    HStack(spacing: 12) {
-                        Picker("", selection: $mode) {
-                            Text("Use recommended").tag(Mode.recommended)
-                            Text("Override").tag(Mode.override)
-                        }
-                        .pickerStyle(.segmented)
-                        Button("Reset") { resetAll() }
-                            .buttonStyle(.bordered)
-                    }
-
-                    // Model selector
-                    HStack {
-                        Text(modelName).font(.headline).foregroundStyle(.tint)
-                        Spacer()
-                        Button("Change model") { presentModelPicker() }
-                    }
-
-                    // Prompt input
-                    VStack(alignment: .leading, spacing: 8) {
-                        ZStack(alignment: .topLeading) {
-                            TextEditor(text: $prompt)
-                                .frame(minHeight: 120, maxHeight: 220)
-                                .padding(12)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(.quaternary.opacity(0.25)))
-                                .focused($focused)
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        Spacer()
-                                        Button("Done") { focused = false }
-                                    }
-                                }
-
-                            if prompt.isEmpty {
-                                Text("Enter your question")
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 18)
-                                    .padding(.vertical, 16)
-                            }
-                        }
-
-                        HStack {
-                            Spacer()
-                            Text("\(prompt.count) chars")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    // Buttons
-                    VStack(spacing: 12) {
-                        Button(action: ask) {
-                            Text("Ask")
-                                .frame(maxWidth: .infinity, minHeight: 50)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                        Button(action: chooseRAG) {
-                            Text("Choose RAG…")
-                                .frame(maxWidth: .infinity, minHeight: 50)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    // History section
-                    Text("History")
-                        .font(.title3.bold())
-                        .padding(.top, 8)
-
-                    HistoryListView()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 20)
-            }
-            .navigationTitle("Noesis Noema")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .ignoresSafeArea(.keyboard)
-    }
-
-    private func resetAll() { mode = .recommended; prompt = "" }
-    private func presentModelPicker() { /* integrate existing picker */ }
-    private func ask() { /* call existing ask logic */ }
-    private func chooseRAG() { /* call existing RAG selection */ }
-
-    enum Mode { case recommended, override }
-}
-```
----
-```swift
-// NoesisNoemaMobile/NoesisNoemaMobileApp.swift
-import SwiftUI
-
-@main
-struct NoesisNoemaMobileApp: App {
-    var body: some Scene {
-        WindowGroup {
-            MobileHomeView()
-        }
-    }
-}
-```
-
-
-
-🧪 Validation checklist
-	•	✅ Build succeeds for iOS target (NoesisNoemaMobile)
-	•	✅ macOS & CLI targets unaffected
-	•	✅ Layout renders properly on iPhone SE and iPhone 16 Pro Max
-	•	✅ Buttons & inputs accessible under dark/light themes
-	•	✅ Keyboard safe area behavior verified
-
-
-
-Deliverables:
-	•	New or updated SwiftUI files as described above
-	•	Screenshots (Light/Dark, SE + 16 Pro Max)
-	•	Short release note summarizing layout improvements
-	•	Push all changes to feature/ui-layout-fix branch (draft PR acceptable)
+If something blocks you (e.g., path mismatch), stop and print the exact blocking setting and the file you need me to confirm.
