@@ -370,7 +370,7 @@ struct MobileHomeView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "brain.head.profile")
                         .font(.system(size: 72))
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(.tint)
 
                     Text("Noesis Noema")
                         .font(.largeTitle)
@@ -479,7 +479,7 @@ struct HistoryCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "questionmark.circle.fill")
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(.tint)
 
                     Text(qa.question)
                         .font(.subheadline)
