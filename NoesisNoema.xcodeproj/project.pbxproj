@@ -77,8 +77,6 @@
             membershipExceptions = (
                 Assets.xcassets,
                 Frameworks/xcframeworks/llama_macos.xcframework,
-                "Resources/Models/gpt-oss-20b-F16.gguf",
-                "Resources/Models/Llama-3.3-70B-Instruct-UD-IQ1_S.gguf",
                 Shared/ContentView.swift,
                 Shared/NoesisNoemaApp.swift,
                 Shared/RAG/RewardBus.swift,
