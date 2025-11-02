@@ -18,7 +18,6 @@
         F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4D1DB532E4F18ED006B902C /* ZIPFoundation */; };
         F4F417BA2EB30A73003A612B /* llama.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4F38B8E2EB2E86400F3CEF3 /* llama.framework */; };
         F4F417BB2EB30A73003A612B /* llama.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4F38B8E2EB2E86400F3CEF3 /* llama.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-        123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -68,7 +67,6 @@
         F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
         F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
         F4F38B8E2EB2E86400F3CEF3 /* llama.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = llama.framework; path = "Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64/llama.framework"; sourceTree = "<group>"; };
-        123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -427,7 +425,6 @@
             isa = PBXSourcesBuildPhase;
             buildActionMask = 2147483647;
             files = (
-                123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
