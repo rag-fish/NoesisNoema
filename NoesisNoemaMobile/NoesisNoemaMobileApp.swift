@@ -11,7 +11,7 @@ import SwiftUI
 struct NoesisNoemaMobileApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MobileHomeView()
         }
     }
 }
