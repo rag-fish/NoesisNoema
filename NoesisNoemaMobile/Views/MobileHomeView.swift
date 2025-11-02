@@ -14,7 +14,6 @@ struct MobileHomeView: View {
 
     @State private var question: String = ""
     @State private var isLoading: Bool = false
-    @State private var selectedEmbeddingModel: String = "default-embedding"
     @State private var selectedLLMModel: String = "Jan-V1-4B"
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
 
