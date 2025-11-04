@@ -106,6 +106,7 @@ class DocumentManager: ObservableObject {
 
     /// Imports a document from a .zip RAGpack file.
     /// - Parameter file: The file to be imported (should be a .zip RAGpack).
+    @MainActor
     func importDocument(file: Any) {
         guard let fileURL = file as? URL else {
             print("Error: Provided file is not a URL.")
@@ -115,6 +116,14 @@ class DocumentManager: ObservableObject {
             print("Error: Only .zip RAGpack files can be imported.")
             return
         }
+
+        // Run heavy processing on background thread
+        Task.detached {
+            await self.processRAGpackImport(fileURL: fileURL)
+        }
+    }
+
+    private func processRAGpackImport(fileURL: URL) async {
         // iOSのFiles/iCloud経由で選択されたURLに対しては、セキュリティスコープを開始する
         var didStartAccessing = false
         #if os(iOS)
@@ -125,6 +134,8 @@ class DocumentManager: ObservableObject {
         defer {
             if didStartAccessing { fileURL.stopAccessingSecurityScopedResource() }
         }
+        #elseif os(macOS)
+        // NSOpenPanel + user-selected-file entitlement is sufficient; no scoped access required
         #endif
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -195,19 +206,23 @@ class DocumentManager: ObservableObject {
                 }
             }
             let ragFile = LLMRagFile(filename: docName, metadata: metadata, chunks: titledChunks)
-            self.llmragFiles.append(ragFile)
-            print("Imported RAGpack document: \(docName)")
+
+            // Filter unique chunks
             let uniqueChunks = titledChunks.filter { chunk in
                 !VectorStore.shared.chunks.contains(where: { $0.content == chunk.content && $0.embedding == chunk.embedding })
             }
-            DispatchQueue.main.async {
+
+            // Update UI on main thread
+            await MainActor.run {
+                self.llmragFiles.append(ragFile)
+                print("Imported RAGpack document: \(docName)")
                 VectorStore.shared.chunks.append(contentsOf: uniqueChunks)
                 print("RAGpack unique chunks added to VectorStore.shared (RAG検索対象拡張)")
+                self.ragpackChunks[docName] = uniqueChunks
+                self.uploadHistory.append(UploadHistory(filename: docName, timestamp: timestamp, chunkCount: uniqueChunks.count))
+                self.saveHistory()
+                self.saveRAGpackChunks()
             }
-            ragpackChunks[docName] = uniqueChunks
-            uploadHistory.append(UploadHistory(filename: docName, timestamp: timestamp, chunkCount: uniqueChunks.count))
-            self.saveHistory()
-            self.saveRAGpackChunks()
         } catch {
             print("Error: Failed to load chunks or embeddings. \(error)")
             try? fileManager.removeItem(at: tempDir)

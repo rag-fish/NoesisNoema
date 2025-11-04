@@ -217,11 +217,30 @@ class ModelManager: ObservableObject {
 
     func isFullyLocal() -> Bool { true }
 
-    /// Minimal stub that produces a quick answer and records no sources
+    /// Full RAG implementation: retrieves chunks and generates answer with citations
     func generateAsyncAnswer(question: String) async -> String {
-        // In a real implementation, this would run RAG + inference. Keep it simple to unblock UI.
-        let prefix = currentLLMModel.name
-        return "[\(prefix)] \(question)"
+        let _log = SystemLog()
+        let _t0 = Date()
+        _log.logEvent(event: "[ModelManager] generateAsyncAnswer enter qLen=\(question.count)")
+        defer {
+            let dt = Date().timeIntervalSince(_t0)
+            _log.logEvent(event: String(format: "[ModelManager] generateAsyncAnswer exit (%.2f ms)", dt*1000))
+        }
+
+        // 1. Retrieve relevant chunks using LocalRetriever
+        let retriever = LocalRetriever(store: VectorStore.shared)
+        let chunks = retriever.retrieve(query: question, k: 5, trace: false)
+
+        // Store chunks for citation UI
+        lastRetrievedChunks = chunks
+
+        // 2. Build context from chunks
+        let context = chunks.map { $0.content }.joined(separator: "\n\n")
+
+        // 3. Generate answer using LLM
+        let answer = currentLLMModel.generate(prompt: question, context: context.isEmpty ? nil : context)
+
+        return answer
     }
 
     /// Fire-and-forget autotune stub; calls completion with optional warning string
