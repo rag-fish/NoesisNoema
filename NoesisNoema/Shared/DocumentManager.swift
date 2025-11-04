@@ -134,6 +134,8 @@ class DocumentManager: ObservableObject {
         defer {
             if didStartAccessing { fileURL.stopAccessingSecurityScopedResource() }
         }
+        #elseif os(macOS)
+        // NSOpenPanel + user-selected-file entitlement is sufficient; no scoped access required
         #endif
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)

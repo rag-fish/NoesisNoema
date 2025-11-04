@@ -7,7 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		098204BA71014889A4D442DF /* libggml-base.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		0F0E9BEA89E04D9A9AEFCD4D /* libggml-blas.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		123456782E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
+		21F6C782D83240D2A0F07F40 /* libggml-cpu.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		33172999C93F47F2A42A4A0C /* libggml-metal.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; };
+		4FA67A74CE634662ADCE813E /* libggml-cpu.dylib in Resources */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; };
+		6376029D435848ED90B04D80 /* libggml-blas.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; };
+		7C436A8302704CDDA3DD30B4 /* libggml-base.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; };
+		C7777252C6E845D7830EB32E /* libggml-metal.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
 		F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
 		F4C581532E4F12D700E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
@@ -17,14 +25,6 @@
 		F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C5811C2E4F036E00E64194 /* Metal.framework */; };
 		F4CF13532EB83FA7003CA2D1 /* libggml.dylib in Resources */ = {isa = PBXBuildFile; fileRef = F4CF13522EB83FA7003CA2D1 /* libggml.dylib */; };
 		F4CF13542EB85845003CA2D1 /* libggml.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4CF13522EB83FA7003CA2D1 /* libggml.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		7C436A8302704CDDA3DD30B4 /* libggml-base.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; };
-		098204BA71014889A4D442DF /* libggml-base.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		4FA67A74CE634662ADCE813E /* libggml-cpu.dylib in Resources */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; };
-		21F6C782D83240D2A0F07F40 /* libggml-cpu.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		6376029D435848ED90B04D80 /* libggml-blas.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; };
-		0F0E9BEA89E04D9A9AEFCD4D /* libggml-blas.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		33172999C93F47F2A42A4A0C /* libggml-metal.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; };
-		C7777252C6E845D7830EB32E /* libggml-metal.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4D1DB532E4F18ED006B902C /* ZIPFoundation */; };
 		F4F417BA2EB30A73003A612B /* llama.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4F38B8E2EB2E86400F3CEF3 /* llama.framework */; };
 		F4F417BB2EB30A73003A612B /* llama.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4F38B8E2EB2E86400F3CEF3 /* llama.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -71,8 +71,12 @@
 
 /* Begin PBXFileReference section */
 		123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-metal.dylib"; sourceTree = "<group>"; };
+		791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-blas.dylib"; sourceTree = "<group>"; };
+		8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-base.dylib"; sourceTree = "<group>"; };
 		AACE11E69B298876180AD693 /* PULL_REQUEST_TEMPLATE.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; name = PULL_REQUEST_TEMPLATE.md; path = .github/PULL_REQUEST_TEMPLATE.md; sourceTree = "<group>"; };
 		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
+		C517CD480A69476F878B4B2C /* libggml-cpu.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-cpu.dylib"; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
@@ -83,10 +87,6 @@
 		F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		F4CF13522EB83FA7003CA2D1 /* libggml.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libggml.dylib; sourceTree = "<group>"; };
-		8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-base.dylib"; sourceTree = "<group>"; };
-		C517CD480A69476F878B4B2C /* libggml-cpu.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-cpu.dylib"; sourceTree = "<group>"; };
-		791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-blas.dylib"; sourceTree = "<group>"; };
-		560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-metal.dylib"; sourceTree = "<group>"; };
 		F4F38B8E2EB2E86400F3CEF3 /* llama.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = llama.framework; path = "Frameworks/xcframeworks/llama_macos.xcframework/macos-arm64/llama.framework"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -615,6 +615,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = NoesisNoema/NoesisNoema.macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -671,6 +672,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = NoesisNoema/NoesisNoema.macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
