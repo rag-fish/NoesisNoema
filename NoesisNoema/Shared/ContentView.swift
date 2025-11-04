@@ -10,6 +10,7 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appSettings: AppSettings
+    @ObservedObject var modelManager = ModelManager.shared
     @State private var question: String = ""
     @State private var answer: String = ""
     @State private var isLoading: Bool = false
@@ -32,10 +33,10 @@ struct ContentView: View {
     @State private var runtimeMode: LLMRuntimeMode = .auto
 
     // これらは計算型プロパティにして初期化時の隔離制約を回避
-    var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
-    var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
+    var availableEmbeddingModels: [String] { modelManager.availableEmbeddingModels }
+    var availableLLMModels: [String] { modelManager.availableLLMModels }
     // 新規: プリセット候補
-    var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
+    var availableLLMPresets: [String] { modelManager.availableLLMPresets }
 
     var body: some View {
         NavigationSplitView {
@@ -118,6 +119,10 @@ struct ContentView: View {
             .padding(.vertical)
             .onAppear {
                 runtimeMode = ModelManager.shared.getLLMRuntimeMode()
+                // Sync selected models with current ModelManager state
+                selectedEmbeddingModel = ModelManager.shared.currentEmbeddingModel.name
+                selectedLLMModel = ModelManager.shared.currentLLMModel.name
+                selectedLLMPreset = ModelManager.shared.currentLLMPreset
             }
         }
         .background(.clear)
