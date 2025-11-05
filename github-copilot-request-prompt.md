@@ -1,70 +1,107 @@
-Title: Enable macOS sandbox entitlements for NSOpenPanel RAGpack import
+Title: Default LLM selection, sandbox-safe RAGPack access, and double-submit guard for Ask button (macOS & iOS)
 
-Context / Constraints
-	•	Project: NoesisNoema (macOS target name: NoesisNoema)
-	•	Keep architecture as-is: Swift-only app; llama.cpp xcframeworks are imported externally; fully local RAG.
-	•	Do not rebuild xcframeworks. Do not change iOS target.
-	•	Goal: On macOS, allow selecting a local .zip RAGpack via NSOpenPanel and importing it without crashes.
+Context & Constraints
+- App: Noesis Noema (Swift-only). LLM runs fully local via llama.cpp xcframeworks built outside Xcode (CLion script).
+- Keep architecture: no CoreML/MLPackage, no tokenizer, Swift native, offline-first.
+- RAGPack is user-chosen (local or Google Drive import), then indexed; no auto-scan of user folders at launch.
+- Current issues (see errors.txt):
+- Picker: the selection "Jan-V1-4B" is invalid and does not have an associated tag → Picker selection/tag mismatch.
+- Sandbox error when scanning ~/Downloads → NSCocoaErrorDomain Code=257.
+- App can get stuck (“Message from debugger: killed”) after small query post-RAGPack.
+- Ask button can be tapped twice (Xcode26 migration lost the lock).
 
-Tasks
-	1.	Add macOS entitlements file
-Create NoesisNoema/NoesisNoema.macOS.entitlements with the following keys:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>com.apple.security.app-sandbox</key><true/>
-  <!-- We only read the user-selected .zip; writes go to app container / tmp -->
-  <key>com.apple.security.files.user-selected.read-only</key><true/>
-</dict>
-</plist>
-```
+Goals
+	1.	Default LLM selection
+- After ModelRegistry finishes discovery/registration, automatically set a valid default LLM (first available or user’s last choice if present).
+- Fix SwiftUI Picker to use a strongly-typed ModelID with .tag(ModelID) and @State/@Published selection: ModelID? that is guaranteed non-nil post-registry.
+- If the previously selected model disappears, gracefully fallback to a valid one.
+	2.	Sandbox-safe RAGPack access & no auto-scan
+- Remove any automatic scanning of ~/Downloads or other non-container paths at app launch.
+- Only scan:
+- App bundle Resources/ (read-only models shipped)
+- App container paths (Application Support/NoesisNoema, Documents/…)
+- User-selected files/folders via NS/Open panel or previously stored security-scoped bookmarks (start/stop accessing properly).
+- When user picks a RAGPack file/folder, create & persist a security-scoped bookmark; re-validate on next launch. If invalid, prompt the user to re-grant.
+- All file IO that may touch outside the container must be wrapped with startAccessingSecurityScopedResource() + defer stop….
+	3.	Ask button double-submit guard & UI state
+- Introduce @Published var isGenerating = false in ChatViewModel.
+- Ask flow: guard !isGenerating → set isGenerating = true → run async generation → ensure isGenerating = false in defer.
+- In SwiftUI, .disabled(isGenerating) on Ask button; show a small ProgressView and prevent multiple presses.
+- Debounce user keystrokes / Enter-to-send or use a short throttle (e.g., 300–500ms) if needed.
+	4.	Stability after RAGPack import
+- Ensure model & vector store readiness checks before allowing Ask:
+- guard selectedModel != nil && VectorStore.shared.indexIsReady
+- If not ready, show inline warning and disable Ask.
+- All registry or index callbacks must hop to MainActor before mutating SwiftUI state.
 
-Do not add broad folder exceptions (Documents/Downloads). We only need user-selected read.
-
-	2.	Wire entitlements to the macOS target
-Edit NoesisNoema.xcodeproj/project.pbxproj:
-	•	Under buildSettings for the macOS target (NoesisNoema) set:
-
-CODE_SIGN_ENTITLEMENTS = NoesisNoema/NoesisNoema.macOS.entitlements;
-
-for Debug/Release (and any custom configs that exist).
-
-	•	Ensure the target has App Sandbox capability (this is implied by the entitlements; no other capabilities needed).
-
-	3.	DocumentManager: tidy platform guards (no security scoped for macOS)
-In NoesisNoema/Shared/DocumentManager.swift:
-	•	Keep the existing #if os(iOS) block that uses startAccessingSecurityScopedResource.
-	•	Add a corresponding #elseif os(macOS) path that does not attempt security-scoped bookmarks (not needed when the file is returned by NSOpenPanel under the user-selected entitlement).
-	•	Ensure heavy work still runs off the main thread (Task.detached) and that UI mutations remain on MainActor.run.
-Example sketch (adjust to current code):
+Files to Modify (typical locations)
+- NoesisNoema/Shared/ModelRegistry.swift
+- Add completion publisher/async method onRegistryReady → set default model.
+- Expose [ModelInfo] → convert to [ModelID: ModelInfo].
+- NoesisNoema/Shared/ViewModels/ChatViewModel.swift
+- Add @Published var isGenerating = false, @Published var selectedModel: ModelID?.
+- In ask() guard against isGenerating, guard against nil model & unready index.
+- Ensure every async path resets isGenerating = false in defer.
+- NoesisNoema/Shared/Views/ModelPickerView.swift (or wherever the Picker lives)
+- Define enum ModelID: String, CaseIterable, Identifiable { … } (id = rawValue).
+- For each row: .tag(model.id); Picker selection is Binding<ModelID>.
+- Provide a non-nil default from registry when view appears.
+- NoesisNoema/Shared/DocumentManager.swift (and any RAG import pipeline)
+- Remove auto-scan of ~/Downloads.
+- Add helpers:
 ```swift
-#if os(iOS)
-  var didStartAccessing = fileURL.startAccessingSecurityScopedResource()
-  defer { if didStartAccessing { fileURL.stopAccessingSecurityScopedResource() } }
-#elseif os(macOS)
-  // NSOpenPanel + user-selected-file entitlement is sufficient; no scoped access required.
-#endif
+func withSecurityScopedURL<T>(_ url: URL, _ work: () throws -> T) rethrows -> T
+func persistBookmark(for url: URL) throws
+func resolveBookmark(data: Data) -> URL?
 ```
 
-	4.	Graceful error if entitlements absent (optional safety)
-In ContentView’s RAGpack upload button action (macOS path), if NSOpenPanel().runModal() throws due to entitlement issues, surface a user-friendly alert suggesting to enable User Selected File Read entitlement. This is a soft guard and should not break normal flow.
+- Use these in import & open flows; scan only within app container + user-granted URLs.
+
+- NoesisNoema/Shared/Views/ChatView.swift (or ContentView.swift)
+- Bind .disabled(viewModel.isGenerating) to Ask button; show ProgressView when true.
+- Guard against empty prompt or not-ready states.
+
+Key Code Changes (high-level, let Copilot fill in)
+- Strongly typed ModelID and correct .tag() wiring.
+- Default selection logic, e.g.:
+```swift
+registry.onReady { models in
+    await MainActor.run {
+        if let keep = UserDefaults.standard.lastModelID, models[keep] != nil {
+            viewModel.selectedModel = keep
+        } else {
+            viewModel.selectedModel = models.keys.sorted().first
+        }
+    }
+}
+```
+
+- Replace any eager FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: "/Users/.../Downloads")…) with container-only scans.
+- Wrap non-container URLs with security-scoped access before reading.
 
 Acceptance Criteria
-	•	Build succeeds for macOS target.
-	•	Launch app → Choose File opens a native NSOpenPanel.
-	•	Selecting a local .zip successfully imports: DocumentManager processes it, updates VectorStore.shared.chunks, and appends to uploadHistory without UI freeze.
-	•	No “Unable to display open panel… missing User Selected File Read” error.
-	•	No new capabilities added beyond App Sandbox + user-selected read-only.
-	•	iOS behavior unchanged.
+- App launches without sandbox errors (no NSCocoaErrorDomain 257).
+- Model Picker shows tags correctly; a valid default model is already selected.
+- After importing a RAGPack, UI refreshes and Ask becomes enabled only when index is ready.
+- Pressing Ask twice rapidly never triggers concurrent requests; button disables & shows progress.
+- No unexpected “killed” after a short query; if a failure occurs, user gets a readable inline error and the UI fully recovers (isGenerating resets).
 
-Files to create/modify
-	•	NoesisNoema/NoesisNoema.macOS.entitlements (new)
-	•	NoesisNoema.xcodeproj/project.pbxproj (set CODE_SIGN_ENTITLEMENTS for macOS target)
-	•	NoesisNoema/Shared/DocumentManager.swift (platform-guarded access; no security-scoped calls on macOS)
+Out of Scope / Do Not Change
+- Do not rebuild xcframeworks inside Xcode. They are produced by CLion script and already copied under:
+- NoesisNoema/NoesisNoema/Frameworks/xcframeworks/llama_macos.xcframework
+- NoesisNoema/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework
+- Do not introduce CoreML/MLPackage/tokenizer. Keep Swift-only + llama.cpp.
 
-Post-fix runbook (for me)
-	•	Clean build folder for macOS scheme.
-	•	Run the macOS app, click Choose File, select a .zip RAGpack in any folder.
-	•	Confirm chunks appear and can be retrieved by the RAG flow.
+After you finish
+	1.	Build & run macOS target. Verify:
+- Default LLM is selected on first launch.
+- Import a RAGPack (user-selected path) → no permissions error; index ready.
+- Ask once → button disables; after completion, re-enables.
+	2.	Build & run iOS target. Verify same UX.
+	3.	Commit with:
+
+```bash
+git checkout -b feature/llm-default-sandbox-ask-guard
+git add .
+git commit -m "fix: default LLM selection, sandbox-safe RAGPack access, double-submit guard"
+```

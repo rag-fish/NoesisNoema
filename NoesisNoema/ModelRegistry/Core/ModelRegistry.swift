@@ -317,45 +317,41 @@ actor ModelRegistry {
         return ModelSpec.autoTuneParameters(metadata: metadata, baseParams: baseParams)
     }
 
-    /// Get standard model search paths
+    /// Get standard model search paths (sandbox-safe, container-only)
     private func getModelSearchPaths() -> [String] {
         let fileManager = FileManager.default
         var paths: [String] = []
 
-        // Current working directory
-        paths.append(fileManager.currentDirectoryPath)
-
-        // Executable directory
-        let exePath = CommandLine.arguments[0]
-        let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
-        if !paths.contains(exeDir) {
-            paths.append(exeDir)
-        }
-
-        // App bundle resources
+        // App bundle resources (read-only, always allowed)
         if let resourcePath = Bundle.main.resourcePath {
             paths.append(resourcePath)
             paths.append("\(resourcePath)/Models")
             paths.append("\(resourcePath)/Resources/Models")
         }
 
-        // User directories (platform-aware)
-        let homeDirPath: String? = {
-            #if os(iOS)
-            return NSHomeDirectory()
-            #else
-            return fileManager.homeDirectoryForCurrentUser.path
-            #endif
-        }()
-        if let homeDir = homeDirPath {
-            paths.append("\(homeDir)/Downloads")
-            paths.append("\(homeDir)/Documents/Models")
-            paths.append("\(homeDir)/.noesisnoema/models")
+        // App container directories (sandbox-safe)
+        #if os(iOS)
+        // iOS: Use container directories
+        if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            paths.append(appSupport.appendingPathComponent("Models").path)
+            paths.append(appSupport.appendingPathComponent("NoesisNoema/models").path)
         }
+        if let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            paths.append(documents.appendingPathComponent("Models").path)
+        }
+        #elseif os(macOS)
+        // macOS: Use container directories only
+        if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            paths.append(appSupport.appendingPathComponent("NoesisNoema/models").path)
+        }
+        // Application-scoped documents (if using App Sandbox)
+        if let documentsURL = try? fileManager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
+            paths.append(documentsURL.appendingPathComponent("Models").path)
+        }
+        #endif
 
-        // System-wide model directories (desktop-oriented; filtered by existence below)
-        paths.append("/usr/local/share/noesisnoema/models")
-        paths.append("/opt/noesisnoema/models")
+        // NOTE: Removed ~/Downloads, ~/Documents/Models - these require explicit user permission
+        // Use NSOpenPanel or security-scoped bookmarks to access user-selected files outside container
 
         return paths.filter { fileManager.fileExists(atPath: $0) }
     }
