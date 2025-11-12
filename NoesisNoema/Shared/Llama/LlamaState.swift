@@ -372,6 +372,10 @@ class LlamaState: ObservableObject {
             self.messageLog += "USER: \(text)\n"
         }
 
+        // First-token watchdog: strict deadline for Jan-v1-4B (8s), relaxed for larger models (15s)
+        let FIRST_TOKEN_DEADLINE_S: Double = 8.0
+        let firstTokenDeadlineNS = DispatchTime.now().uptimeNanoseconds + UInt64(FIRST_TOKEN_DEADLINE_S * 1_000_000_000)
+
         var assistantResponse = ""
         // ストリームフィルタ用バッファと状態
         var buffer = ""
@@ -387,6 +391,7 @@ class LlamaState: ObservableObject {
         #if DEBUG
         var tokenCount = 0
         var loopCount = 0
+        var firstTokenReceivedAt: UInt64? = nil
         #endif
 
         while await !llamaContext.is_done {
@@ -403,6 +408,18 @@ class LlamaState: ObservableObject {
                 await llamaContext.request_stop()
                 break
             }
+
+            // CRITICAL: First-token watchdog - strict deadline
+            #if DEBUG
+            if tokenCount == 0 && DispatchTime.now().uptimeNanoseconds > firstTokenDeadlineNS {
+                let elapsed = Double(DispatchTime.now().uptimeNanoseconds - genStartNS) / 1_000_000_000.0
+                print("❌ [LlamaState] FIRST TOKEN DEADLINE EXCEEDED: \(String(format: "%.2f", elapsed))s with no tokens!")
+                print("💡 [LlamaState] This model may be too large or incompatible")
+                SystemLog().logEvent(event: "[LlamaState] ERROR: First token deadline exceeded (\(String(format: "%.2f", elapsed))s)")
+                await llamaContext.request_stop()
+                break
+            }
+            #endif
 
             // Check for stuck generation (no tokens after many loops)
             #if DEBUG
@@ -423,8 +440,10 @@ class LlamaState: ObservableObject {
             #if DEBUG
             tokenCount += 1
             if tokenCount == 1 {
-                print("🎉 [LlamaState] First token received!")
-                SystemLog().logEvent(event: "[LlamaState] First token generated after \(loopCount) loops")
+                firstTokenReceivedAt = DispatchTime.now().uptimeNanoseconds
+                let firstTokenTime = Double(firstTokenReceivedAt! - genStartNS) / 1_000_000_000.0
+                print("🎉 [LlamaState] First token received at \(String(format: "%.2f", firstTokenTime))s!")
+                SystemLog().logEvent(event: "[LlamaState] First token generated after \(loopCount) loops in \(String(format: "%.2f", firstTokenTime))s")
             }
             if tokenCount % 10 == 0 {
                 print("📊 [LlamaState] Generated \(tokenCount) tokens...")

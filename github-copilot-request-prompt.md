@@ -1,78 +1,106 @@
-Title: Make llama.cpp inference robust: log every stage, fail fast on init, validate GGUF arch, and stream tokens (macOS/iOS)
+Title: Unstick first-token: migrate Swift wrapper to current llama.cpp batch/sampling APIs, enforce BOS/stop, detach generation, and add hard first-token watchdog + fallback
 
 Context
-- App: Noesis Noema (Swift-only), llama.cpp via xcframeworks (prebuilt outside Xcode).
-- Models registered in app bundle Resources:
-- Jan-v1-4B-Q4_K_M.gguf
-- Llama-3.3-70B-Instruct-UD-IQ1_S.gguf
-- gpt-oss-20b-F16.gguf
-- Logs show:
-- RAG returns 0 chunks (that’s fine for now)
-- Selected model: Gpt Oss 20B F16
-- Found model file at: .../gpt-oss-20b-F16.gguf
-- No further logs (no “model loaded”, no “generation started”, no tokens)
-
-Hypothesis
-We’re hanging or returning early during model load / context creation / batch loop. Also, architecture mismatch (e.g., general.architecture) could make llama.cpp silently fail if we don’t surface the error.
+- App: Noesis Noema (Swift-only, macOS focus for now). xcframeworks (llama_macos/ios) are prebuilt; do not rebuild here.
+- After prior instrumentation, UI locks Ask properly but no tokens are ever streamed; it stays “querying…”. No crash.
+- DONE summary shows watchdogs, but we still have no first token in real run.
+- Likely causes:
+	1.	Swift wrapper is using obsolete llama APIs (decode loop not driving in latest llama.cpp).
+	2.	Missing BOS token or bad prompt packing for instruct models (no output).
+	3.	Stop sequences or repeat-penalty mishandling stalling decoding.
+	4.	Async deadlock: generation running on MainActor or blocked by UI thread.
+	5.	Too-large model path selected (e.g., gpt-oss-20b-F16) → extremely slow; we must fallback fast.
 
 Goals
-	1.	Instrument LlamaBridge (or equivalent Swift wrapper) with granular logging and hard guards for every native call.
-	2.	Validate GGUF architecture & vocab type before starting generation; print them.
-	3.	Ensure we actually create context, prepare prompt (with or without RAG), run decode loop, and stream tokens back to UI.
-	4.	Add timeout / watchdog to avoid dead awaits; always clear isGenerating.
+- Ensure we reliably get the first generated token within a strict budget (e.g., ≤ 8s on Jan-v1-4B).
+- Use current llama.cpp generation path: batch + sampler helpers.
+- Enforce BOS + EOS + stop sequences; fix prompt template for instruct models.
+- Run generation off the main thread (Task.detached), stream tokens back on MainActor, and always clear isGenerating.
+- If no first token in time, abort and fallback automatically to Jan-v1-4B-Q4_K_M.gguf.
 
-Concrete tasks
-- In the Swift wrapper around llama.cpp (e.g. LibLlama.swift / LlamaBridge.swift), add verbose logs (DEBUG only):
+Tasks
+	1.	Migrate wrapper to the current llama.cpp generation flow
+In NoesisNoema/Shared/Llama/LibLlama.swift (or LlamaBridge.swift), refactor to match latest examples:
+- Use llama_context, llama_batch_init, llama_tokenize, llama_decode, and the new sampling helpers (llama_sampler_* stack).
+- Pseudocode outline (adjust to Swift bridging):
 
 ```ts
-print("🧩 GGUF path: \(path)")
-// After llama_model_loader
-print("📦 GGUF meta: arch=\(arch), vocab=\(vocab), n_ctx=\(nCtx), n_gpu_layers=\(nGpu)")
-// After llama_init
-print("✅ llama_init done (ctx=\(ctx != nil))")
-// Before eval
-print("🚀 start generation: promptTokens=\(promptTokens.count)")
-// During stream
-print("🔹 token: \(piece)")
-// On done
-print("🏁 generation finished (tokens=\(count))")
+// tokenize with BOS
+var toks = [llama_token](repeating: 0, count: N)
+let addBos: Bool = true
+let nPrompt = llama_tokenize(model, prompt, &toks, toks.count, addBos, /*special=*/true)
+
+// eval prompt
+var batch = llama_batch_init(nBatch, 0, 1)
+// fill batch with prompt toks ...
+llama_decode(ctx, batch)
+
+// sampling stack
+let smpl = llama_sampler_chain_init(ctx) // top_k, top_p, temp, repeat_penalty etc.
+
+// generation loop
+var firstTokenAt: TimeInterval? = nil
+for step in 0..<maxNewTokens {
+  let id = llama_sampler_sample(smpl, ctx, /*apply_penalties=*/true)
+  if firstTokenAt == nil { firstTokenAt = now() }
+  // append piece, stream to UI
+  if id == EOS { break }
+  // feed back the sampled token
+  // prepare batch with single token & llama_decode
+}
+llama_sampler_free(smpl)
+llama_batch_free(batch)
 ```
 
-- Fail fast on any null / error return:
-- If model/context creation fails → throw LlamaError.initFailed(reason: ...)
-- If tokenizer prep fails → throw LlamaError.tokenizeFailed
-- If generation loop yields 0 tokens in N steps → throw LlamaError.noResponse
-- Read GGUF metadata (via llama.cpp APIs if exposed, else at least print llama_model_desc() or similar) and log:
-- general.architecture
-- tokenizer.ggml / vocab type
-- Reject unsupported arch with a friendly error:
-“Model arch ‘X’ is unsupported by this build. Try Jan-v1-4B or a Llama-3-family quant.”
-- Sampler & loop sanity
-- Ensure we set sane defaults per preset (temp/top_p/top_k/repeat_penalty).
-- Make sure we actually run a decode loop (llama_decode / batch API) and append generated tokens.
-- Respect EOS (stop tokens, newline stop sequences).
-- Put a max token cap and a time watchdog (e.g., 30s) to prevent infinite hang.
-- Select smaller model for sanity
-- If selected model is gpt-oss-20b-F16, also try jan-v1-4b automatically on failure, and log:
-“Primary model failed to generate, falling back to Jan-v1-4B for diagnostics.”
-- UI flow
-- Always reset isGenerating = false on all code paths (defer).
-- Stream tokens to MainActor each step. If no tokens after N ms, render an inline error.
+- Ensure n_threads > 0, n_batch sane (e.g., 256–1024), and context length from preset.
+- Print llama_print_system_info() and meta (arch, vocab) once per load (DEBUG).
+
+	2.	BOS/EOS & stop sequences
+- Force BOS on tokenize for instruct models.
+- Configure EOS and stop strings (e.g., </s>, ###, or preset-defined).
+- Prevent stall from an empty decode by guarding: if llama_decode returns error → throw initFailed/decodeFailed.
+- Add max-wall-time first-token watchdog (e.g., 8s for Jan-v1-4B): if no token by deadline → cancel generation and surface an inline error.
+	3.	Prompt template sanity
+- For instruct models, build prompt as:
+```bash
+[INST] <<SYS>>
+{system}
+<</SYS>>
+{RAG_CONTEXT}
+{USER_PROMPT}
+[/INST]
+```
+or the model’s documented format.
+
+- If RAG returns 0 chunks, proceed without context (don’t block).
+
+	4.	Async isolation / UI streaming
+- Run generation in Task.detached(priority: .userInitiated).
+- Only do await MainActor.run { ... } to append streamed text & flip isGenerating = false.
+- Use defer { Task { @MainActor in self.isGenerating = false } } to always unlock even on failure.
+	5.	Fallback strategy
+- If selected model fails to produce a first token under watchdog, log and auto-switch to Jan-v1-4B-Q4_K_M.gguf, then retry once.
+- Surface a small banner:
+“Primary model timed out (no first token). Fallback: Jan-v1-4B.”
+	6.	Verbose diagnostics (DEBUG only)
+- Print:
+- 🧩 arch=..., vocab=..., n_ctx=..., n_threads=..., n_batch=...
+- 🚀 first token at X.XXs (or timeout)
+- 🏁 total tokens, wall time
+- On error, bubble up a typed error; never silently hang.
 
 Acceptance criteria
-- Logs show:
-- GGUF path + arch + vocab + ctx created
-- “start generation …” then streamed tokens or explicit noResponse error.
-- Asking a simple prompt with Jan-v1-4B returns tokens on macOS & iOS.
-- If a model is unsupported or fails, user gets a clear inline message (not a silent hang).
-- isGenerating never stays true after an error.
-- No change to xcframework build process; we only fix Swift wrapper + model invocation.
+- With Jan-v1-4B-Q4_K_M.gguf selected, asking “1+1?” streams tokens within ≤ 8s first token on macOS.
+- With an oversized/slow model (e.g., GPT-OSS-20B-F16), app times out first token and falls back to Jan-v1-4B automatically; user sees a clear banner; response arrives.
+- isGenerating never stays true after completion/error.
+- No infinite “querying…” state.
+- iOS target compiles; the same wrapper change works (we’ll test next).
 
 Do not
-- Don’t rebuild xcframeworks from Xcode.
-- Don’t introduce CoreML / tokenizer packages. GGUF + llama.cpp only.
+- Don’t rebuild xcframeworks or touch CMake. Swift layer only.
+- Don’t introduce Core ML/tokenizer packages. Stay with gguf + llama.cpp wrapper.
 
-After changes
-- Build macOS/iOS; in macOS run:
-- Model: Jan-v1-4B → ask “1+1?” → confirm streamed tokens.
-- Model: gpt-oss-20b-F16 → ask short prompt; if fails, see a readable error and fallback path logs.
+Post-fix test steps
+	1.	Select Jan-v1-4B → ask “1+1?” → expect streamed tokens; confirm 🚀 first token … log.
+	2.	Select Gpt-Oss-20B-F16 → short prompt → expect timeout banner + auto-fallback → response streams via Jan-v1-4B.
+	3.	Try with/without RAG context; both must return.

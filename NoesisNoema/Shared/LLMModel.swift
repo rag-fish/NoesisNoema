@@ -244,7 +244,62 @@ class LLMModel: @unchecked Sendable {
                         guard !result.isEmpty else {
                             let modelName = self.name
                             let isLargeModel = fileName.lowercased().contains("20b") || fileName.lowercased().contains("70b")
+                            let isNotJan = !fileName.lowercased().contains("jan")
 
+                            // Try fallback to Jan-V1-4B if primary model failed
+                            if isNotJan {
+                                #if DEBUG
+                                print("⚠️ [LLMModel] Primary model '\(modelName)' failed, trying fallback to Jan-V1-4B...")
+                                #endif
+                                SystemLog().logEvent(event: "[LLMModel] Primary model failed, attempting Jan-V1-4B fallback")
+
+                                // Try to find Jan-V1-4B
+                                let fallbackFile = "Jan-v1-4B-Q4_K_M.gguf"
+                                var fallbackPath: String? = nil
+
+                                // Check same paths for fallback model
+                                for checkPath in checkedPaths {
+                                    let fallbackCheckPath = (checkPath as NSString).deletingLastPathComponent + "/" + fallbackFile
+                                    if fm.fileExists(atPath: fallbackCheckPath) {
+                                        fallbackPath = fallbackCheckPath
+                                        break
+                                    }
+                                }
+
+                                if let fallbackPath = fallbackPath {
+                                    #if DEBUG
+                                    print("💡 [LLMModel] Found fallback model at: \(fallbackPath)")
+                                    #endif
+
+                                    // Try loading and generating with fallback
+                                    let fallbackState = await LlamaState()
+                                    do {
+                                        try await fallbackState.loadModel(modelUrl: URL(fileURLWithPath: fallbackPath))
+                                        let preset = await fallbackState.autoSelectPreset(modelFileName: fallbackFile, prompt: userText)
+                                        await fallbackState.setPreset(preset.rawValue)
+
+                                        let fallbackPrompt = buildPlainPrompt(userText, context: context)
+                                        let fallbackResponse = await fallbackState.complete(text: fallbackPrompt)
+                                        let fallbackCleaned = cleanOutput(fallbackResponse)
+
+                                        if !fallbackCleaned.isEmpty {
+                                            result = "⚠️ Primary model '\(modelName)' timed out. Fallback: Jan-V1-4B\n\n\(fallbackCleaned)"
+                                            #if DEBUG
+                                            print("✅ [LLMModel] Fallback succeeded with \(fallbackCleaned.count) chars")
+                                            #endif
+                                            SystemLog().logEvent(event: "[LLMModel] Fallback to Jan-V1-4B succeeded")
+                                            semaphore.signal()
+                                            return
+                                        }
+                                    } catch {
+                                        #if DEBUG
+                                        print("❌ [LLMModel] Fallback also failed: \(error)")
+                                        #endif
+                                    }
+                                }
+                            }
+
+                            // Fallback didn't work or wasn't attempted
                             if isLargeModel {
                                 result = "[LLMModel] Model '\(modelName)' failed to generate (possibly too large or unsupported). Try Jan-V1-4B instead."
                                 #if DEBUG
