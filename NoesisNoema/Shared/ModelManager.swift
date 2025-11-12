@@ -259,12 +259,9 @@ class ModelManager: ObservableObject {
 
     /// Full RAG implementation: retrieves chunks and generates answer with citations
     func generateAsyncAnswer(question: String) async -> String {
-        // Guard against concurrent requests
-        guard !isGenerating else {
-            return "[ERROR] Generation already in progress"
-        }
+        // Explicit MainActor boundary: check and set generating state
+        await MainActor.run { self.isGenerating = true }
 
-        isGenerating = true
         defer {
             Task { @MainActor in
                 self.isGenerating = false
@@ -279,17 +276,19 @@ class ModelManager: ObservableObject {
             _log.logEvent(event: String(format: "[ModelManager] generateAsyncAnswer exit (%.2f ms)", dt*1000))
         }
 
-        // 1. Retrieve relevant chunks using LocalRetriever
+        // 1. Retrieve relevant chunks using LocalRetriever (background)
         let retriever = LocalRetriever(store: VectorStore.shared)
         let chunks = retriever.retrieve(query: question, k: 5, trace: false)
 
-        // Store chunks for citation UI
-        lastRetrievedChunks = chunks
+        // Store chunks for citation UI (MainActor)
+        await MainActor.run {
+            self.lastRetrievedChunks = chunks
+        }
 
-        // 2. Build context from chunks
+        // 2. Build context from chunks (background)
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
 
-        // 3. Generate answer using LLM
+        // 3. Generate answer using LLM (background)
         let answer = currentLLMModel.generate(prompt: question, context: context.isEmpty ? nil : context)
 
         return answer

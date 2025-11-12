@@ -141,21 +141,33 @@ struct ContentView: View {
 
     // オフライントグル行
     private var offlineToggleRow: some View {
-        HStack(spacing: 12) {
-            Toggle("Offline", isOn: $appSettings.offline)
-                .toggleStyle(.switch)
-                .help("When enabled, any remote calls are blocked.")
-                .disabled(isLoading)
-            if appSettings.offline && ModelManager.shared.isFullyLocal() {
-                Text("Local Only")
-                    .font(.caption2)
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.12), in: Capsule())
-                    .help("All components are local and remote calls are disabled.")
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Toggle("Offline", isOn: $appSettings.offline)
+                    .toggleStyle(.switch)
+                    .help("When enabled, any remote calls are blocked.")
+                    .disabled(isLoading)
+                if appSettings.offline && ModelManager.shared.isFullyLocal() {
+                    Text("Local Only")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .help("All components are local and remote calls are disabled.")
+                }
+                Spacer()
             }
-            Spacer()
+
+            #if os(macOS)
+            HStack(spacing: 12) {
+                Toggle("Disable macOS IME", isOn: $appSettings.disableMacOSIME)
+                    .toggleStyle(.switch)
+                    .help("When enabled, disables Input Method Editor integration to prevent XPC decoding issues.")
+                    .disabled(isLoading)
+                Spacer()
+            }
+            #endif
         }
         .padding(.horizontal)
     }
@@ -307,6 +319,20 @@ struct ContentView: View {
     // 質問入力セクション
     private var questionInputSection: some View {
         VStack(spacing: 12) {
+            #if os(macOS)
+            SafeTextInput(
+                text: $question,
+                placeholder: "Enter your question",
+                onSubmit: { Task { await askRAG() } },
+                isEnabled: !isLoading && !modelManager.isGenerating
+            )
+            .frame(height: 60)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            )
+            .padding(.horizontal)
+            #else
             TextField("Enter your question", text: $question)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
@@ -314,6 +340,7 @@ struct ContentView: View {
                     Task { await askRAG() }
                 }
                 .disabled(isLoading || modelManager.isGenerating)
+            #endif
 
             Button(action: { Task { await askRAG() } }) {
                 if isLoading || modelManager.isGenerating {
@@ -365,15 +392,11 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     func askRAG() async {
         let _log = SystemLog()
         let _t0 = Date()
         _log.logEvent(event: "[UI] askRAG enter qLen=\(question.count)")
-        defer {
-            let dt = Date().timeIntervalSince(_t0)
-            _log.logEvent(event: String(format: "[UI] askRAG exit (%.2f ms)", dt*1000))
-            isLoading = false
-        }
 
         // Guard: empty question
         guard !question.isEmpty else { return }
@@ -391,35 +414,44 @@ struct ContentView: View {
             return
         }
 
+        // Explicit MainActor boundary: set loading state
         isLoading = true
         answer = ""
 
-        // Call actual RAG inference via ModelManager
+        // Call actual RAG inference via ModelManager (runs on background)
         let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-        answer = result
 
-        // Build citations mapping from answer text and last retrieved chunks
-        var perParagraph = CitationExtractor.extractParagraphLabels(from: result)
-        let chunks = ModelManager.shared.lastRetrievedChunks
-        // Fallback: if no labels found but we have sources, attach all sources to first paragraph
-        let hasAnyLabel = perParagraph.contains { !$0.isEmpty }
-        if !hasAnyLabel && !chunks.isEmpty {
-            perParagraph = [Array(1...chunks.count)]
-        }
-        // Build catalog with 1-based index
-        let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
-            CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)
-        }
-        let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
+        // Explicit MainActor boundary: update UI state
+        await MainActor.run {
+            answer = result
 
-        let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
-        // Cache: store QA context for potential thumbs-up capture
-        let embedder = EmbeddingModel(name: "nomic-embed-text") // デフォルトの埋め込みモデル
-        QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: embedder)
-        qaHistory.append(newQAPair)
-        selectedQAPair = newQAPair
-        question = ""
-        answer = ""
+            // Build citations mapping from answer text and last retrieved chunks
+            var perParagraph = CitationExtractor.extractParagraphLabels(from: result)
+            let chunks = ModelManager.shared.lastRetrievedChunks
+            // Fallback: if no labels found but we have sources, attach all sources to first paragraph
+            let hasAnyLabel = perParagraph.contains { !$0.isEmpty }
+            if !hasAnyLabel && !chunks.isEmpty {
+                perParagraph = [Array(1...chunks.count)]
+            }
+            // Build catalog with 1-based index
+            let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
+                CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)
+            }
+            let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
+
+            let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
+            // Cache: store QA context for potential thumbs-up capture
+            let embedder = EmbeddingModel(name: "nomic-embed-text") // デフォルトの埋め込みモデル
+            QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: embedder)
+            qaHistory.append(newQAPair)
+            selectedQAPair = newQAPair
+            question = ""
+            answer = ""
+            isLoading = false
+
+            let dt = Date().timeIntervalSince(_t0)
+            _log.logEvent(event: String(format: "[UI] askRAG exit (%.2f ms)", dt*1000))
+        }
     }
 }
 
