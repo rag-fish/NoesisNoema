@@ -276,15 +276,28 @@ class LlamaState: ObservableObject {
     ]
     func loadModel(modelUrl: URL?) throws {
         if let modelUrl {
+            #if DEBUG
+            print("🔄 [LlamaState] Loading model from: \(modelUrl.path)")
+            #endif
             messageLog += "Loading model...\n"
+            SystemLog().logEvent(event: "[LlamaState] Loading model: \(modelUrl.lastPathComponent)")
+
             llamaContext = try LlamaContext.create_context(path: modelUrl.path)
+
+            #if DEBUG
+            print("✅ [LlamaState] Model loaded successfully: \(modelUrl.lastPathComponent)")
+            #endif
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
+            SystemLog().logEvent(event: "[LlamaState] Model loaded: \(modelUrl.lastPathComponent)")
 
             // モデル/環境情報をログ
             if let llamaContext {
                 Task { [weak self] in
                     let info = await llamaContext.system_info()
                     SystemLog().logEvent(event: "[llama] system_info: \(info)")
+                    #if DEBUG
+                    print("ℹ️ [LlamaState] System info: \(info)")
+                    #endif
                     await MainActor.run { self?.messageLog += "system_info captured\n" }
                 }
             }
@@ -297,6 +310,9 @@ class LlamaState: ObservableObject {
             // Assuming that the model is successfully loaded, update the downloaded models
             updateDownloadedModels(modelName: modelUrl.lastPathComponent, status: "downloaded")
         } else {
+            #if DEBUG
+            print("⚠️ [LlamaState] No model URL provided")
+            #endif
             messageLog += "Load a model from the list below\n"
         }
     }
@@ -327,7 +343,18 @@ class LlamaState: ObservableObject {
     }
 
     func complete(text: String) async -> String {
-        guard let llamaContext else { return "" }
+        guard let llamaContext else {
+            #if DEBUG
+            print("❌ [LlamaState] No llamaContext available!")
+            #endif
+            SystemLog().logEvent(event: "[LlamaState] ERROR: No llamaContext")
+            return ""
+        }
+
+        #if DEBUG
+        print("🎬 [LlamaState] Starting completion for prompt length: \(text.count)")
+        #endif
+        SystemLog().logEvent(event: "[LlamaState] Starting completion, promptLen=\(text.count)")
 
         // 設定を念のため反映（直前に変更がある場合）
         await applyConfigToContext()
@@ -336,6 +363,10 @@ class LlamaState: ObservableObject {
         await llamaContext.completion_init(text: text)
         let t_heat_end = DispatchTime.now().uptimeNanoseconds
         let t_heat = Double(t_heat_end - t_start) / NS_PER_S
+
+        #if DEBUG
+        print("🔥 [LlamaState] Heat up completed in \(String(format: "%.2f", t_heat))s")
+        #endif
 
         await MainActor.run {
             self.messageLog += "USER: \(text)\n"
@@ -353,16 +384,34 @@ class LlamaState: ObservableObject {
         let GENERATION_TIMEOUT_S: Double = 20.0
         let genStartNS = DispatchTime.now().uptimeNanoseconds
 
+        #if DEBUG
+        var tokenCount = 0
+        #endif
+
         while await !llamaContext.is_done {
             // 全体タイムアウト
             let genElapsed = Double(DispatchTime.now().uptimeNanoseconds - genStartNS) / NS_PER_S
             if genElapsed > GENERATION_TIMEOUT_S {
+                #if DEBUG
+                print("⏱️ [LlamaState] Generation timeout after \(String(format: "%.2f", genElapsed))s")
+                #endif
                 await llamaContext.request_stop()
                 break
             }
 
             let chunk = await llamaContext.completion_loop()
             if chunk.isEmpty { continue }
+
+            #if DEBUG
+            tokenCount += 1
+            if tokenCount == 1 {
+                print("🎉 [LlamaState] First token received!")
+            }
+            if tokenCount % 10 == 0 {
+                print("📊 [LlamaState] Generated \(tokenCount) tokens...")
+            }
+            #endif
+
             buffer += chunk
 
             // Stopトークン: <|im_end|> で即終了
@@ -418,10 +467,25 @@ class LlamaState: ObservableObject {
         let t_generation = Double(t_end - t_heat_end) / self.NS_PER_S
         let tokens_per_second = Double(await llamaContext.n_len) / t_generation
 
+        #if DEBUG
+        print("⏱️ [LlamaState] Generation completed in \(String(format: "%.2f", t_generation))s")
+        print("⚡ [LlamaState] Speed: \(String(format: "%.2f", tokens_per_second)) tokens/s")
+        print("📊 [LlamaState] Total tokens: \(tokenCount)")
+        print("📝 [LlamaState] Raw response length: \(assistantResponse.count)")
+        #endif
+
         await llamaContext.clear()
 
         // 最終正規化
         let finalAnswer = normalizeOutput(assistantResponse)
+
+        #if DEBUG
+        print("✨ [LlamaState] Normalized response length: \(finalAnswer.count)")
+        if finalAnswer.isEmpty {
+            print("⚠️ [LlamaState] WARNING: Final answer is empty!")
+        }
+        #endif
+        SystemLog().logEvent(event: "[LlamaState] Generation complete: \(finalAnswer.count) chars, \(String(format: "%.2f", tokens_per_second)) t/s")
 
         await MainActor.run {
             self.messageLog += "ASSISTANT: \(finalAnswer)\n"

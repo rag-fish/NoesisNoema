@@ -271,14 +271,32 @@ class ModelManager: ObservableObject {
         let _log = SystemLog()
         let _t0 = Date()
         _log.logEvent(event: "[ModelManager] generateAsyncAnswer enter qLen=\(question.count)")
+        #if DEBUG
+        print("🚀 [ModelManager] Starting generation for question: \(question.prefix(50))...")
+        #endif
+
         defer {
             let dt = Date().timeIntervalSince(_t0)
             _log.logEvent(event: String(format: "[ModelManager] generateAsyncAnswer exit (%.2f ms)", dt*1000))
+            #if DEBUG
+            print("✅ [ModelManager] Generation completed in \(String(format: "%.2f", dt*1000))ms")
+            #endif
         }
 
         // 1. Retrieve relevant chunks using LocalRetriever (background)
+        _log.logEvent(event: "[ModelManager] Retrieving RAG context...")
+        #if DEBUG
+        print("📚 [ModelManager] Retrieving RAG context...")
+        #endif
         let retriever = LocalRetriever(store: VectorStore.shared)
         let chunks = retriever.retrieve(query: question, k: 5, trace: false)
+
+        #if DEBUG
+        print("📚 [ModelManager] Retrieved \(chunks.count) chunks")
+        if !chunks.isEmpty {
+            print("📚 [ModelManager] Context preview: \(chunks.map { $0.content.prefix(50) })")
+        }
+        #endif
 
         // Store chunks for citation UI (MainActor)
         await MainActor.run {
@@ -287,9 +305,25 @@ class ModelManager: ObservableObject {
 
         // 2. Build context from chunks (background)
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
+        _log.logEvent(event: "[ModelManager] Context length: \(context.count) chars")
+        #if DEBUG
+        print("📝 [ModelManager] Built context with \(context.count) characters")
+        #endif
 
         // 3. Generate answer using LLM (background)
+        _log.logEvent(event: "[ModelManager] Calling LLM generate...")
+        #if DEBUG
+        print("🧠 [ModelManager] Calling LLM model: \(currentLLMModel.name)")
+        print("🧠 [ModelManager] Model file: \(currentLLMModel.modelFile)")
+        #endif
+
         let answer = currentLLMModel.generate(prompt: question, context: context.isEmpty ? nil : context)
+
+        #if DEBUG
+        print("💬 [ModelManager] LLM response length: \(answer.count) chars")
+        print("💬 [ModelManager] Response preview: \(answer.prefix(100))")
+        #endif
+        _log.logEvent(event: "[ModelManager] LLM response length: \(answer.count)")
 
         return answer
     }
