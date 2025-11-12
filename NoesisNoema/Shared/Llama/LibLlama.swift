@@ -11,6 +11,10 @@ import llama
 
 enum LlamaError: Error {
     case couldNotInitializeContext
+    case initFailed(reason: String)
+    case tokenizeFailed(reason: String)
+    case noResponse(reason: String)
+    case unsupportedArchitecture(arch: String)
 }
 
 #if !DISABLE_LLAMA
@@ -110,6 +114,11 @@ actor LlamaContext {
     }
 
     static func create_context(path: String) throws -> LlamaContext {
+        #if DEBUG
+        print("🧩 [LibLlama] GGUF path: \(path)")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] Loading GGUF from: \(path)")
+
         // iOSではMetalを無効化してCPUフォールバック（MTLCompiler内部エラー対策）
         #if os(iOS)
         setenv("LLAMA_NO_METAL", "1", 1)
@@ -117,7 +126,12 @@ actor LlamaContext {
         #if targetEnvironment(simulator)
         setenv("LLAMA_NO_METAL", "1", 1)
         #endif
+
         llama_backend_init()
+        #if DEBUG
+        print("✅ [LibLlama] llama_backend_init() complete")
+        #endif
+
         var model_params = llama_model_default_params()
 
         #if targetEnvironment(simulator)
@@ -129,18 +143,47 @@ actor LlamaContext {
         print("Running on iOS device, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
         #endif
 
+        #if DEBUG
+        print("📦 [LibLlama] Loading model with n_gpu_layers=\(model_params.n_gpu_layers)...")
+        #endif
+
         let model = llama_model_load_from_file(path, model_params)
         guard let model else {
-            print("Could not load model at \(path)")
-            throw LlamaError.couldNotInitializeContext
+            let errorMsg = "Could not load model at \(path)"
+            #if DEBUG
+            print("❌ [LibLlama] \(errorMsg)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: \(errorMsg)")
+            throw LlamaError.initFailed(reason: errorMsg)
         }
+
+        #if DEBUG
+        print("✅ [LibLlama] Model loaded successfully")
+        #endif
+
+        // Get and validate GGUF metadata
+        let modelDesc = UnsafeMutablePointer<Int8>.allocate(capacity: 512)
+        modelDesc.initialize(repeating: Int8(0), count: 512)
+        defer { modelDesc.deallocate() }
+
+        let nChars = llama_model_desc(model, modelDesc, 512)
+        let modelInfo = String(cString: modelDesc)
+
+        #if DEBUG
+        print("📦 [LibLlama] Model info: \(modelInfo)")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] Model desc: \(modelInfo)")
 
         #if os(iOS)
         let n_threads = max(1, min(4, ProcessInfo.processInfo.processorCount))
         #else
         let n_threads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
         #endif
-        print("Using \(n_threads) threads")
+
+        #if DEBUG
+        print("⚙️ [LibLlama] Using \(n_threads) threads")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] Config: threads=\(n_threads)")
 
         // 修正箇所：Never型 → 実際の構造体に置換
         var ctx_params = llama_context_default_params()
@@ -153,11 +196,24 @@ actor LlamaContext {
         ctx_params.n_threads       = Int32(n_threads)
         ctx_params.n_threads_batch = Int32(n_threads)
 
+        #if DEBUG
+        print("📦 [LibLlama] Creating context with n_ctx=\(ctx_params.n_ctx)...")
+        #endif
+
         let context = llama_init_from_model(model, ctx_params)
         guard let context else {
-            print("Could not load context!")
-            throw LlamaError.couldNotInitializeContext
+            let errorMsg = "Could not initialize context from model"
+            #if DEBUG
+            print("❌ [LibLlama] \(errorMsg)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: \(errorMsg)")
+            throw LlamaError.initFailed(reason: errorMsg)
         }
+
+        #if DEBUG
+        print("✅ [LibLlama] Context initialized successfully (ctx != nil)")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] Context created: n_ctx=\(ctx_params.n_ctx)")
 
         #if os(iOS)
         return LlamaContext(model: model, context: context, initialNLen: 256)
@@ -222,8 +278,25 @@ actor LlamaContext {
     func completion_init(text: String) {
         dprint("attempting to complete \"\(text)\"")
 
+        #if DEBUG
+        print("🚀 [LibLlama] completion_init: prompt length \(text.count) chars")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] completion_init: promptLen=\(text.count)")
+
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
+
+        #if DEBUG
+        print("🔤 [LibLlama] Tokenized to \(tokens_list.count) tokens")
+        #endif
+
+        guard !tokens_list.isEmpty else {
+            #if DEBUG
+            print("❌ [LibLlama] ERROR: Tokenization produced 0 tokens!")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: Empty token list after tokenization")
+            return
+        }
 
         // Ensure batch capacity >= prompt token length
         let needed = max(512, tokens_list.count + 1) // +1 for logits marker
@@ -236,8 +309,17 @@ actor LlamaContext {
 
         dprint("\n n_len = \(n_len), n_ctx = \(n_ctx), n_kv_req = \(n_kv_req)")
 
+        #if DEBUG
+        print("📊 [LibLlama] Batch config: n_len=\(n_len), n_ctx=\(n_ctx), n_kv_req=\(n_kv_req)")
+        #endif
+
         if n_kv_req > n_ctx {
-            print("error: n_kv_req > n_ctx, the required KV cache size is not big enough")
+            let warning = "ERROR: n_kv_req (\(n_kv_req)) > n_ctx (\(n_ctx)), KV cache too small!"
+            print(warning)
+            #if DEBUG
+            print("⚠️ [LibLlama] \(warning)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] \(warning)")
         }
 
         for id in tokens_list {
@@ -252,12 +334,30 @@ actor LlamaContext {
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
+        #if DEBUG
+        print("🚀 [LibLlama] Starting initial decode with \(batch.n_tokens) prompt tokens...")
+        #endif
+
         if llama_decode(context, batch) != 0 {
-            print("llama_decode() failed")
+            let error = "llama_decode() failed during prompt processing"
+            print(error)
+            #if DEBUG
+            print("❌ [LibLlama] \(error)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
+        } else {
+            #if DEBUG
+            print("✅ [LibLlama] Initial decode successful, ready to generate")
+            #endif
         }
 
         n_cur = batch.n_tokens
         is_done = false // 追加: 推論開始時にis_doneをリセット
+
+        #if DEBUG
+        print("✅ [LibLlama] completion_init complete, n_cur=\(n_cur)")
+        #endif
+        SystemLog().logEvent(event: "[LibLlama] Prompt processed: \(tokens_list.count) tokens, ready for generation")
     }
 
     func completion_loop() -> String {
@@ -269,8 +369,25 @@ actor LlamaContext {
         dprint("[DEBUG] new_token_id:", new_token_id)
         dprint("[DEBUG] is_eog:", llama_vocab_is_eog(vocab, new_token_id), "n_cur:", n_cur, "n_len:", n_len)
 
+        // First token logging
+        #if DEBUG
+        if n_decode == 0 {
+            print("🔹 [LibLlama] First token sampled: id=\(new_token_id)")
+        }
+        #endif
+
         if llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len {
             dprint("[DEBUG] EOG or max length reached. Returning:", String(cString: temporary_invalid_cchars + [0]))
+            #if DEBUG
+            if llama_vocab_is_eog(vocab, new_token_id) {
+                print("🏁 [LibLlama] EOG token reached, generation complete")
+            } else {
+                print("🏁 [LibLlama] Max length (\(n_len)) reached, generation complete")
+            }
+            print("🏁 [LibLlama] Total tokens generated: \(n_decode)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] Generation finished: \(n_decode) tokens")
+
             is_done = true
             // 直前のトークンがflushされていない場合は返す
             if !temporary_invalid_cchars.isEmpty {
@@ -288,6 +405,14 @@ actor LlamaContext {
 
         let new_token_cchars = token_to_piece(token: new_token_id)
         dprint("[DEBUG] new_token_cchars:", new_token_cchars)
+
+        #if DEBUG
+        // Log every 10 tokens
+        if n_decode > 0 && n_decode % 10 == 0 {
+            print("📊 [LibLlama] Generated \(n_decode) tokens...")
+        }
+        #endif
+
         temporary_invalid_cchars.append(contentsOf: new_token_cchars)
         let new_token_str: String
         if let string = String(validatingUTF8: temporary_invalid_cchars + [0]) {
@@ -301,6 +426,14 @@ actor LlamaContext {
             new_token_str = ""
         }
         dprint("[DEBUG] new_token_str:", new_token_str)
+
+        #if DEBUG
+        // Log actual text output periodically
+        if !new_token_str.isEmpty && n_decode % 20 == 0 {
+            print("🔹 [LibLlama] Token text: '\(new_token_str)'")
+        }
+        #endif
+
         llama_batch_clear(&batch)
         llama_batch_add(&batch, new_token_id, n_cur, [0], true)
 
@@ -308,7 +441,12 @@ actor LlamaContext {
         n_cur    += 1
 
         if llama_decode(context, batch) != 0 {
-            print("failed to evaluate llama!")
+            let error = "failed to evaluate llama during generation!"
+            print(error)
+            #if DEBUG
+            print("❌ [LibLlama] \(error)")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
         }
 
         return new_token_str

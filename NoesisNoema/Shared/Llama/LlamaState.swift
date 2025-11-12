@@ -386,9 +386,14 @@ class LlamaState: ObservableObject {
 
         #if DEBUG
         var tokenCount = 0
+        var loopCount = 0
         #endif
 
         while await !llamaContext.is_done {
+            #if DEBUG
+            loopCount += 1
+            #endif
+
             // 全体タイムアウト
             let genElapsed = Double(DispatchTime.now().uptimeNanoseconds - genStartNS) / NS_PER_S
             if genElapsed > GENERATION_TIMEOUT_S {
@@ -399,6 +404,19 @@ class LlamaState: ObservableObject {
                 break
             }
 
+            // Check for stuck generation (no tokens after many loops)
+            #if DEBUG
+            if loopCount > 50 && tokenCount == 0 {
+                print("⚠️ [LlamaState] WARNING: \(loopCount) loops but no tokens yet!")
+            }
+            if loopCount > 100 && tokenCount == 0 {
+                print("❌ [LlamaState] ERROR: Generation stuck - 100 loops with 0 tokens")
+                SystemLog().logEvent(event: "[LlamaState] ERROR: Generation stuck after 100 loops")
+                await llamaContext.request_stop()
+                break
+            }
+            #endif
+
             let chunk = await llamaContext.completion_loop()
             if chunk.isEmpty { continue }
 
@@ -406,6 +424,7 @@ class LlamaState: ObservableObject {
             tokenCount += 1
             if tokenCount == 1 {
                 print("🎉 [LlamaState] First token received!")
+                SystemLog().logEvent(event: "[LlamaState] First token generated after \(loopCount) loops")
             }
             if tokenCount % 10 == 0 {
                 print("📊 [LlamaState] Generated \(tokenCount) tokens...")
@@ -481,11 +500,24 @@ class LlamaState: ObservableObject {
 
         #if DEBUG
         print("✨ [LlamaState] Normalized response length: \(finalAnswer.count)")
+        print("📊 [LlamaState] Token metrics: \(tokenCount) tokens in \(loopCount) loops")
         if finalAnswer.isEmpty {
             print("⚠️ [LlamaState] WARNING: Final answer is empty!")
+            if tokenCount == 0 {
+                print("❌ [LlamaState] ERROR: No tokens were generated!")
+            }
         }
         #endif
-        SystemLog().logEvent(event: "[LlamaState] Generation complete: \(finalAnswer.count) chars, \(String(format: "%.2f", tokens_per_second)) t/s")
+        SystemLog().logEvent(event: "[LlamaState] Generation complete: \(finalAnswer.count) chars, \(tokenCount) tokens, \(String(format: "%.2f", tokens_per_second)) t/s")
+
+        // Explicit check for empty generation
+        if finalAnswer.isEmpty && tokenCount == 0 {
+            let errorMsg = "No tokens generated - model may be incompatible or context initialization failed"
+            #if DEBUG
+            print("❌ [LlamaState] \(errorMsg)")
+            #endif
+            SystemLog().logEvent(event: "[LlamaState] ERROR: \(errorMsg)")
+        }
 
         await MainActor.run {
             self.messageLog += "ASSISTANT: \(finalAnswer)\n"

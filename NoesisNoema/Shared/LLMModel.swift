@@ -242,11 +242,23 @@ class LLMModel: @unchecked Sendable {
                         #endif
 
                         guard !result.isEmpty else {
-                            result = "[LLMModel] エラー: LLMが空の応答を返しました"
-                            #if DEBUG
-                            print("❌ [LLMModel] Empty response from LLM!")
-                            #endif
-                            SystemLog().logEvent(event: "[LLMModel] ERROR: Empty response from LLM")
+                            let modelName = self.name
+                            let isLargeModel = fileName.lowercased().contains("20b") || fileName.lowercased().contains("70b")
+
+                            if isLargeModel {
+                                result = "[LLMModel] Model '\(modelName)' failed to generate (possibly too large or unsupported). Try Jan-V1-4B instead."
+                                #if DEBUG
+                                print("❌ [LLMModel] Large model '\(modelName)' failed - may be incompatible")
+                                print("💡 [LLMModel] Suggestion: Use Jan-V1-4B or llama3-8b instead")
+                                #endif
+                            } else {
+                                result = "[LLMModel] エラー: LLMが空の応答を返しました"
+                                #if DEBUG
+                                print("❌ [LLMModel] Empty response from LLM!")
+                                #endif
+                            }
+
+                            SystemLog().logEvent(event: "[LLMModel] ERROR: Empty response from '\(modelName)'")
                             semaphore.signal()
                             return
                         }
