@@ -190,22 +190,33 @@ func candidateModelPaths(fileName: String) -> [String] {
     let cwd = fm.currentDirectoryPath
     var paths: [String] = []
 
-    // 1) CWD
+    // 1) CWD + project structure (NoesisNoema/NoesisNoema/Resources/Models/)
+    paths.append("\(cwd)/NoesisNoema/NoesisNoema/Resources/Models/\(fileName)")
+
+    // 2) Absolute path to actual project location
+    paths.append("/Users/raskolnikoff/Xcode Projects/NoesisNoema/NoesisNoema/Resources/Models/\(fileName)")
+
+    // 3) Bundle resources (works for both CLI in Xcode and packaged apps)
+    if let r = Bundle.main.resourceURL {
+        paths.append(r.appendingPathComponent(fileName).path)
+        // Also try subdirectories
+        paths.append(r.appendingPathComponent("Models").appendingPathComponent(fileName).path)
+        paths.append(r.appendingPathComponent("Resources/Models").appendingPathComponent(fileName).path)
+    }
+
+    // 4) CWD (basic fallback)
     paths.append("\(cwd)/\(fileName)")
 
-    // 2) Executable directory
+    // 5) Executable directory
     let exePath = CommandLine.arguments[0]
     let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
     if exeDir != cwd { paths.append("\(exeDir)/\(fileName)") }
 
-    // 3) Bundle resources (rare in CLI, but handy when run inside Xcode)
-    if let r = Bundle.main.resourceURL { paths.append(r.appendingPathComponent(fileName).path) }
-
-    // 4) Conventional places (adjust as needed in your workspace)
+    // 6) Conventional relative places (for backwards compatibility)
     paths.append("./Resources/Models/\(fileName)")
     paths.append("./NoesisNoema/Resources/Models/\(fileName)")
 
-    // 5) User downloads (convenience)
+    // 7) User downloads (convenience)
     #if !targetEnvironment(macCatalyst)
     if let home = FileManager.default.homeDirectoryForCurrentUser.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
         let decoded = home.removingPercentEncoding ?? home
@@ -216,6 +227,7 @@ func candidateModelPaths(fileName: String) -> [String] {
     let homeDir = NSHomeDirectory()
     paths.append("\(homeDir)/Downloads/\(fileName)")
     #endif
+
     return Array(LinkedHashSet(paths)) // preserve order, drop dups
 }
 
@@ -320,23 +332,52 @@ if CommandLine.arguments.contains("--demo") { printDemoAndExit() }
 
 // Resolve model path
 var modelPath: String?
+var matchedIndex: Int? = nil
 if let explicit = cli.modelPath, fm.fileExists(atPath: explicit) {
     modelPath = explicit
+    print("=== LlamaBridgeTest ===")
+    print("✅ Using explicitly provided model path:")
+    print("   \(explicit)")
 } else {
-    for p in candidateModelPaths(fileName: defaultModelFileName) {
-        if fm.fileExists(atPath: p) { modelPath = p; break }
+    print("=== LlamaBridgeTest ===")
+    print("🔍 Searching for model: \(defaultModelFileName)")
+    print("   Candidate paths:")
+    let candidates = candidateModelPaths(fileName: defaultModelFileName)
+    for (index, p) in candidates.enumerated() {
+        let exists = fm.fileExists(atPath: p)
+        let status = exists ? "✅ FOUND" : "❌"
+        print("   \(index + 1). \(status) \(p)")
+        if exists && modelPath == nil {
+            modelPath = p
+            matchedIndex = index + 1
+        }
+    }
+
+    if let found = modelPath, let idx = matchedIndex {
+        print("")
+        print("✅ Model auto-detected at path #\(idx):")
+        print("   \(found)")
     }
 }
 
-print("=== LlamaBridgeTest ===")
-if modelPath == nil { print("Model auto-lookup candidates (not found):") }
-for p in candidateModelPaths(fileName: defaultModelFileName) { print("  - \(p)") }
-
 guard let modelPath else {
-    fputs("\nERROR: Could not locate model file.\n  Hint: pass -m /absolute/path/to/Jan-v1-4B-Q4_K_M.gguf or place it in one of the listed paths.\n", stderr)
+    print("")
+    fputs("❌ ERROR: Could not locate model file.\n", stderr)
+    fputs("   Searched \(candidateModelPaths(fileName: defaultModelFileName).count) locations.\n", stderr)
+    fputs("   Hint: pass -m /absolute/path/to/Jan-v1-4B-Q4_K_M.gguf\n", stderr)
+    fputs("         or place \(defaultModelFileName) in one of the listed paths.\n", stderr)
     exit(2)
 }
-print("USING MODEL: \(modelPath)")
+
+print("")
+print("📂 Resolved model path:")
+print("   \(modelPath)")
+let fileSize = try? fm.attributesOfItem(atPath: modelPath)[.size] as? UInt64
+if let size = fileSize {
+    let sizeMB = Double(size) / (1024 * 1024)
+    print("   Size: \(String(format: "%.1f", sizeMB)) MB")
+}
+print("")
 
 // Default prompt if none provided
 let promptText = cli.prompt ?? "What is Retrieval-Augmented Generation (RAG)? Answer in 2 sentences. If unknown, say 'I don't know.'"
