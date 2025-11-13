@@ -9,12 +9,13 @@
 /* Begin PBXBuildFile section */
 		098204BA71014889A4D442DF /* libggml-base.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		0F0E9BEA89E04D9A9AEFCD4D /* libggml-blas.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		123456782E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
+		123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */; };
 		21F6C782D83240D2A0F07F40 /* libggml-cpu.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		33172999C93F47F2A42A4A0C /* libggml-metal.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; };
 		4FA67A74CE634662ADCE813E /* libggml-cpu.dylib in Resources */ = {isa = PBXBuildFile; fileRef = C517CD480A69476F878B4B2C /* libggml-cpu.dylib */; };
 		6376029D435848ED90B04D80 /* libggml-blas.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */; };
 		7C436A8302704CDDA3DD30B4 /* libggml-base.dylib in Resources */ = {isa = PBXBuildFile; fileRef = 8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */; };
+		B88066B91356827198E98FE6 /* llama_ios.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 191AFA302097B2D549BFEACC /* llama_ios.xcframework */; };
 		C7777252C6E845D7830EB32E /* libggml-metal.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
 		F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
@@ -70,7 +71,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		191AFA302097B2D549BFEACC /* llama_ios.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = Frameworks/xcframeworks/llama_ios.xcframework; sourceTree = SOURCE_ROOT; };
 		560D5F5DF35F4A28BA548441 /* libggml-metal.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-metal.dylib"; sourceTree = "<group>"; };
 		791F56CC6DDB42C1B275E2E0 /* libggml-blas.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-blas.dylib"; sourceTree = "<group>"; };
 		8AEEDF9DF2674BE6B1718BDC /* libggml-base.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libggml-base.dylib"; sourceTree = "<group>"; };
@@ -146,11 +148,8 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */ = {
+		F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			attributesByRelativePath = {
-				Frameworks/xcframeworks/llama_macos.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
-			};
 			buildPhase = F4F38B892EB265A600F3CEF3 /* Embed Frameworks */;
 			membershipExceptions = (
 				Frameworks/xcframeworks/llama_macos.xcframework,
@@ -163,7 +162,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				F4EEEAAA2E50099900E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
-				F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */,
+				F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" build phase */,
 				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
 				F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */,
 			);
@@ -172,11 +171,15 @@
 		};
 		F460884A2E2CD45000D4C555 /* LlamaBridgeTest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = LlamaBridgeTest;
 			sourceTree = "<group>";
 		};
 		F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = NoesisNoemaMobile;
 			sourceTree = "<group>";
 		};
@@ -210,6 +213,7 @@
 			files = (
 				F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */,
 				F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */,
+				B88066B91356827198E98FE6 /* llama_ios.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,6 +254,7 @@
 				F408F3402E35C1C700F621C5 /* Frameworks */,
 				AACE160730FAA9CB4526C2D7 /* README.md */,
 				F45991592EB76940002CCA0C /* Recovered References */,
+				191AFA302097B2D549BFEACC /* llama_ios.xcframework */,
 			);
 			sourceTree = "<group>";
 		};
@@ -266,7 +271,7 @@
 		F45991592EB76940002CCA0C /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */,
+				123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -467,7 +472,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				123456782E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */,
+				123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -824,7 +829,11 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
@@ -840,7 +849,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited) DISABLE_LLAMA";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
@@ -858,7 +867,11 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
@@ -874,7 +887,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DISABLE_LLAMA;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
