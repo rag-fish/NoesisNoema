@@ -183,6 +183,14 @@ class LLMModel: @unchecked Sendable {
                         print("🔄 [LLMModel] Loading model into LlamaState...")
                         #endif
                         try await llamaState.loadModel(modelUrl: URL(fileURLWithPath: path))
+
+                        #if DEBUG
+                        print("🧪 [LLMModel] Testing system info call...")
+                        if let llamaCtx = await llamaState.getLlamaContext() {
+                            let sysInfo = await llamaCtx.printSystemInfo()
+                            print("✅ [LLMModel] System info test passed: \(sysInfo.prefix(100))")
+                        }
+                        #endif
                         #if DEBUG
                         print("✅ [LLMModel] Model loaded successfully")
                         #endif

@@ -84,6 +84,10 @@ class LlamaState: ObservableObject {
     private let modelManager = ModelManager.shared
     private var useModelManager = false // フラグで新旧API切り替え
 
+    func getLlamaContext() -> LlamaContext? {
+        return llamaContext
+    }
+
     init() {
         // ランタイムガード（壊れたFWを早期検知）
         if let err = LlamaRuntimeCheck.ensureLoadable() {
