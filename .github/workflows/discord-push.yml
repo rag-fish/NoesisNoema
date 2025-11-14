@@ -19,14 +19,14 @@ jobs:
           BRANCH="${GITHUB_REF#refs/heads/}"
           COMMITS=$(jq -r '.commits[] | "- " + .message + " ([" + .id[0:7] + "](" + .url + ")) by " + .author.username' <<< '${{ toJson(github.event) }}')
           [ -z "$COMMITS" ] && COMMITS="(no commit messages)"
-          echo "repo=$REPO" >> $GITHUB_OUTPUT
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-          echo "url=${{ github.event.compare }}" >> $GITHUB_OUTPUT
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "url=${{ github.event.compare }}" >> "$GITHUB_OUTPUT"
           {
             echo "commits<<EOF"
             echo "$COMMITS"
             echo "EOF"
-          } >> $GITHUB_OUTPUT
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send to Discord
         env:
