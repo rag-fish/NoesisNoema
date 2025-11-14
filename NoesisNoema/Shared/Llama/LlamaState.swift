@@ -347,16 +347,24 @@ class LlamaState: ObservableObject {
     }
 
     func complete(text: String) async -> String {
+        #if DEBUG
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎬 [LlamaState] complete() CALLED")
+        print("🎬 [LlamaState] Prompt length: \(text.count)")
+        print("🎬 [LlamaState] Prompt preview: \(text.prefix(150))...")
+        print("🎬 [LlamaState] llamaContext exists: \(llamaContext != nil)")
+        #endif
+
         guard let llamaContext else {
             #if DEBUG
-            print("❌ [LlamaState] No llamaContext available!")
+            print("❌ [LlamaState] No llamaContext available! Generation CANNOT proceed!")
             #endif
             SystemLog().logEvent(event: "[LlamaState] ERROR: No llamaContext")
             return ""
         }
 
         #if DEBUG
-        print("🎬 [LlamaState] Starting completion for prompt length: \(text.count)")
+        print("✅ [LlamaState] llamaContext OK, proceeding with generation...")
         #endif
         SystemLog().logEvent(event: "[LlamaState] Starting completion, promptLen=\(text.count)")
 
@@ -370,6 +378,7 @@ class LlamaState: ObservableObject {
 
         #if DEBUG
         print("🔥 [LlamaState] Heat up completed in \(String(format: "%.2f", t_heat))s")
+        print("🔄 [LlamaState] Entering token generation loop...")
         #endif
 
         await MainActor.run {
@@ -398,9 +407,16 @@ class LlamaState: ObservableObject {
         var firstTokenReceivedAt: UInt64? = nil
         #endif
 
+        #if DEBUG
+        print("🔄 [LlamaState] Entering main generation loop (is_done=\(await llamaContext.is_done))...")
+        #endif
+
         while await !llamaContext.is_done {
             #if DEBUG
             loopCount += 1
+            if loopCount == 1 {
+                print("🔄 [LlamaState] Loop iteration #1 - calling completion_loop()...")
+            }
             #endif
 
             // 全体タイムアウト
@@ -439,6 +455,16 @@ class LlamaState: ObservableObject {
             #endif
 
             let chunk = await llamaContext.completion_loop()
+
+            #if DEBUG
+            if loopCount == 1 && chunk.isEmpty {
+                print("⚠️ [LlamaState] Loop #1: completion_loop() returned empty chunk")
+            }
+            if loopCount <= 3 {
+                print("🔄 [LlamaState] Loop #\(loopCount): chunk length=\(chunk.count)")
+            }
+            #endif
+
             if chunk.isEmpty { continue }
 
             #if DEBUG
@@ -447,6 +473,7 @@ class LlamaState: ObservableObject {
                 firstTokenReceivedAt = DispatchTime.now().uptimeNanoseconds
                 let firstTokenTime = Double(firstTokenReceivedAt! - genStartNS) / 1_000_000_000.0
                 print("🎉 [LlamaState] First token received at \(String(format: "%.2f", firstTokenTime))s!")
+                print("🎉 [LlamaState] First token content: '\(chunk)'")
                 SystemLog().logEvent(event: "[LlamaState] First token generated after \(loopCount) loops in \(String(format: "%.2f", firstTokenTime))s")
             }
             if tokenCount % 10 == 0 {

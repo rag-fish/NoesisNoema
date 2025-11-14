@@ -40,58 +40,61 @@ class DocumentManager: ObservableObject {
     }
     @Published var llmragFiles: [LLMRagFile]
     @Published var uploadHistory: [UploadHistory] = []
-    @Published var ragpackChunks: [String: [Chunk]] = [:]
-    let historyKey = "RAGpackUploadHistory"
-    let ragpackChunksKey = "RAGpackChunks"
 
-    /// Stores all question-answer pairs (QA history).
+    /// POTENTIAL LARGE PAYLOAD: RAGpack chunks with embeddings (can be MBs per pack)
+    @Published var ragpackChunks: [String: [Chunk]] = [:]
+
+    // DEPRECATED: Old UserDefaults keys (migrated to file storage)
+    // let historyKey = "RAGpackUploadHistory" // SMALL - but moved for consistency
+    // let ragpackChunksKey = "RAGpackChunks"  // LARGE PAYLOAD - MOVED to file
+
+    /// POTENTIAL LARGE PAYLOAD: QA history stores full questions + full answers
+    /// Each answer can be hundreds of chars, × 100s of QA pairs = easily > 4MB
     @Published var qaHistory: [QAPair] = []
+
     /// Tracks the currently selected question-answer pair.
     @Published var selectedQAPair: QAPair? = nil
-    let qaHistoryKey = "QAHistory"
+
+    // DEPRECATED: Old UserDefaults key
+    // let qaHistoryKey = "QAHistory" // LARGE PAYLOAD - MOVED to file
 
     /**
      * Initializes a DocumentManager with an empty array of LLMRagFiles.
      * This is the default initializer that sets up the document manager for use.
      * Also loads upload history, RAGpack chunks, and QA history from persistent storage.
+     *
+     * ✅ NOW USES FILE-BASED STORAGE (not UserDefaults) for large data
      */
     init() {
         self.llmragFiles = []
+
+        // Perform one-time migration from UserDefaults to file storage
+        PersistenceStore.shared.migrateFromUserDefaultsIfNeeded()
+
+        // Load from file storage
         loadHistory()
         loadRAGpackChunks()
         loadQAHistory()
     }
 
+    // MARK: - Upload History (SMALL - moved to file for consistency)
+
     func saveHistory() {
-        let encoder = JSONEncoder()
-        if let data = try? encoder.encode(uploadHistory) {
-            UserDefaults.standard.set(data, forKey: historyKey)
-        }
+        PersistenceStore.shared.saveUploadHistory(uploadHistory)
     }
+
     func loadHistory() {
-        let decoder = JSONDecoder()
-        if let data = UserDefaults.standard.data(forKey: historyKey),
-           let history = try? decoder.decode([UploadHistory].self, from: data) {
-            uploadHistory = history
-        }
+        uploadHistory = PersistenceStore.shared.loadUploadHistory()
     }
+
+    // MARK: - RAGpack Chunks (LARGE PAYLOAD - now in file storage)
+
     func saveRAGpackChunks() {
-        let encoder = JSONEncoder()
-        var dict: [String: Data] = [:]
-        for (key, chunks) in ragpackChunks {
-            if let data = try? encoder.encode(chunks) {
-                dict[key] = data
-            }
-        }
-        UserDefaults.standard.set(dict, forKey: ragpackChunksKey)
+        PersistenceStore.shared.saveRAGpackChunks(ragpackChunks)
     }
+
     func loadRAGpackChunks() {
-        let decoder = JSONDecoder()
-        if let dict = UserDefaults.standard.dictionary(forKey: ragpackChunksKey) as? [String: Data] {
-            ragpackChunks = dict.compactMapValues { data in
-                (try? decoder.decode([Chunk].self, from: data)) ?? []
-            }
-        }
+        ragpackChunks = PersistenceStore.shared.loadRAGpackChunks()
     }
     func deleteRAGpack(named name: String) {
         let chunksToDelete = ragpackChunks[name] ?? []
@@ -355,20 +358,16 @@ class DocumentManager: ObservableObject {
         saveQAHistory()
     }
 
-    /// Saves the QA history to UserDefaults.
+    // MARK: - QA History (LARGE PAYLOAD - now in file storage)
+
+    /// Saves the QA history to file storage (NOT UserDefaults).
+    /// This prevents the 4MB limit issues.
     private func saveQAHistory() {
-        let encoder = JSONEncoder()
-        if let data = try? encoder.encode(qaHistory) {
-            UserDefaults.standard.set(data, forKey: qaHistoryKey)
-        }
+        PersistenceStore.shared.saveQAHistory(qaHistory)
     }
 
-    /// Loads the QA history from UserDefaults.
+    /// Loads the QA history from file storage (NOT UserDefaults).
     private func loadQAHistory() {
-        let decoder = JSONDecoder()
-        if let data = UserDefaults.standard.data(forKey: qaHistoryKey),
-           let history = try? decoder.decode([QAPair].self, from: data) {
-            qaHistory = history
-        }
+        qaHistory = PersistenceStore.shared.loadQAHistory()
     }
 }

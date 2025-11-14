@@ -423,16 +423,33 @@ struct MobileHomeView: View {
     }
 
     private func startAsk() {
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎬 [iOS/MobileHomeView] startAsk CALLED")
+        print("   Question: \(question.prefix(50))...")
+
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard !isLoading else { return }
+        guard !trimmed.isEmpty else {
+            print("❌ [iOS] Guard failed: empty question")
+            return
+        }
+        print("✅ [iOS] Guard passed: question not empty")
+
+        guard !isLoading else {
+            print("❌ [iOS] Guard failed: already loading")
+            return
+        }
+        print("✅ [iOS] Guard passed: not loading")
 
         question = trimmed
         questionFocused = false
         isLoading = true
+        print("🔒 [iOS] Set isLoading = true")
 
         Task { @MainActor in
+            print("🚀 [iOS] Task started, calling ModelManager.generateAsyncAnswer()")
             let result = await ModelManager.shared.generateAsyncAnswer(question: question)
+            print("📥 [iOS] ModelManager returned: \(result.count) chars")
+
             let newPair = documentManager.addQAPair(question: question, answer: result)
 
             let sources = ModelManager.shared.lastRetrievedChunks
@@ -446,6 +463,7 @@ struct MobileHomeView: View {
 
             question = ""
             isLoading = false
+            print("✅ [iOS] Completed, isLoading = false")
         }
     }
 }

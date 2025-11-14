@@ -94,6 +94,10 @@
 		F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				.idea/.gitignore,
+				.idea/modules.xml,
+				.idea/NoesisNoema.iml,
+				.idea/workspace.xml,
 				Assets.xcassets,
 				Frameworks/xcframeworks/llama_macos.xcframework,
 				"Resources/Models/gpt-oss-20b-F16.gguf",
@@ -140,7 +144,6 @@
 				.idea/modules.xml,
 				.idea/NoesisNoema.iml,
 				.idea/workspace.xml,
-				Frameworks/xcframeworks/llama_ios.xcframework,
 				Shared/RAG/RewardBus.swift,
 			);
 			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
@@ -148,14 +151,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */ = {
+		F431B3002EC7545400C5A4B3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoemaMobile" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			attributesByRelativePath = {
-				Frameworks/xcframeworks/llama_macos.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
+				Frameworks/xcframeworks/llama_ios.xcframework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
 			};
-			buildPhase = F4F38B892EB265A600F3CEF3 /* Embed Frameworks */;
+			buildPhase = F4F38B852EB2659A00F3CEF3 /* Embed Frameworks */;
 			membershipExceptions = (
-				Frameworks/xcframeworks/llama_macos.xcframework,
+				Frameworks/xcframeworks/llama_ios.xcframework,
 			);
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
@@ -165,9 +168,9 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				F4EEEAAA2E50099900E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
-				F45993A22EB7F341002CCA0C /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoema" target */,
 				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
 				F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */,
+				F431B3002EC7545400C5A4B3 /* Exceptions for "NoesisNoema" folder in "Embed Frameworks" phase from "NoesisNoemaMobile" target */,
 			);
 			path = NoesisNoema;
 			sourceTree = "<group>";
