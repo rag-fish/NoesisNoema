@@ -18,6 +18,8 @@ class ModelManager: ObservableObject {
     @Published var availableModels: [ModelSpec] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isGenerating = false  // Guard against double-submit
+    @Published var selectedModelID: ModelID?  // Strongly-typed model selection
 
     // MARK: - UI-facing additions
     @Published private(set) var currentEmbeddingModel: EmbeddingModel = EmbeddingModel(name: "nomic-embed-text")
@@ -39,6 +41,7 @@ class ModelManager: ObservableObject {
     init() {
         Task {
             await scanAvailableModels()
+            await setDefaultModel()
         }
     }
 
@@ -47,6 +50,30 @@ class ModelManager: ObservableObject {
         await registry.scanForModels()
         availableModels = await registry.getAvailableModelSpecs()
         SystemLog().logEvent(event: "[ModelManager] Found \(availableModels.count) models")
+    }
+
+    /// Set default model after registry completes
+    private func setDefaultModel() async {
+        guard !availableModels.isEmpty else { return }
+
+        // Try to restore last selection from UserDefaults
+        if let lastModelIDString = UserDefaults.standard.string(forKey: "lastSelectedModelID"),
+           availableModels.contains(where: { $0.id == lastModelIDString }) {
+            selectedModelID = ModelID(lastModelIDString)
+            currentModelID = lastModelIDString
+            if let spec = availableModels.first(where: { $0.id == lastModelIDString }) {
+                currentLLMModel = LLMModel(name: spec.name, modelFile: spec.modelFile, version: spec.version, isEmbedded: true)
+            }
+            SystemLog().logEvent(event: "[ModelManager] Restored last model: \(lastModelIDString)")
+        } else {
+            // Pick first available model as default
+            if let firstModel = availableModels.first {
+                selectedModelID = ModelID(firstModel.id)
+                currentModelID = firstModel.id
+                currentLLMModel = LLMModel(name: firstModel.name, modelFile: firstModel.modelFile, version: firstModel.version, isEmbedded: true)
+                SystemLog().logEvent(event: "[ModelManager] Set default model: \(firstModel.name)")
+            }
+        }
     }
 
     /// モデルをロード（既にロード済みならスキップ）
@@ -193,9 +220,22 @@ class ModelManager: ObservableObject {
         // Update current model selection; attempt to point to registry spec if present
         if let spec = availableModels.first(where: { $0.name == name }) {
             currentModelID = spec.id
+            selectedModelID = ModelID(spec.id)
             currentLLMModel = LLMModel(name: spec.name, modelFile: spec.modelFile, version: spec.version, isEmbedded: true)
+            // Persist selection
+            UserDefaults.standard.set(spec.id, forKey: "lastSelectedModelID")
         } else {
             currentLLMModel = LLMModel(name: name, modelFile: "", version: "v1", isEmbedded: true)
+        }
+    }
+
+    func switchLLMModelByID(_ modelID: ModelID) {
+        if let spec = availableModels.first(where: { $0.id == modelID.rawValue }) {
+            currentModelID = spec.id
+            selectedModelID = modelID
+            currentLLMModel = LLMModel(name: spec.name, modelFile: spec.modelFile, version: spec.version, isEmbedded: true)
+            // Persist selection
+            UserDefaults.standard.set(spec.id, forKey: "lastSelectedModelID")
         }
     }
 
@@ -219,26 +259,71 @@ class ModelManager: ObservableObject {
 
     /// Full RAG implementation: retrieves chunks and generates answer with citations
     func generateAsyncAnswer(question: String) async -> String {
+        // Explicit MainActor boundary: check and set generating state
+        await MainActor.run { self.isGenerating = true }
+
+        defer {
+            Task { @MainActor in
+                self.isGenerating = false
+            }
+        }
+
         let _log = SystemLog()
         let _t0 = Date()
         _log.logEvent(event: "[ModelManager] generateAsyncAnswer enter qLen=\(question.count)")
+        #if DEBUG
+        print("🚀 [ModelManager] Starting generation for question: \(question.prefix(50))...")
+        #endif
+
         defer {
             let dt = Date().timeIntervalSince(_t0)
             _log.logEvent(event: String(format: "[ModelManager] generateAsyncAnswer exit (%.2f ms)", dt*1000))
+            #if DEBUG
+            print("✅ [ModelManager] Generation completed in \(String(format: "%.2f", dt*1000))ms")
+            #endif
         }
 
-        // 1. Retrieve relevant chunks using LocalRetriever
+        // 1. Retrieve relevant chunks using LocalRetriever (background)
+        _log.logEvent(event: "[ModelManager] Retrieving RAG context...")
+        #if DEBUG
+        print("📚 [ModelManager] Retrieving RAG context...")
+        #endif
         let retriever = LocalRetriever(store: VectorStore.shared)
         let chunks = retriever.retrieve(query: question, k: 5, trace: false)
 
-        // Store chunks for citation UI
-        lastRetrievedChunks = chunks
+        #if DEBUG
+        print("📚 [ModelManager] Retrieved \(chunks.count) chunks")
+        if !chunks.isEmpty {
+            print("📚 [ModelManager] Context preview: \(chunks.map { $0.content.prefix(50) })")
+        }
+        #endif
 
-        // 2. Build context from chunks
+        // Store chunks for citation UI (MainActor)
+        await MainActor.run {
+            self.lastRetrievedChunks = chunks
+        }
+
+        // 2. Build context from chunks (background)
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
+        _log.logEvent(event: "[ModelManager] Context length: \(context.count) chars")
+        #if DEBUG
+        print("📝 [ModelManager] Built context with \(context.count) characters")
+        #endif
 
-        // 3. Generate answer using LLM
+        // 3. Generate answer using LLM (background)
+        _log.logEvent(event: "[ModelManager] Calling LLM generate...")
+        #if DEBUG
+        print("🧠 [ModelManager] Calling LLM model: \(currentLLMModel.name)")
+        print("🧠 [ModelManager] Model file: \(currentLLMModel.modelFile)")
+        #endif
+
         let answer = currentLLMModel.generate(prompt: question, context: context.isEmpty ? nil : context)
+
+        #if DEBUG
+        print("💬 [ModelManager] LLM response length: \(answer.count) chars")
+        print("💬 [ModelManager] Response preview: \(answer.prefix(100))")
+        #endif
+        _log.logEvent(event: "[ModelManager] LLM response length: \(answer.count)")
 
         return answer
     }

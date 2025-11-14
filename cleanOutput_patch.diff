@@ -1,0 +1,99 @@
+--- a/LlamaBridgeTest/main.swift
++++ b/LlamaBridgeTest/main.swift
+@@ -319,12 +319,71 @@ func buildPlainPrompt(question: String, context: String? = nil) -> String {
+
+ func cleanOutput(_ s: String) -> String {
+-    var out = s
++    // Step 1: Remove all <think>...</think> blocks
++    var out = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
++
++    // Step 2: Remove broken fragments
++    out = out.replacingOccurrences(of: "<\\|im(?:_[a-z]+)?", with: "", options: .regularExpression)
++    out = out.replacingOccurrences(of: "</im[^>]*", with: "", options: .regularExpression)
++    out = out.replacingOccurrences(of: "<im[^>]*", with: "", options: .regularExpression)
++
++    // Step 3: Extract only the last assistant block if present
++    let assistantPattern = "(?s)<\\|im_start\\|>assistant\\s*(.*?)(?:<\\|im_end\\|>|$)"
++    if let regex = try? NSRegularExpression(pattern: assistantPattern, options: []),
++       let matches = regex.matches(in: out, options: [], range: NSRange(out.startIndex..., in: out)) as [NSTextCheckingResult]?,
++       !matches.isEmpty {
++        // Get the last assistant block
++        if let lastMatch = matches.last,
++           lastMatch.numberOfRanges >= 2,
++           let contentRange = Range(lastMatch.range(at: 1), in: out) {
++            out = String(out[contentRange])
++        }
++    }
++
++    // Step 4: Remove any remaining <|im_start|> or <|im_end|> tags
++    out = out.replacingOccurrences(of: "<\\|im_start\\|>[^<]*", with: "", options: .regularExpression)
++    out = out.replacingOccurrences(of: "<\\|im_end\\|>", with: "", options: .regularExpression)
++
++    // Step 5: Trim whitespace
++    return out.trimmingCharacters(in: .whitespacesAndNewlines)
++}
++
++// Extract final answer by filtering out meta-commentary
++func extractFinalAnswer(_ s: String) -> String {
++    let metaPatterns = [
++        "history of previous interactions",
++        "we are given",
++        "analysis",
++        "chain-of-thought",
++        "meta-commentary",
++        "reasoning",
++        "step-by-step",
++        "let me",
++        "i will",
++        "first,",
++        "second,",
++        "finally,"
++    ]
+
+-    // remove <think> blocks
+-    out = out.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
++    // Split into lines and filter out meta-commentary
++    let lines = s.components(separatedBy: .newlines)
++    let filteredLines = lines.filter { line in
++        let lower = line.lowercased()
++        // Keep lines that don't contain meta patterns
++        return !metaPatterns.contains(where: { lower.contains($0) })
++    }
+
+-    // remove assistant/system tags at head
+-    out = out.replacingOccurrences(of: "<\\|im_start\\|>assistant", with: "", options: .regularExpression)
+-    out = out.replacingOccurrences(of: "<\\|im_end\\|>", with: "", options: .regularExpression)
++    // Join back and split into paragraphs
++    let filtered = filteredLines.joined(separator: "\n")
++    let paragraphs = filtered.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+-    return out.trimmingCharacters(in: .whitespacesAndNewlines)
++    // Find the longest paragraph (likely the actual answer)
++    if let longestParagraph = paragraphs.max(by: { $0.count < $1.count }),
++       longestParagraph.count > 20 {
++        return longestParagraph.trimmingCharacters(in: .whitespacesAndNewlines)
++    }
++
++    // Fallback: return filtered text or original if filtering removed too much
++    let result = filtered.trimmingCharacters(in: .whitespacesAndNewlines)
++    return result.isEmpty ? s.trimmingCharacters(in: .whitespacesAndNewlines) : result
+ }
+
+@@ -560,7 +619,12 @@ Task {
+             print("")
+
+             let cleaned = cleanOutput(acc)
+             if cleaned.isEmpty {
+                 print("⚠️  Output is empty after cleaning")
+                 return ""
+             }
+
+-            print("   Cleaned output length: \(cleaned.count) characters")
+-            return cleaned
++            // Extract final answer by filtering meta-commentary
++            let finalAnswer = extractFinalAnswer(cleaned)
++
++            print("   Cleaned output length: \(cleaned.count) characters")
++            print("   Final answer length: \(finalAnswer.count) characters")
++            return finalAnswer
+         }

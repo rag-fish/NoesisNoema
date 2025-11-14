@@ -68,6 +68,13 @@ class LLMModel: @unchecked Sendable {
 
     // 生成本体（共通）
     private func runInference(userText: String, context: String?) -> String {
+        #if DEBUG
+        print("🎯 [LLMModel] runInference called for model: \(name)")
+        print("🎯 [LLMModel] Question length: \(userText.count)")
+        print("🎯 [LLMModel] Context provided: \(context != nil ? "YES (\(context!.count) chars)" : "NO")")
+        #endif
+        SystemLog().logEvent(event: "[LLMModel] runInference: model=\(name), qLen=\(userText.count), hasContext=\(context != nil)")
+
         // Jan 向けテンプレート/クリーニングを適用
         func buildJanPrompt(_ question: String, context: String? = nil) -> String {
             let sys = """
@@ -162,15 +169,39 @@ class LLMModel: @unchecked Sendable {
 
         for path in checkedPaths {
             if fm.fileExists(atPath: path) {
+                #if DEBUG
+                print("🧠 [LLMModel] Found model file at: \(path)")
+                #endif
+                SystemLog().logEvent(event: "[LLMModel] Loaded model: \(path)")
+
                 let semaphore = DispatchSemaphore(value: 0)
                 var result = ""
                 Task {
                     let llamaState = await LlamaState()
                     do {
+                        #if DEBUG
+                        print("🔄 [LLMModel] Loading model into LlamaState...")
+                        #endif
                         try await llamaState.loadModel(modelUrl: URL(fileURLWithPath: path))
+
+                        #if DEBUG
+                        print("🧪 [LLMModel] Testing system info call...")
+                        if let _ = await llamaState.getLlamaContext() {
+                            #if DEBUG
+                            print("🧪 [LLMModel] LlamaContext acquired successfully")
+                            #endif
+                        }
+                        #endif
+                        #if DEBUG
+                        print("✅ [LLMModel] Model loaded successfully")
+                        #endif
+
                         // 自動/手動プリセットの決定と適用
                         let userPreset = await ModelManager.shared.currentLLMPreset
                         if userPreset != "auto" {
+                            #if DEBUG
+                            print("⚙️ [LLMModel] Applying user preset: \(userPreset)")
+                            #endif
                             await llamaState.setPreset(userPreset)
                         } else {
                             var intentText = "Question: \(userText)"
@@ -178,21 +209,131 @@ class LLMModel: @unchecked Sendable {
                                 intentText += "\nContext:\n\(ctx)"
                             }
                             let preset = await llamaState.autoSelectPreset(modelFileName: fileName, prompt: intentText)
+                            #if DEBUG
+                            print("⚙️ [LLMModel] Auto-selected preset: \(preset.rawValue)")
+                            #endif
                             await llamaState.setPreset(preset.rawValue)
                         }
 
                         let isJan = self.name.lowercased().contains("jan") || fileName.lowercased().contains("jan")
                         let primaryPrompt = isJan ? buildJanPrompt(userText, context: context) : buildPlainPrompt(userText, context: context)
+
+                        #if DEBUG
+                        print("🚀 [LLMModel] Generating response with context length \(context?.count ?? 0)")
+                        print("🚀 [LLMModel] Prompt preview: \(primaryPrompt.prefix(200))...")
+                        #endif
+                        SystemLog().logEvent(event: "[LLMModel] Starting generation with \(primaryPrompt.count) chars prompt")
+
                         var response: String = await llamaState.complete(text: primaryPrompt)
+
+                        #if DEBUG
+                        print("📥 [LLMModel] Raw response length: \(response.count)")
+                        #endif
+
                         var cleaned = cleanOutput(response)
                         let needsFallback = cleaned.isEmpty || cleaned.contains("<think>") || cleaned.contains("<|im_") || cleaned.lowercased().hasPrefix("assistant")
+
                         if needsFallback {
+                            #if DEBUG
+                            print("⚠️ [LLMModel] Primary response needs fallback, retrying with plain prompt")
+                            #endif
                             response = await llamaState.complete(text: buildPlainPrompt(userText, context: context))
                             cleaned = cleanOutput(response)
                         }
+
                         result = cleaned.isEmpty ? response : cleaned
+
+                        #if DEBUG
+                        print("✅ [LLMModel] Final result length: \(result.count)")
+                        if result.isEmpty {
+                            print("⚠️ [LLMModel] WARNING: Empty response!")
+                        }
+                        #endif
+
+                        guard !result.isEmpty else {
+                            let modelName = self.name
+                            let isLargeModel = fileName.lowercased().contains("20b") || fileName.lowercased().contains("70b")
+                            let isNotJan = !fileName.lowercased().contains("jan")
+
+                            // Try fallback to Jan-V1-4B if primary model failed
+                            if isNotJan {
+                                #if DEBUG
+                                print("⚠️ [LLMModel] Primary model '\(modelName)' failed, trying fallback to Jan-V1-4B...")
+                                #endif
+                                SystemLog().logEvent(event: "[LLMModel] Primary model failed, attempting Jan-V1-4B fallback")
+
+                                // Try to find Jan-V1-4B
+                                let fallbackFile = "Jan-v1-4B-Q4_K_M.gguf"
+                                var fallbackPath: String? = nil
+
+                                // Check same paths for fallback model
+                                for checkPath in checkedPaths {
+                                    let fallbackCheckPath = (checkPath as NSString).deletingLastPathComponent + "/" + fallbackFile
+                                    if fm.fileExists(atPath: fallbackCheckPath) {
+                                        fallbackPath = fallbackCheckPath
+                                        break
+                                    }
+                                }
+
+                                if let fallbackPath = fallbackPath {
+                                    #if DEBUG
+                                    print("💡 [LLMModel] Found fallback model at: \(fallbackPath)")
+                                    #endif
+
+                                    // Try loading and generating with fallback
+                                    let fallbackState = await LlamaState()
+                                    do {
+                                        try await fallbackState.loadModel(modelUrl: URL(fileURLWithPath: fallbackPath))
+                                        let preset = await fallbackState.autoSelectPreset(modelFileName: fallbackFile, prompt: userText)
+                                        await fallbackState.setPreset(preset.rawValue)
+
+                                        let fallbackPrompt = buildPlainPrompt(userText, context: context)
+                                        let fallbackResponse = await fallbackState.complete(text: fallbackPrompt)
+                                        let fallbackCleaned = cleanOutput(fallbackResponse)
+
+                                        if !fallbackCleaned.isEmpty {
+                                            result = "⚠️ Primary model '\(modelName)' timed out. Fallback: Jan-V1-4B\n\n\(fallbackCleaned)"
+                                            #if DEBUG
+                                            print("✅ [LLMModel] Fallback succeeded with \(fallbackCleaned.count) chars")
+                                            #endif
+                                            SystemLog().logEvent(event: "[LLMModel] Fallback to Jan-V1-4B succeeded")
+                                            semaphore.signal()
+                                            return
+                                        }
+                                    } catch {
+                                        #if DEBUG
+                                        print("❌ [LLMModel] Fallback also failed: \(error)")
+                                        #endif
+                                    }
+                                }
+                            }
+
+                            // Fallback didn't work or wasn't attempted
+                            if isLargeModel {
+                                result = "[LLMModel] Model '\(modelName)' failed to generate (possibly too large or unsupported). Try Jan-V1-4B instead."
+                                #if DEBUG
+                                print("❌ [LLMModel] Large model '\(modelName)' failed - may be incompatible")
+                                print("💡 [LLMModel] Suggestion: Use Jan-V1-4B or llama3-8b instead")
+                                #endif
+                            } else {
+                                result = "[LLMModel] エラー: LLMが空の応答を返しました"
+                                #if DEBUG
+                                print("❌ [LLMModel] Empty response from LLM!")
+                                #endif
+                            }
+
+                            SystemLog().logEvent(event: "[LLMModel] ERROR: Empty response from '\(modelName)'")
+                            semaphore.signal()
+                            return
+                        }
+
                     } catch {
-                        result = "[LLMModel] 推論エラー: \(error)"
+                        let errorMsg = "[LLMModel] 推論エラー: \(error)"
+                        result = errorMsg
+                        #if DEBUG
+                        print("❌ [LLMModel] Inference error: \(error)")
+                        #endif
+                        SystemLog().logEvent(event: errorMsg)
                     }
                     semaphore.signal()
                 }
@@ -200,7 +341,14 @@ class LLMModel: @unchecked Sendable {
                 return result
             }
         }
-        return "[LLMModel] モデルファイルが見つかりません: \(fileName)"
+
+        let notFoundMsg = "[LLMModel] モデルファイルが見つかりません: \(fileName)"
+        #if DEBUG
+        print("❌ [LLMModel] Model file not found: \(fileName)")
+        print("❌ [LLMModel] Checked paths: \(checkedPaths)")
+        #endif
+        SystemLog().logEvent(event: notFoundMsg)
+        return notFoundMsg
     }
 
     /**

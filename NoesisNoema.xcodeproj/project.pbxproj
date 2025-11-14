@@ -35,7 +35,7 @@
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
-			dstSubfolderSpec = 10;
+			dstSubfolderSpec = 6;
 			files = (
 				F4F417BB2EB30A73003A612B /* llama.framework in Embed Frameworks */,
 			);
@@ -96,6 +96,8 @@
 			membershipExceptions = (
 				Assets.xcassets,
 				Frameworks/xcframeworks/llama_macos.xcframework,
+				"Resources/Models/gpt-oss-20b-F16.gguf",
+				"Resources/Models/Llama-3.3-70B-Instruct-UD-IQ1_S.gguf",
 				Shared/ContentView.swift,
 				Shared/NoesisNoemaApp.swift,
 				Shared/RAG/RewardBus.swift,
@@ -824,7 +826,11 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
@@ -840,7 +846,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited) DISABLE_LLAMA";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
@@ -858,7 +864,11 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/llama_ios.xcframework/ios-arm64-simulator",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/NoesisNoema/Frameworks/xcframeworks/**";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
@@ -874,7 +884,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DISABLE_LLAMA;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(inherited)";
