@@ -345,3 +345,8 @@ build-*
 
 # dylibs (llama.cpp local builds)
 *.dylib
+
+# Added by organize_repo_step2.sh
+tools/
+.build/
+.DS_Store
