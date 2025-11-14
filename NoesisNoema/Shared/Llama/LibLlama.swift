@@ -274,6 +274,12 @@ actor LlamaContext {
         print("🔤 [LibLlama] Tokenized to \(tokens_list.count) tokens")
         #endif
 
+        // CRITICAL FIX 1: Clear KV cache before starting new generation
+        #if DEBUG
+        print("🧹 [LibLlama] Clearing KV cache before decode...")
+        #endif
+        llama_memory_clear(llama_get_memory(context), false)
+
         let n_ctx = llama_n_ctx(context)
         let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
 
@@ -281,6 +287,7 @@ actor LlamaContext {
 
         #if DEBUG
         print("📊 [LibLlama] Batch config: n_len=\(n_len), n_ctx=\(n_ctx), n_kv_req=\(n_kv_req)")
+        print("📍 [LibLlama] Context pointer: \(String(describing: context))")
         #endif
 
         if n_kv_req > n_ctx {
@@ -296,13 +303,42 @@ actor LlamaContext {
             dprint(String(cString: token_to_piece(token: id) + [0]))
         }
 
+        // CRITICAL FIX 2: Reinitialize batch for each decode cycle
+        #if DEBUG
+        print("🔄 [LibLlama] Reinitializing batch...")
+        #endif
+        llama_batch_free(batch)
+        batch = llama_batch_init(512, 0, 1)
+
+        #if DEBUG
+        print("✅ [LibLlama] Batch reinitialized with capacity 512")
+        #endif
+
         llama_batch_clear(&batch)
 
+        // CRITICAL FIX 3: Validate token positions are consecutive
         for i1 in 0..<tokens_list.count {
             let i = Int(i1)
             llama_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1
+
+        #if DEBUG
+        print("🔢 [LibLlama] Batch state before decode:")
+        print("   - n_tokens: \(batch.n_tokens)")
+        print("   - positions: 0..\(batch.n_tokens - 1)")
+        print("   - all sequences: [0]")
+        #endif
+
+        // CRITICAL FIX 4: Assert batch is valid before decode
+        guard batch.n_tokens > 0 else {
+            #if DEBUG
+            print("❌ [LibLlama] ERROR: batch.n_tokens is 0, aborting decode")
+            #endif
+            SystemLog().logEvent(event: "[LibLlama] ERROR: Empty batch")
+            is_done = true
+            return
+        }
 
         #if DEBUG
         print("🚀 [LibLlama] Starting decode with \(batch.n_tokens) prompt tokens...")
@@ -313,6 +349,8 @@ actor LlamaContext {
             print(error)
             #if DEBUG
             print("❌ [LibLlama] \(error)")
+            print("   - batch.n_tokens: \(batch.n_tokens)")
+            print("   - context: \(String(describing: context))")
             #endif
             SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
         } else {
@@ -333,6 +371,24 @@ actor LlamaContext {
 
     func completion_loop() -> String {
         var new_token_id: llama_token = 0
+
+        // CRITICAL FIX 5: Validate context and batch before sampling
+        guard batch.n_tokens > 0 else {
+            #if DEBUG
+            print("❌ [LibLlama] ERROR: batch.n_tokens is 0 in completion_loop")
+            #endif
+            is_done = true
+            return ""
+        }
+
+        #if DEBUG
+        if n_decode == 0 {
+            print("🎲 [LibLlama] About to sample first token...")
+            print("   - context: \(String(describing: context))")
+            print("   - batch.n_tokens: \(batch.n_tokens)")
+            print("   - sampling index: \(batch.n_tokens - 1)")
+        }
+        #endif
 
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
 
@@ -387,6 +443,16 @@ actor LlamaContext {
         llama_batch_clear(&batch)
         llama_batch_add(&batch, new_token_id, n_cur, [0], true)
 
+        #if DEBUG
+        if n_decode % 10 == 0 || n_decode < 3 {
+            print("🔢 [LibLlama] Batch state for token #\(n_decode):")
+            print("   - n_tokens: \(batch.n_tokens)")
+            print("   - token_id: \(new_token_id)")
+            print("   - position: \(n_cur)")
+            print("   - sequence: [0]")
+        }
+        #endif
+
         n_decode += 1
         n_cur    += 1
 
@@ -395,6 +461,9 @@ actor LlamaContext {
             print(error)
             #if DEBUG
             print("❌ [LibLlama] \(error)")
+            print("   - n_decode: \(n_decode)")
+            print("   - n_cur: \(n_cur)")
+            print("   - batch.n_tokens: \(batch.n_tokens)")
             #endif
             SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
         }
@@ -506,9 +575,24 @@ actor LlamaContext {
     }
 
     func clear() {
+        #if DEBUG
+        print("🧹 [LibLlama] Clearing llama state...")
+        #endif
+
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
-        llama_memory_clear(llama_get_memory(context), true)
+
+        // Clear KV cache and memory
+        llama_memory_clear(llama_get_memory(context), false)
+
+        // Reset counters
+        n_cur = 0
+        n_decode = 0
+        is_done = false
+
+        #if DEBUG
+        print("✅ [LibLlama] State cleared")
+        #endif
     }
 
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
