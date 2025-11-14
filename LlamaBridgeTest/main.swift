@@ -185,50 +185,89 @@ func autoPresetAdjust(_ cli: inout CLI, modelPath: String, prompt: String) {
 // MARK: - Paths
 let defaultModelFileName = "Jan-v1-4B-Q4_K_M.gguf" // development default
 
+/// Search for a model file, supporting both flat and nested directory structures
+/// (llama.cpp v0.2.0+ expects Models/<modelName>/*.gguf)
+func findModelInDirectory(_ baseDir: String, modelName: String, fm: FileManager) -> String? {
+    // Try direct file first (flat structure)
+    let directPath = "\(baseDir)/\(modelName)"
+    if fm.fileExists(atPath: directPath) {
+        return directPath
+    }
+
+    // Try nested: Models/<modelName>/*.gguf
+    let modelNameWithoutExt = (modelName as NSString).deletingPathExtension
+    let nestedDir = "\(baseDir)/\(modelNameWithoutExt)"
+    if fm.fileExists(atPath: nestedDir) {
+        do {
+            let contents = try fm.contentsOfDirectory(atPath: nestedDir)
+            if let ggufFile = contents.first(where: { $0.hasSuffix(".gguf") }) {
+                return "\(nestedDir)/\(ggufFile)"
+            }
+        } catch {
+            // Directory not accessible, continue
+        }
+    }
+
+    return nil
+}
+
 func candidateModelPaths(fileName: String) -> [String] {
     let fm = FileManager.default
     let cwd = fm.currentDirectoryPath
     var paths: [String] = []
 
-    // 1) CWD + project structure (NoesisNoema/NoesisNoema/Resources/Models/)
-    paths.append("\(cwd)/NoesisNoema/NoesisNoema/Resources/Models/\(fileName)")
+    print("🔍 [CLI] Starting model search for: \(fileName)")
+    print("   CWD: \(cwd)")
 
-    // 2) Absolute path to actual project location
-    paths.append("/Users/raskolnikoff/Xcode Projects/NoesisNoema/NoesisNoema/Resources/Models/\(fileName)")
+    // Define base directories to search
+    var baseDirs: [String] = []
 
-    // 3) Bundle resources (works for both CLI in Xcode and packaged apps)
+    // 1) CWD + project structure
+    baseDirs.append("\(cwd)/NoesisNoema/NoesisNoema/Resources/Models")
+    baseDirs.append("\(cwd)/NoesisNoema/Resources/Models")
+    baseDirs.append("\(cwd)/Resources/Models")
+    baseDirs.append("\(cwd)/Models")
+
+    // 2) Absolute project path
+    baseDirs.append("/Users/raskolnikoff/Xcode Projects/NoesisNoema/NoesisNoema/Resources/Models")
+
+    // 3) Bundle resources
     if let r = Bundle.main.resourceURL {
-        paths.append(r.appendingPathComponent(fileName).path)
-        // Also try subdirectories
-        paths.append(r.appendingPathComponent("Models").appendingPathComponent(fileName).path)
-        paths.append(r.appendingPathComponent("Resources/Models").appendingPathComponent(fileName).path)
+        baseDirs.append(r.appendingPathComponent("Models").path)
+        baseDirs.append(r.appendingPathComponent("Resources/Models").path)
+        baseDirs.append(r.path)
     }
 
-    // 4) CWD (basic fallback)
-    paths.append("\(cwd)/\(fileName)")
-
-    // 5) Executable directory
+    // 4) Executable directory
     let exePath = CommandLine.arguments[0]
     let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
-    if exeDir != cwd { paths.append("\(exeDir)/\(fileName)") }
+    baseDirs.append("\(exeDir)/Models")
+    baseDirs.append("\(exeDir)/Resources/Models")
 
-    // 6) Conventional relative places (for backwards compatibility)
-    paths.append("./Resources/Models/\(fileName)")
-    paths.append("./NoesisNoema/Resources/Models/\(fileName)")
-
-    // 7) User downloads (convenience)
+    // 5) Downloads
     #if !targetEnvironment(macCatalyst)
     if let home = FileManager.default.homeDirectoryForCurrentUser.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
         let decoded = home.removingPercentEncoding ?? home
-        paths.append("\(decoded)/Downloads/\(fileName)")
+        baseDirs.append("\(decoded)/Downloads")
     }
     #else
-    // Catalyst fallback: use NSHomeDirectory()
     let homeDir = NSHomeDirectory()
-    paths.append("\(homeDir)/Downloads/\(fileName)")
+    baseDirs.append("\(homeDir)/Downloads")
     #endif
 
-    return Array(LinkedHashSet(paths)) // preserve order, drop dups
+    // Search each base directory
+    for baseDir in LinkedHashSet(baseDirs) {
+        if let found = findModelInDirectory(baseDir, modelName: fileName, fm: fm) {
+            paths.append(found)
+        }
+    }
+
+    // Fallback: direct paths (for backwards compatibility)
+    paths.append("\(cwd)/\(fileName)")
+    paths.append("./\(fileName)")
+
+    print("   Generated \(paths.count) candidate paths")
+    return Array(LinkedHashSet(paths))
 }
 
 // Poor-man linked hash set for unique-preserving order
@@ -330,53 +369,88 @@ func printDemoAndExit() -> Never {
 if CommandLine.arguments.contains("--defaults") { printDefaultsAndExit() }
 if CommandLine.arguments.contains("--demo") { printDemoAndExit() }
 
-// Resolve model path
+// ============================================================
+// MODEL PATH RESOLUTION
+// ============================================================
+print("=== LlamaBridgeTest CLI ===")
+print("📋 Discovered LLM name: \(defaultModelFileName)")
+
 var modelPath: String?
 var matchedIndex: Int? = nil
-if let explicit = cli.modelPath, fm.fileExists(atPath: explicit) {
-    modelPath = explicit
-    print("=== LlamaBridgeTest ===")
-    print("✅ Using explicitly provided model path:")
-    print("   \(explicit)")
+
+if let explicit = cli.modelPath {
+    print("🔧 Explicit model path provided: \(explicit)")
+    if fm.fileExists(atPath: explicit) {
+        modelPath = explicit
+        print("✅ Explicit path validated")
+    } else {
+        fputs("❌ ERROR: Explicit path does not exist: \(explicit)\n", stderr)
+        exit(2)
+    }
 } else {
-    print("=== LlamaBridgeTest ===")
-    print("🔍 Searching for model: \(defaultModelFileName)")
-    print("   Candidate paths:")
+    print("🔍 Auto-detecting model location...")
+    print("")
+
     let candidates = candidateModelPaths(fileName: defaultModelFileName)
+
+    if candidates.isEmpty {
+        fputs("❌ ERROR: No candidate paths generated. This is a bug.\n", stderr)
+        exit(2)
+    }
+
+    print("   Checking \(candidates.count) candidate paths:")
     for (index, p) in candidates.enumerated() {
         let exists = fm.fileExists(atPath: p)
-        let status = exists ? "✅ FOUND" : "❌"
-        print("   \(index + 1). \(status) \(p)")
+        let status = exists ? "✅ FOUND" : "❌ not found"
+        print("   \(index + 1). \(status)")
+        print("      \(p)")
+
         if exists && modelPath == nil {
             modelPath = p
             matchedIndex = index + 1
         }
     }
 
-    if let found = modelPath, let idx = matchedIndex {
+    if modelPath != nil, let idx = matchedIndex {
         print("")
-        print("✅ Model auto-detected at path #\(idx):")
-        print("   \(found)")
+        print("✅ Model auto-detected at candidate #\(idx)")
+    } else {
+        print("")
+        fputs("❌ ERROR: Model file not found in any candidate location.\n", stderr)
+        fputs("\n", stderr)
+        fputs("   Searched: \(candidates.count) locations\n", stderr)
+        fputs("   Model name: \(defaultModelFileName)\n", stderr)
+        fputs("\n", stderr)
+        fputs("   Hint: Use -m /absolute/path/to/\(defaultModelFileName)\n", stderr)
+        fputs("         or place the model in one of:\n", stderr)
+        fputs("         - ./Resources/Models/\n", stderr)
+        fputs("         - ./NoesisNoema/Resources/Models/\n", stderr)
+        fputs("         - ~/Downloads/\n", stderr)
+        exit(2)
     }
 }
 
 guard let modelPath else {
-    print("")
-    fputs("❌ ERROR: Could not locate model file.\n", stderr)
-    fputs("   Searched \(candidateModelPaths(fileName: defaultModelFileName).count) locations.\n", stderr)
-    fputs("   Hint: pass -m /absolute/path/to/Jan-v1-4B-Q4_K_M.gguf\n", stderr)
-    fputs("         or place \(defaultModelFileName) in one of the listed paths.\n", stderr)
+    fputs("❌ FATAL: modelPath is nil after resolution. This should not happen.\n", stderr)
     exit(2)
 }
 
 print("")
-print("📂 Resolved model path:")
+print("═══════════════════════════════════════════════════════════")
+print("📂 RESOLVED MODEL PATH:")
 print("   \(modelPath)")
+
 let fileSize = try? fm.attributesOfItem(atPath: modelPath)[.size] as? UInt64
 if let size = fileSize {
     let sizeMB = Double(size) / (1024 * 1024)
-    print("   Size: \(String(format: "%.1f", sizeMB)) MB")
+    let sizeGB = sizeMB / 1024
+    if sizeGB >= 1.0 {
+        print("   Size: \(String(format: "%.2f", sizeGB)) GB (\(String(format: "%.0f", sizeMB)) MB)")
+    } else {
+        print("   Size: \(String(format: "%.1f", sizeMB)) MB")
+    }
 }
+print("═══════════════════════════════════════════════════════════")
 print("")
 
 // Default prompt if none provided
@@ -388,23 +462,58 @@ autoPresetAdjust(&cli, modelPath: modelPath, prompt: promptText)
 applyPreset(&cli)
 print("PRESET: \(cli.preset ?? "(none)") temp=\(cli.temp) topK=\(cli.topK) topP=\(cli.topP) nLen=\(cli.nLen)")
 
-// === LlamaState integration ===
+// ============================================================
+// LLAMA CONTEXT INITIALIZATION
+// ============================================================
 Task {
     do {
-        // 直接 LlamaContext を使用してモデル読み込みと推論を実施（shim 経由・llama_* 直接呼び出しはしない）
+        print("🔧 Initializing llama_context...")
+        print("   Model path: \(modelPath)")
+
         let ctx = try LlamaContext.create_context(path: modelPath)
+
+        print("✅ llama_context created successfully")
+        print("")
+
+        print("🎛️  Configuring sampling parameters...")
         await ctx.set_verbose(cli.verbose)
         await ctx.configure_sampling(temp: cli.temp, top_k: cli.topK, top_p: cli.topP, seed: cli.seed)
         await ctx.set_n_len(cli.nLen)
+        print("   Temperature: \(cli.temp)")
+        print("   Top-K: \(cli.topK)")
+        print("   Top-P: \(cli.topP)")
+        print("   Max tokens: \(cli.nLen)")
+        print("✅ Sampling configured")
+        print("")
 
         func infer(_ prompt: String) async -> String {
+            print("🚀 Starting inference...")
+            print("   Prompt length: \(prompt.count) characters")
+            print("")
+
             await ctx.completion_init(text: prompt)
+            print("✅ Prompt processed, beginning token generation...")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("🔄 TOKEN STREAM:")
+            print("")
+
             var acc = ""
             var buffer = ""
             var inThink = false
+            var tokenCount = 0
+
             while await !ctx.is_done {
                 let chunk = await ctx.completion_loop()
                 if chunk.isEmpty { continue }
+
+                tokenCount += 1
+                if tokenCount == 1 {
+                    print("   ✅ First token received")
+                }
+                if tokenCount % 10 == 0 {
+                    print("   [Token \(tokenCount)]")
+                }
+
                 buffer += chunk
 
                 // streaming processing
@@ -445,25 +554,60 @@ Task {
             // flush any non-think residue
             if !buffer.isEmpty && !inThink { acc += buffer }
 
+            print("")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("✅ Token generation complete")
+            print("   Total tokens: \(tokenCount)")
+            print("   Raw output length: \(acc.count) characters")
+            print("")
+
             let cleaned = cleanOutput(acc)
-            // クリーニング結果が空の場合は上位で--plain再試行してもらうため、ここでは空文字を返す
             if cleaned.isEmpty {
+                print("⚠️  Output is empty after cleaning")
                 return ""
             }
+
+            print("   Cleaned output length: \(cleaned.count) characters")
             return cleaned
         }
 
+        print("🎯 Running inference with \(cli.usePlainTemplate ? "plain" : "chat") template...")
+        print("")
+
         var finalOut = await infer(fullPrompt)
+
         if finalOut.isEmpty && !cli.usePlainTemplate {
-            fputs("\nINFO: Empty output; retrying with plain prompt... Use --plain to force this mode.\n", stderr)
+            print("")
+            print("ℹ️  Empty output detected, retrying with plain prompt template...")
+            print("")
             finalOut = await infer(buildPlainPrompt(question: promptText))
         }
+
         if finalOut.isEmpty {
-            fputs("\nWARN: Model returned empty content (template mismatch or immediate stop). Try providing a different model or --plain.\n", stderr)
+            print("")
+            fputs("❌ WARN: Model returned empty content.\n", stderr)
+            fputs("   Possible causes:\n", stderr)
+            fputs("   - Template mismatch with model format\n", stderr)
+            fputs("   - Model immediately hit stop token\n", stderr)
+            fputs("   - Try: --plain flag for plain template\n", stderr)
+            fputs("   - Try: different model with -m flag\n", stderr)
+            print("")
+        } else {
+            print("")
+            print("═══════════════════════════════════════════════════════════")
+            print("📝 FINAL OUTPUT:")
+            print("═══════════════════════════════════════════════════════════")
+            print(finalOut)
+            print("═══════════════════════════════════════════════════════════")
+            print("")
         }
-        print("\n---\nModel completion:\n\(finalOut)\n")
     } catch {
-        fputs("ERROR running inference: \(error)\n", stderr)
+        print("")
+        print("═══════════════════════════════════════════════════════════")
+        fputs("❌ ERROR during inference pipeline:\n", stderr)
+        fputs("   \(error)\n", stderr)
+        print("═══════════════════════════════════════════════════════════")
+        print("")
     }
     exit(0)
 }
