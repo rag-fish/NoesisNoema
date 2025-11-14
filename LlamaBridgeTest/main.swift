@@ -318,14 +318,73 @@ func buildPlainPrompt(question: String, context: String? = nil) -> String {
 }
 
 func cleanOutput(_ s: String) -> String {
-    // 1) Drop any <think>...</think> internal monologue blocks if present
-    let withoutThink = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
+    // Step 1: Remove all <think>...</think> blocks
+    var out = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
 
-    // 2) For Jan/Qwen-style chat templates, cut at <|im_end|> (assistant turn terminator)
-    let cutAtEnd = withoutThink.components(separatedBy: "<|im_end|>").first ?? withoutThink
+    // Step 2: Remove broken fragments
+    out = out.replacingOccurrences(of: "<\\|im(?:_[a-z]+)?", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "</im[^>]*", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "<im[^>]*", with: "", options: .regularExpression)
 
-    // 3) Trim whitespace/newlines
-    return cutAtEnd.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Step 3: Extract only the last assistant block if present
+    let assistantPattern = "(?s)<\\|im_start\\|>assistant\\s*(.*?)(?:<\\|im_end\\|>|$)"
+    if let regex = try? NSRegularExpression(pattern: assistantPattern, options: []),
+       let matches = regex.matches(in: out, options: [], range: NSRange(out.startIndex..., in: out)) as [NSTextCheckingResult]?,
+       !matches.isEmpty {
+        // Get the last assistant block
+        if let lastMatch = matches.last,
+           lastMatch.numberOfRanges >= 2,
+           let contentRange = Range(lastMatch.range(at: 1), in: out) {
+            out = String(out[contentRange])
+        }
+    }
+
+    // Step 4: Remove any remaining <|im_start|> or <|im_end|> tags
+    out = out.replacingOccurrences(of: "<\\|im_start\\|>[^<]*", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "<\\|im_end\\|>", with: "", options: .regularExpression)
+
+    // Step 5: Trim whitespace
+    return out.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Extract final answer by filtering out meta-commentary
+func extractFinalAnswer(_ s: String) -> String {
+    let metaPatterns = [
+        "history of previous interactions",
+        "we are given",
+        "analysis",
+        "chain-of-thought",
+        "meta-commentary",
+        "reasoning",
+        "step-by-step",
+        "let me",
+        "i will",
+        "first,",
+        "second,",
+        "finally,"
+    ]
+
+    // Split into lines and filter out meta-commentary
+    let lines = s.components(separatedBy: .newlines)
+    let filteredLines = lines.filter { line in
+        let lower = line.lowercased()
+        // Keep lines that don't contain meta patterns
+        return !metaPatterns.contains(where: { lower.contains($0) })
+    }
+
+    // Join back and split into paragraphs
+    let filtered = filteredLines.joined(separator: "\n")
+    let paragraphs = filtered.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    // Find the longest paragraph (likely the actual answer)
+    if let longestParagraph = paragraphs.max(by: { $0.count < $1.count }),
+       longestParagraph.count > 20 {
+        return longestParagraph.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // Fallback: return filtered text or original if filtering removed too much
+    let result = filtered.trimmingCharacters(in: .whitespacesAndNewlines)
+    return result.isEmpty ? s.trimmingCharacters(in: .whitespacesAndNewlines) : result
 }
 
 // MARK: - Main
@@ -507,48 +566,44 @@ Task {
                 if chunk.isEmpty { continue }
 
                 tokenCount += 1
-                if tokenCount == 1 {
-                    print("   ✅ First token received")
-                }
-                if tokenCount % 10 == 0 {
-                    print("   [Token \(tokenCount)]")
-                }
 
                 buffer += chunk
 
-                // streaming processing
                 processing: while true {
+
+                    // skip think blocks
                     if inThink {
-                        if let rng = buffer.range(of: "</think>") {
-                            // drop until end tag
-                            buffer = String(buffer[rng.upperBound...])
+                        if let end = buffer.range(of: "</think>") {
+                            buffer = String(buffer[end.upperBound...])
                             inThink = false
                             continue processing
                         } else {
-                            // wait for more
-                            break processing
-                        }
-                    } else {
-                        // stop at assistant end token
-                        if let end = buffer.range(of: "<|im_end|>") {
-                            let prefix = String(buffer[..<end.lowerBound])
-                            if !prefix.isEmpty { acc += prefix }
-                            await ctx.request_stop()
-                            buffer.removeAll(keepingCapacity: true)
-                            break processing
-                        }
-                        if let rng = buffer.range(of: "<think>") {
-                            let prefix = String(buffer[..<rng.lowerBound])
-                            if !prefix.isEmpty { acc += prefix }
-                            buffer = String(buffer[rng.upperBound...])
-                            inThink = true
-                            continue processing
-                        } else {
-                            acc += buffer
-                            buffer.removeAll(keepingCapacity: true)
                             break processing
                         }
                     }
+
+                    // detect <think>
+                    if let start = buffer.range(of: "<think>") {
+                        let prefix = String(buffer[..<start.lowerBound])
+                        if !prefix.isEmpty { acc += prefix }
+                        buffer = String(buffer[start.upperBound...])
+                        inThink = true
+                        continue processing
+                    }
+
+                    // detect <|im_end|> but DO NOT discard previous data
+                    if let endTag = buffer.range(of: "<|im_end|>") {
+                        let prefix = String(buffer[..<endTag.lowerBound])
+                        if !prefix.isEmpty { acc += prefix }
+                        await ctx.request_stop()
+                        buffer.removeAll()
+                        break processing
+                    }
+
+                    // no special markers — flush buffer into acc
+                    acc += buffer
+                    buffer.removeAll()
+                    break processing
                 }
             }
             // flush any non-think residue
@@ -567,20 +622,29 @@ Task {
                 return ""
             }
 
+            // Extract final answer by filtering meta-commentary
+            let finalAnswer = extractFinalAnswer(cleaned)
+
             print("   Cleaned output length: \(cleaned.count) characters")
-            return cleaned
+            print("   Final answer length: \(finalAnswer.count) characters")
+            return finalAnswer
         }
 
         print("🎯 Running inference with \(cli.usePlainTemplate ? "plain" : "chat") template...")
         print("")
 
-        var finalOut = await infer(fullPrompt)
+        let finalOut = await infer(fullPrompt)
 
         if finalOut.isEmpty && !cli.usePlainTemplate {
             print("")
             print("ℹ️  Empty output detected, retrying with plain prompt template...")
             print("")
-            finalOut = await infer(buildPlainPrompt(question: promptText))
+            // NOTE:
+            // We are NOT retrying here because LlamaContext does not expose a reset()
+            // API. Multi-pass retry would require recreating the context, which is out
+            // of scope for this small CLI harness.
+//            await ctx.reset()
+//            finalOut = await infer(buildPlainPrompt(question: promptText))
         }
 
         if finalOut.isEmpty {

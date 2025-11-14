@@ -186,9 +186,10 @@ class LLMModel: @unchecked Sendable {
 
                         #if DEBUG
                         print("🧪 [LLMModel] Testing system info call...")
-                        if let llamaCtx = await llamaState.getLlamaContext() {
-                            let sysInfo = await llamaCtx.printSystemInfo()
-                            print("✅ [LLMModel] System info test passed: \(sysInfo.prefix(100))")
+                        if let _ = await llamaState.getLlamaContext() {
+                            #if DEBUG
+                            print("🧪 [LLMModel] LlamaContext acquired successfully")
+                            #endif
                         }
                         #endif
                         #if DEBUG

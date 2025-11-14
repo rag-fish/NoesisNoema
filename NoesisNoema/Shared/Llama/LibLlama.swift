@@ -4,31 +4,36 @@
 // - If upstream changes break the build, fix here and add/adjust a unit test.
 
 import Foundation
-
-#if !DISABLE_LLAMA
 import llama
-#endif
+
 
 enum LlamaError: Error {
     case couldNotInitializeContext
-    case initFailed(reason: String)
-    case tokenizeFailed(reason: String)
-    case noResponse(reason: String)
-    case unsupportedArchitecture(arch: String)
 }
-
-#if !DISABLE_LLAMA
 
 func llama_batch_clear(_ batch: inout llama_batch) {
     batch.n_tokens = 0
 }
 
 func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama_pos, _ seq_ids: [llama_seq_id], _ logits: Bool) {
+    // Safety: guard against null buffers (in case allocation failed upstream)
+    guard batch.token != nil, batch.pos != nil, batch.logits != nil else {
+        print("[llama_batch_add] ERROR: null buffer(s) in llama_batch; skipping token append")
+        return
+    }
+
     batch.token   [Int(batch.n_tokens)] = id
     batch.pos     [Int(batch.n_tokens)] = pos
-    batch.n_seq_id[Int(batch.n_tokens)] = Int32(seq_ids.count)
-    for i in 0..<seq_ids.count {
-        batch.seq_id[Int(batch.n_tokens)]![Int(i)] = seq_ids[i]
+    // 既定: 単一シーケンス（seq_id=0）として扱う。nil の可能性があるため強制アンラップは行わない
+    // n_seq_id バッファは存在しない可能性がある環境もあるため保護
+    if batch.n_seq_id != nil {
+        batch.n_seq_id[Int(batch.n_tokens)] = 0
+    }
+    // もしバッファが確保されていれば書き込む（任意）
+    if !seq_ids.isEmpty, let seqBase = batch.seq_id, let dst = seqBase[Int(batch.n_tokens)] {
+        let n = min(seq_ids.count, 1)
+        for i in 0..<n { dst[Int(i)] = seq_ids[i] }
+        if batch.n_seq_id != nil { batch.n_seq_id[Int(batch.n_tokens)] = Int32(n) }
     }
     batch.logits  [Int(batch.n_tokens)] = logits ? 1 : 0
 
@@ -69,10 +74,14 @@ actor LlamaContext {
         self.temporary_invalid_cchars = []
         let sparams = llama_sampler_chain_default_params()
         self.sampling = llama_sampler_chain_init(sparams)
-        llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(0.4))
-        llama_sampler_chain_add(self.sampling, llama_sampler_init_dist(1234))
         vocab = llama_model_get_vocab(model)
+        // 初期生成長を上書き
         self.n_len = initialNLen
+        // 既定の保守的プリセット（init 中は直接構築して Swift 6 の actor 初期化制約を回避）
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(0.25))
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_k(60))
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_p(0.90, 1))
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_dist(UInt32(1234)))
     }
 
     deinit {
@@ -84,106 +93,48 @@ actor LlamaContext {
     }
 
     static func create_context(path: String) throws -> LlamaContext {
-        #if DEBUG
-        print("🧩 [LibLlama] GGUF path: \(path)")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] Loading GGUF from: \(path)")
-
         // iOSではMetalを無効化してCPUフォールバック（MTLCompiler内部エラー対策）
         #if os(iOS)
         setenv("LLAMA_NO_METAL", "1", 1)
         #endif
-        #if targetEnvironment(simulator)
-        setenv("LLAMA_NO_METAL", "1", 1)
-        #endif
-
         llama_backend_init()
-        #if DEBUG
-        print("✅ [LibLlama] llama_backend_init() complete")
-        #endif
-
         var model_params = llama_model_default_params()
 
         #if targetEnvironment(simulator)
         model_params.n_gpu_layers = 0
-        print("Running on iOS simulator, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
+        print("Running on simulator, force use n_gpu_layers = 0")
         #endif
         #if os(iOS)
         model_params.n_gpu_layers = 0
-        print("Running on iOS device, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
+        print("Running on iOS device, force CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
         #endif
-
-        #if DEBUG
-        print("📦 [LibLlama] Loading model with n_gpu_layers=\(model_params.n_gpu_layers)...")
-        #endif
-
         let model = llama_model_load_from_file(path, model_params)
         guard let model else {
-            let errorMsg = "Could not load model at \(path)"
-            #if DEBUG
-            print("❌ [LibLlama] \(errorMsg)")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] ERROR: \(errorMsg)")
-            throw LlamaError.initFailed(reason: errorMsg)
+            print("Could not load model at \(path)")
+            throw LlamaError.couldNotInitializeContext
         }
-
-        #if DEBUG
-        print("✅ [LibLlama] Model loaded successfully")
-        #endif
-
-        // Get and validate GGUF metadata
-        let modelDesc = UnsafeMutablePointer<Int8>.allocate(capacity: 512)
-        modelDesc.initialize(repeating: Int8(0), count: 512)
-        defer { modelDesc.deallocate() }
-
-        let nChars = llama_model_desc(model, modelDesc, 512)
-        let modelInfo = String(cString: modelDesc)
-
-        #if DEBUG
-        print("📦 [LibLlama] Model info: \(modelInfo)")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] Model desc: \(modelInfo)")
 
         #if os(iOS)
         let n_threads = max(1, min(4, ProcessInfo.processInfo.processorCount))
         #else
         let n_threads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
         #endif
+        print("Using \(n_threads) threads")
 
-        #if DEBUG
-        print("⚙️ [LibLlama] Using \(n_threads) threads")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] Config: threads=\(n_threads)")
-
-        // 修正箇所：Never型 → 実際の構造体に置換
         var ctx_params = llama_context_default_params()
-
-        #if os(iOS) || targetEnvironment(simulator)
-        ctx_params.n_ctx = 1024
+        #if os(iOS)
+        ctx_params.n_ctx = 1024 // 軽量化
         #else
         ctx_params.n_ctx = 2048
         #endif
         ctx_params.n_threads       = Int32(n_threads)
         ctx_params.n_threads_batch = Int32(n_threads)
 
-        #if DEBUG
-        print("📦 [LibLlama] Creating context with n_ctx=\(ctx_params.n_ctx)...")
-        #endif
-
         let context = llama_init_from_model(model, ctx_params)
         guard let context else {
-            let errorMsg = "Could not initialize context from model"
-            #if DEBUG
-            print("❌ [LibLlama] \(errorMsg)")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] ERROR: \(errorMsg)")
-            throw LlamaError.initFailed(reason: errorMsg)
+            print("Could not load context!")
+            throw LlamaError.couldNotInitializeContext
         }
-
-        #if DEBUG
-        print("✅ [LibLlama] Context initialized successfully (ctx != nil)")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] Context created: n_ctx=\(ctx_params.n_ctx)")
 
         #if os(iOS)
         return LlamaContext(model: model, context: context, initialNLen: 256)
@@ -218,36 +169,22 @@ actor LlamaContext {
         return String(cString: cstr)
     }
 
-    /// Test function: call llama_print_system_info and return safely
-    func printSystemInfo() -> String {
-        #if DEBUG
-        print("🧪 [LibLlama] Testing llama_print_system_info() call...")
-        #endif
-        let info = system_info()
-        #if DEBUG
-        print("✅ [LibLlama] System info retrieved: \(info)")
-        #endif
-        return info
-    }
-
     // MARK: - Verbosity
     func set_verbose(_ on: Bool) {
         self.verbose = on
     }
 
     // MARK: - Sampling configuration
-    /// Rebuild sampler chain with given parameters (simplified to match reference)
-    func configure_sampling(temp: Float, top_k: Int32 = 0, top_p: Float = 0.0, seed: UInt64 = 1234) {
+    /// Rebuild sampler chain with given parameters (thin shim around llama.cpp samplers)
+    func configure_sampling(temp: Float, top_k: Int32, top_p: Float, seed: UInt64 = 1234) {
+        // 再構成：既存チェーンを破棄して作り直す
         llama_sampler_free(self.sampling)
         let sparams = llama_sampler_chain_default_params()
         self.sampling = llama_sampler_chain_init(sparams)
         llama_sampler_chain_add(self.sampling, llama_sampler_init_temp(temp))
-        if top_k > 0 {
-            llama_sampler_chain_add(self.sampling, llama_sampler_init_top_k(top_k))
-        }
-        if top_p > 0.0 {
-            llama_sampler_chain_add(self.sampling, llama_sampler_init_top_p(top_p, 1))
-        }
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_k(top_k))
+        // llama.cpp の API 変更により top_p は min_keep を要求
+        llama_sampler_chain_add(self.sampling, llama_sampler_init_top_p(top_p, 1))
         llama_sampler_chain_add(self.sampling, llama_sampler_init_dist(UInt32(seed)))
     }
 
@@ -262,210 +199,93 @@ actor LlamaContext {
     func completion_init(text: String) {
         dprint("attempting to complete \"\(text)\"")
 
-        #if DEBUG
-        print("🚀 [LibLlama] completion_init: prompt length \(text.count) chars")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] completion_init: promptLen=\(text.count)")
-
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
-        #if DEBUG
-        print("🔤 [LibLlama] Tokenized to \(tokens_list.count) tokens")
-        #endif
-
-        // CRITICAL FIX 1: Clear KV cache before starting new generation
-        #if DEBUG
-        print("🧹 [LibLlama] Clearing KV cache before decode...")
-        #endif
-        llama_memory_clear(llama_get_memory(context), false)
+        // Ensure batch capacity >= prompt token length
+        let needed = max(512, tokens_list.count + 1) // +1 for logits marker
+        // Recreate batch with sufficient capacity (safe even if same size)
+        llama_batch_free(batch)
+        batch = llama_batch_init(Int32(needed), 0, 1)
 
         let n_ctx = llama_n_ctx(context)
         let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
 
         dprint("\n n_len = \(n_len), n_ctx = \(n_ctx), n_kv_req = \(n_kv_req)")
 
-        #if DEBUG
-        print("📊 [LibLlama] Batch config: n_len=\(n_len), n_ctx=\(n_ctx), n_kv_req=\(n_kv_req)")
-        print("📍 [LibLlama] Context pointer: \(String(describing: context))")
-        #endif
-
         if n_kv_req > n_ctx {
-            let warning = "error: n_kv_req > n_ctx, the required KV cache size is not big enough"
-            print(warning)
-            #if DEBUG
-            print("⚠️ [LibLlama] \(warning)")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] \(warning)")
+            print("error: n_kv_req > n_ctx, the required KV cache size is not big enough")
         }
 
         for id in tokens_list {
             dprint(String(cString: token_to_piece(token: id) + [0]))
         }
 
-        // CRITICAL FIX 2: Reinitialize batch for each decode cycle
-        #if DEBUG
-        print("🔄 [LibLlama] Reinitializing batch...")
-        #endif
-        llama_batch_free(batch)
-        batch = llama_batch_init(512, 0, 1)
-
-        #if DEBUG
-        print("✅ [LibLlama] Batch reinitialized with capacity 512")
-        #endif
-
         llama_batch_clear(&batch)
 
-        // CRITICAL FIX 3: Validate token positions are consecutive
         for i1 in 0..<tokens_list.count {
             let i = Int(i1)
             llama_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
         }
-        batch.logits[Int(batch.n_tokens) - 1] = 1
-
-        #if DEBUG
-        print("🔢 [LibLlama] Batch state before decode:")
-        print("   - n_tokens: \(batch.n_tokens)")
-        print("   - positions: 0..\(batch.n_tokens - 1)")
-        print("   - all sequences: [0]")
-        #endif
-
-        // CRITICAL FIX 4: Assert batch is valid before decode
-        guard batch.n_tokens > 0 else {
-            #if DEBUG
-            print("❌ [LibLlama] ERROR: batch.n_tokens is 0, aborting decode")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] ERROR: Empty batch")
-            is_done = true
-            return
-        }
-
-        #if DEBUG
-        print("🚀 [LibLlama] Starting decode with \(batch.n_tokens) prompt tokens...")
-        #endif
+        batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
         if llama_decode(context, batch) != 0 {
-            let error = "llama_decode() failed"
-            print(error)
-            #if DEBUG
-            print("❌ [LibLlama] \(error)")
-            print("   - batch.n_tokens: \(batch.n_tokens)")
-            print("   - context: \(String(describing: context))")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
-        } else {
-            #if DEBUG
-            print("✅ [LibLlama] Initial decode successful")
-            #endif
+            print("llama_decode() failed")
         }
 
         n_cur = batch.n_tokens
-        n_decode = 0
-        is_done = false
-
-        #if DEBUG
-        print("✅ [LibLlama] completion_init complete, n_cur=\(n_cur)")
-        #endif
-        SystemLog().logEvent(event: "[LibLlama] Prompt processed: \(tokens_list.count) tokens")
+        is_done = false // 追加: 推論開始時にis_doneをリセット
     }
 
     func completion_loop() -> String {
         var new_token_id: llama_token = 0
 
-        // CRITICAL FIX 5: Validate context and batch before sampling
-        guard batch.n_tokens > 0 else {
-            #if DEBUG
-            print("❌ [LibLlama] ERROR: batch.n_tokens is 0 in completion_loop")
-            #endif
-            is_done = true
-            return ""
-        }
-
-        #if DEBUG
-        if n_decode == 0 {
-            print("🎲 [LibLlama] About to sample first token...")
-            print("   - context: \(String(describing: context))")
-            print("   - batch.n_tokens: \(batch.n_tokens)")
-            print("   - sampling index: \(batch.n_tokens - 1)")
-        }
-        #endif
-
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
-
+        // サンプラーの状態を前進
+        llama_sampler_accept(sampling, new_token_id)
         dprint("[DEBUG] new_token_id:", new_token_id)
         dprint("[DEBUG] is_eog:", llama_vocab_is_eog(vocab, new_token_id), "n_cur:", n_cur, "n_len:", n_len)
 
-        #if DEBUG
-        if n_decode == 0 {
-            print("🔹 [LibLlama] First token sampled: id=\(new_token_id)")
-        }
-        #endif
-
         if llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len {
-            dprint("\n")
-            #if DEBUG
-            if llama_vocab_is_eog(vocab, new_token_id) {
-                print("🏁 [LibLlama] EOG token reached")
-            } else {
-                print("🏁 [LibLlama] Max length (\(n_len)) reached")
-            }
-            print("🏁 [LibLlama] Total tokens: \(n_decode)")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] Generation finished: \(n_decode) tokens")
-
+            dprint("[DEBUG] EOG or max length reached. Returning:", String(cString: temporary_invalid_cchars + [0]))
             is_done = true
-            let new_token_str = String(cString: temporary_invalid_cchars + [0])
-            temporary_invalid_cchars.removeAll()
-            return new_token_str
+            // 直前のトークンがflushされていない場合は返す
+            if !temporary_invalid_cchars.isEmpty {
+                let new_token_str = String(cString: temporary_invalid_cchars + [0])
+                temporary_invalid_cchars.removeAll()
+                return new_token_str
+            }
+            // 直前のnew_token_ccharsを返す（max length時のflush漏れ対策）
+            let last_token_cchars = token_to_piece(token: new_token_id)
+            if last_token_cchars.count > 0 {
+                return String(cString: last_token_cchars + [0])
+            }
+            return ""
         }
 
         let new_token_cchars = token_to_piece(token: new_token_id)
+        dprint("[DEBUG] new_token_cchars:", new_token_cchars)
         temporary_invalid_cchars.append(contentsOf: new_token_cchars)
         let new_token_str: String
         if let string = String(validatingUTF8: temporary_invalid_cchars + [0]) {
             temporary_invalid_cchars.removeAll()
             new_token_str = string
-        } else if (0 ..< temporary_invalid_cchars.count).contains(where: {$0 != 0 && String(validatingUTF8: Array(temporary_invalid_cchars.suffix($0)) + [0]) != nil}) {
+        } else if (0 ..< temporary_invalid_cchars.count).contains(where: { $0 != 0 && String(validatingUTF8: Array(temporary_invalid_cchars.suffix($0)) + [0]) != nil }) {
             let string = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()
             new_token_str = string
         } else {
             new_token_str = ""
         }
-        dprint(new_token_str)
-
-        #if DEBUG
-        if n_decode % 10 == 0 {
-            print("📊 [LibLlama] Generated \(n_decode) tokens...")
-        }
-        #endif
-
+        dprint("[DEBUG] new_token_str:", new_token_str)
         llama_batch_clear(&batch)
         llama_batch_add(&batch, new_token_id, n_cur, [0], true)
-
-        #if DEBUG
-        if n_decode % 10 == 0 || n_decode < 3 {
-            print("🔢 [LibLlama] Batch state for token #\(n_decode):")
-            print("   - n_tokens: \(batch.n_tokens)")
-            print("   - token_id: \(new_token_id)")
-            print("   - position: \(n_cur)")
-            print("   - sequence: [0]")
-        }
-        #endif
 
         n_decode += 1
         n_cur    += 1
 
         if llama_decode(context, batch) != 0 {
-            let error = "failed to evaluate llama!"
-            print(error)
-            #if DEBUG
-            print("❌ [LibLlama] \(error)")
-            print("   - n_decode: \(n_decode)")
-            print("   - n_cur: \(n_cur)")
-            print("   - batch.n_tokens: \(batch.n_tokens)")
-            #endif
-            SystemLog().logEvent(event: "[LibLlama] ERROR: \(error)")
+            print("failed to evaluate llama!")
         }
 
         return new_token_str
@@ -575,24 +395,9 @@ actor LlamaContext {
     }
 
     func clear() {
-        #if DEBUG
-        print("🧹 [LibLlama] Clearing llama state...")
-        #endif
-
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
-
-        // Clear KV cache and memory
-        llama_memory_clear(llama_get_memory(context), false)
-
-        // Reset counters
-        n_cur = 0
-        n_decode = 0
-        is_done = false
-
-        #if DEBUG
-        print("✅ [LibLlama] State cleared")
-        #endif
+        llama_memory_clear(llama_get_memory(context), true)
     }
 
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
@@ -612,97 +417,24 @@ actor LlamaContext {
     }
 
     /// - note: The result does not contain null-terminator
+    /// Safe token_to_piece wrapper (prevents buffer overflow)
     private func token_to_piece(token: llama_token) -> [CChar] {
-        let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
-        result.initialize(repeating: Int8(0), count: 8)
-        defer {
-            result.deallocate()
-        }
-        let nTokens = llama_token_to_piece(vocab, token, result, 8, 0, false)
 
-        if nTokens < 0 {
-            let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
-            newResult.initialize(repeating: Int8(0), count: Int(-nTokens))
-            defer {
-                newResult.deallocate()
-            }
-            let nNewTokens = llama_token_to_piece(vocab, token, newResult, -nTokens, 0, false)
-            let bufferPointer = UnsafeBufferPointer(start: newResult, count: Int(nNewTokens))
-            return Array(bufferPointer)
-        } else {
-            let bufferPointer = UnsafeBufferPointer(start: result, count: Int(nTokens))
-            return Array(bufferPointer)
+        // First call with 0 capacity to ask llama.cpp how many bytes are needed
+        var required = llama_token_to_piece(vocab, token, nil, 0, 0, false)
+
+        if required < 0 {
+            required = -required
         }
+
+        let buf = UnsafeMutablePointer<Int8>.allocate(capacity: Int(required + 1))
+        buf.initialize(repeating: 0, count: Int(required + 1))
+
+        defer { buf.deallocate() }
+
+        let written = llama_token_to_piece(vocab, token, buf, required, 0, false)
+        let bufferPointer = UnsafeBufferPointer(start: buf, count: Int(written))
+
+        return Array(bufferPointer)
     }
 }
-
-#else
-// MARK: - iOS Stub Implementation (DISABLE_LLAMA)
-
-// Stub LlamaContext for iOS when llama framework is disabled
-actor LlamaContext {
-    var is_done: Bool = false
-    var n_len: Int32 = 1024
-    private var n_cur: Int32 = 0
-    private var n_decode: Int32 = 0
-
-    init(model: OpaquePointer, context: OpaquePointer, initialNLen: Int32 = 1024) {
-        self.n_len = initialNLen
-        print("[LlamaContext Stub] Initialized with stub implementation (llama disabled for iOS)")
-    }
-
-    static func create_context(path: String) throws -> LlamaContext {
-        print("[LlamaContext Stub] create_context called - returning stub (llama disabled for iOS)")
-        // Return a dummy context - we can't actually create OpaquePointers, so this will fail
-        // Instead, throw an error
-        throw LlamaError.couldNotInitializeContext
-    }
-
-    func model_info() -> String {
-        return "[Stub] LLM functionality disabled for iOS"
-    }
-
-    func system_info() -> String {
-        return "[Stub] LLM functionality disabled for iOS"
-    }
-
-    func set_verbose(_ on: Bool) {
-        // No-op
-    }
-
-    func configure_sampling(temp: Float, top_k: Int32, top_p: Float, seed: UInt64 = 1234) {
-        // No-op
-    }
-
-    func set_n_len(_ value: Int32) {
-        self.n_len = value
-    }
-
-    func get_n_tokens() -> Int32 {
-        return 0
-    }
-
-    func completion_init(text: String) {
-        print("[LlamaContext Stub] completion_init called with: \(text.prefix(50))...")
-        is_done = true
-    }
-
-    func completion_loop() -> String {
-        is_done = true
-        return ""
-    }
-
-    func request_stop() {
-        is_done = true
-    }
-
-    func bench(pp: Int, tg: Int, pl: Int, nr: Int = 1) -> String {
-        return "[Stub] Benchmarking disabled for iOS"
-    }
-
-    func clear() {
-        // No-op
-    }
-}
-
-#endif
