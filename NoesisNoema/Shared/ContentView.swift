@@ -15,7 +15,6 @@ struct ContentView: View {
     @State private var answer: String = ""
     @State private var isLoading: Bool = false
     @State private var selectedEmbeddingModel: String = ModelManager.shared.currentEmbeddingModel.name
-    @State private var selectedLLMModel: String = ModelManager.shared.currentLLMModel.name
     // 新規: LLMプリセット選択
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
     @State private var showRAGpackManager: Bool = false
@@ -34,9 +33,22 @@ struct ContentView: View {
 
     // これらは計算型プロパティにして初期化時の隔離制約を回避
     var availableEmbeddingModels: [String] { modelManager.availableEmbeddingModels }
-    var availableLLMModels: [String] { modelManager.availableLLMModels }
+    // Helper to get models with their IDs
+    var availableModelSpecs: [ModelSpec] { modelManager.availableModels }
     // 新規: プリセット候補
     var availableLLMPresets: [String] { modelManager.availableLLMPresets }
+
+    // Binding to ModelManager's selectedModelID
+    var selectedModelIDBinding: Binding<ModelID?> {
+        Binding(
+            get: { modelManager.selectedModelID },
+            set: { newValue in
+                if let modelID = newValue {
+                    modelManager.switchLLMModelByID(modelID)
+                }
+            }
+        )
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -121,7 +133,6 @@ struct ContentView: View {
                 runtimeMode = ModelManager.shared.getLLMRuntimeMode()
                 // Sync selected models with current ModelManager state
                 selectedEmbeddingModel = ModelManager.shared.currentEmbeddingModel.name
-                selectedLLMModel = ModelManager.shared.currentLLMModel.name
                 selectedLLMPreset = ModelManager.shared.currentLLMPreset
             }
         }
@@ -130,21 +141,33 @@ struct ContentView: View {
 
     // オフライントグル行
     private var offlineToggleRow: some View {
-        HStack(spacing: 12) {
-            Toggle("Offline", isOn: $appSettings.offline)
-                .toggleStyle(.switch)
-                .help("When enabled, any remote calls are blocked.")
-                .disabled(isLoading)
-            if appSettings.offline && ModelManager.shared.isFullyLocal() {
-                Text("Local Only")
-                    .font(.caption2)
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.12), in: Capsule())
-                    .help("All components are local and remote calls are disabled.")
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Toggle("Offline", isOn: $appSettings.offline)
+                    .toggleStyle(.switch)
+                    .help("When enabled, any remote calls are blocked.")
+                    .disabled(isLoading)
+                if appSettings.offline && ModelManager.shared.isFullyLocal() {
+                    Text("Local Only")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .help("All components are local and remote calls are disabled.")
+                }
+                Spacer()
             }
-            Spacer()
+
+            #if os(macOS)
+            HStack(spacing: 12) {
+                Toggle("Disable macOS IME", isOn: $appSettings.disableMacOSIME)
+                    .toggleStyle(.switch)
+                    .help("When enabled, disables Input Method Editor integration to prevent XPC decoding issues.")
+                    .disabled(isLoading)
+                Spacer()
+            }
+            #endif
         }
         .padding(.horizontal)
     }
@@ -168,24 +191,23 @@ struct ContentView: View {
     private var llmModelSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Picker("LLM Model", selection: $selectedLLMModel) {
-                    ForEach(availableLLMModels, id: \.self) { model in
-                        Text(model)
+                Picker("LLM Model", selection: selectedModelIDBinding) {
+                    ForEach(availableModelSpecs, id: \.id) { spec in
+                        Text(spec.name).tag(ModelID(spec.id) as ModelID?)
                     }
                 }
                 .pickerStyle(.menu)
-                .onChange(of: selectedLLMModel) { oldValue, newValue in
+                .onChange(of: modelManager.selectedModelID) { oldValue, newValue in
+                    guard newValue != nil else { return }
                     recommendedReady = false
                     autotuneWarning = nil
                     isAutotuningModel = true
-                    ModelManager.shared.switchLLMModel(name: newValue)
                     runtimeMode = ModelManager.shared.getLLMRuntimeMode()
                     selectedLLMPreset = "auto"
                     ModelManager.shared.setLLMPreset(name: "auto")
                     ModelManager.shared.autotuneCurrentModelAsync(trace: false, timeoutSeconds: 3.0) { outcome in
                         isAutotuningModel = false
                         recommendedReady = true
-                        // outcomeはString型なので直接表示
                         if !outcome.isEmpty {
                             autotuneWarning = outcome
                         }
@@ -297,22 +319,51 @@ struct ContentView: View {
     // 質問入力セクション
     private var questionInputSection: some View {
         VStack(spacing: 12) {
+            #if os(macOS)
+            SafeTextInput(
+                text: $question,
+                placeholder: "Enter your question",
+                onSubmit: { Task { await askRAG() } },
+                isEnabled: !isLoading && !modelManager.isGenerating
+            )
+            .frame(height: 60)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            )
+            .padding(.horizontal)
+            #else
             TextField("Enter your question", text: $question)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
                 .onSubmit {
                     Task { await askRAG() }
                 }
-                .disabled(isLoading)
+                .disabled(isLoading || modelManager.isGenerating)
+            #endif
 
             Button(action: { Task { await askRAG() } }) {
-                Text("Ask")
+                if isLoading || modelManager.isGenerating {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Generating...")
+                    }
+                } else {
+                    Text("Ask")
+                }
             }
-            .disabled(question.isEmpty || isLoading)
+            .disabled(question.isEmpty || isLoading || modelManager.isGenerating || modelManager.selectedModelID == nil)
             .padding(.horizontal)
 
-            if isLoading {
-                ProgressView().padding()
+            if isLoading || modelManager.isGenerating {
+                HStack {
+                    ProgressView()
+                    Text("Please wait...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
 
             Text(answer)
@@ -341,45 +392,66 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     func askRAG() async {
         let _log = SystemLog()
         let _t0 = Date()
         _log.logEvent(event: "[UI] askRAG enter qLen=\(question.count)")
-        defer {
+
+        // Guard: empty question
+        guard !question.isEmpty else { return }
+
+        // Guard: already generating
+        guard !isLoading else { return }
+        guard !modelManager.isGenerating else {
+            _log.logEvent(event: "[UI] askRAG blocked: already generating")
+            return
+        }
+
+        // Guard: model selected
+        guard modelManager.selectedModelID != nil else {
+            answer = "[ERROR] No model selected. Please select an LLM model from the picker."
+            return
+        }
+
+        // Explicit MainActor boundary: set loading state
+        isLoading = true
+        answer = ""
+
+        // Call actual RAG inference via ModelManager (runs on background)
+        let result = await ModelManager.shared.generateAsyncAnswer(question: question)
+
+        // Explicit MainActor boundary: update UI state
+        await MainActor.run {
+            answer = result
+
+            // Build citations mapping from answer text and last retrieved chunks
+            var perParagraph = CitationExtractor.extractParagraphLabels(from: result)
+            let chunks = ModelManager.shared.lastRetrievedChunks
+            // Fallback: if no labels found but we have sources, attach all sources to first paragraph
+            let hasAnyLabel = perParagraph.contains { !$0.isEmpty }
+            if !hasAnyLabel && !chunks.isEmpty {
+                perParagraph = [Array(1...chunks.count)]
+            }
+            // Build catalog with 1-based index
+            let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
+                CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)
+            }
+            let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
+
+            let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
+            // Cache: store QA context for potential thumbs-up capture
+            let embedder = EmbeddingModel(name: "nomic-embed-text") // デフォルトの埋め込みモデル
+            QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: embedder)
+            qaHistory.append(newQAPair)
+            selectedQAPair = newQAPair
+            question = ""
+            answer = ""
+            isLoading = false
+
             let dt = Date().timeIntervalSince(_t0)
             _log.logEvent(event: String(format: "[UI] askRAG exit (%.2f ms)", dt*1000))
         }
-        guard !question.isEmpty else { return }
-        guard !isLoading else { return }
-        isLoading = true
-        answer = ""
-        // Call actual RAG inference via ModelManager
-        let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-        answer = result
-        isLoading = false
-
-        // Build citations mapping from answer text and last retrieved chunks
-        var perParagraph = CitationExtractor.extractParagraphLabels(from: result)
-        let chunks = ModelManager.shared.lastRetrievedChunks
-        // Fallback: if no labels found but we have sources, attach all sources to first paragraph
-        let hasAnyLabel = perParagraph.contains { !$0.isEmpty }
-        if !hasAnyLabel && !chunks.isEmpty {
-            perParagraph = [Array(1...chunks.count)]
-        }
-        // Build catalog with 1-based index
-        let catalog: [CitationInfo] = chunks.enumerated().map { (i, ch) in
-            CitationInfo(index: i + 1, title: ch.sourceTitle, path: ch.sourcePath, page: ch.page)
-        }
-        let paraCitations = ParagraphCitations(perParagraph: perParagraph, catalog: catalog)
-
-        let newQAPair = QAPair(id: UUID(), question: question, answer: answer, citations: paraCitations)
-        // Cache: store QA context for potential thumbs-up capture
-        let embedder = EmbeddingModel(name: "nomic-embed-text") // デフォルトの埋め込みモデル
-        QAContextStore.shared.put(qaId: newQAPair.id, question: newQAPair.question, answer: newQAPair.answer, sources: chunks, embedder: embedder)
-        qaHistory.append(newQAPair)
-        selectedQAPair = newQAPair
-        question = ""
-        answer = ""
     }
 }
 

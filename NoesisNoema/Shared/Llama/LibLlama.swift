@@ -4,16 +4,12 @@
 // - If upstream changes break the build, fix here and add/adjust a unit test.
 
 import Foundation
-
-#if !DISABLE_LLAMA
 import llama
-#endif
+
 
 enum LlamaError: Error {
     case couldNotInitializeContext
 }
-
-#if !DISABLE_LLAMA
 
 func llama_batch_clear(_ batch: inout llama_batch) {
     batch.n_tokens = 0
@@ -26,34 +22,21 @@ func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama
         return
     }
 
-    let idx = Int(batch.n_tokens)
-
-    // core fields
-    batch.token [idx] = id
-    batch.pos   [idx] = pos
-
-    // default: single sequence (seq_id = 0) unless caller provided otherwise
-    if let nSeqBuf = batch.n_seq_id {
-        nSeqBuf[idx] = 0
+    batch.token   [Int(batch.n_tokens)] = id
+    batch.pos     [Int(batch.n_tokens)] = pos
+    // 既定: 単一シーケンス（seq_id=0）として扱う。nil の可能性があるため強制アンラップは行わない
+    // n_seq_id バッファは存在しない可能性がある環境もあるため保護
+    if batch.n_seq_id != nil {
+        batch.n_seq_id[Int(batch.n_tokens)] = 0
     }
-
-    // Write seq_ids safely when buffers are present.
-    // `seq_id` is a **pointer to pointer** in C; in Swift it is Optional-to-Optional.
-    if !seq_ids.isEmpty, let seqBase = batch.seq_id {
-        // get row pointer for this token: seqBase[idx]
-        let rowOpt = seqBase.advanced(by: idx).pointee
-        if let row = rowOpt {
-            let n = min(seq_ids.count, 1) // llama.cpp expects up to n_seq_max per token; we use 1 here
-            for i in 0..<n {
-                row.advanced(by: i).pointee = seq_ids[i]
-            }
-            if let nSeqBuf = batch.n_seq_id {
-                nSeqBuf[idx] = Int32(n)
-            }
-        }
+    // もしバッファが確保されていれば書き込む（任意）
+    if !seq_ids.isEmpty, let seqBase = batch.seq_id, let dst = seqBase[Int(batch.n_tokens)] {
+        let n = min(seq_ids.count, 1)
+        for i in 0..<n { dst[Int(i)] = seq_ids[i] }
+        if batch.n_seq_id != nil { batch.n_seq_id[Int(batch.n_tokens)] = Int32(n) }
     }
+    batch.logits  [Int(batch.n_tokens)] = logits ? 1 : 0
 
-    batch.logits[idx] = logits ? 1 : 0
     batch.n_tokens += 1
 }
 
@@ -114,21 +97,17 @@ actor LlamaContext {
         #if os(iOS)
         setenv("LLAMA_NO_METAL", "1", 1)
         #endif
-        #if targetEnvironment(simulator)
-        setenv("LLAMA_NO_METAL", "1", 1)
-        #endif
         llama_backend_init()
         var model_params = llama_model_default_params()
 
         #if targetEnvironment(simulator)
         model_params.n_gpu_layers = 0
-        print("Running on iOS simulator, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
+        print("Running on simulator, force use n_gpu_layers = 0")
         #endif
         #if os(iOS)
         model_params.n_gpu_layers = 0
-        print("Running on iOS device, forcing CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
+        print("Running on iOS device, force CPU (n_gpu_layers = 0, LLAMA_NO_METAL=1)")
         #endif
-
         let model = llama_model_load_from_file(path, model_params)
         guard let model else {
             print("Could not load model at \(path)")
@@ -142,11 +121,9 @@ actor LlamaContext {
         #endif
         print("Using \(n_threads) threads")
 
-        // 修正箇所：Never型 → 実際の構造体に置換
         var ctx_params = llama_context_default_params()
-
-        #if os(iOS) || targetEnvironment(simulator)
-        ctx_params.n_ctx = 1024
+        #if os(iOS)
+        ctx_params.n_ctx = 1024 // 軽量化
         #else
         ctx_params.n_ctx = 2048
         #endif
@@ -440,97 +417,24 @@ actor LlamaContext {
     }
 
     /// - note: The result does not contain null-terminator
+    /// Safe token_to_piece wrapper (prevents buffer overflow)
     private func token_to_piece(token: llama_token) -> [CChar] {
-        let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
-        result.initialize(repeating: Int8(0), count: 8)
-        defer {
-            result.deallocate()
-        }
-        let nTokens = llama_token_to_piece(vocab, token, result, 8, 0, false)
 
-        if nTokens < 0 {
-            let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
-            newResult.initialize(repeating: Int8(0), count: Int(-nTokens))
-            defer {
-                newResult.deallocate()
-            }
-            let nNewTokens = llama_token_to_piece(vocab, token, newResult, -nTokens, 0, false)
-            let bufferPointer = UnsafeBufferPointer(start: newResult, count: Int(nNewTokens))
-            return Array(bufferPointer)
-        } else {
-            let bufferPointer = UnsafeBufferPointer(start: result, count: Int(nTokens))
-            return Array(bufferPointer)
+        // First call with 0 capacity to ask llama.cpp how many bytes are needed
+        var required = llama_token_to_piece(vocab, token, nil, 0, 0, false)
+
+        if required < 0 {
+            required = -required
         }
+
+        let buf = UnsafeMutablePointer<Int8>.allocate(capacity: Int(required + 1))
+        buf.initialize(repeating: 0, count: Int(required + 1))
+
+        defer { buf.deallocate() }
+
+        let written = llama_token_to_piece(vocab, token, buf, required, 0, false)
+        let bufferPointer = UnsafeBufferPointer(start: buf, count: Int(written))
+
+        return Array(bufferPointer)
     }
 }
-
-#else
-// MARK: - iOS Stub Implementation (DISABLE_LLAMA)
-
-// Stub LlamaContext for iOS when llama framework is disabled
-actor LlamaContext {
-    var is_done: Bool = false
-    var n_len: Int32 = 1024
-    private var n_cur: Int32 = 0
-    private var n_decode: Int32 = 0
-
-    init(model: OpaquePointer, context: OpaquePointer, initialNLen: Int32 = 1024) {
-        self.n_len = initialNLen
-        print("[LlamaContext Stub] Initialized with stub implementation (llama disabled for iOS)")
-    }
-
-    static func create_context(path: String) throws -> LlamaContext {
-        print("[LlamaContext Stub] create_context called - returning stub (llama disabled for iOS)")
-        // Return a dummy context - we can't actually create OpaquePointers, so this will fail
-        // Instead, throw an error
-        throw LlamaError.couldNotInitializeContext
-    }
-
-    func model_info() -> String {
-        return "[Stub] LLM functionality disabled for iOS"
-    }
-
-    func system_info() -> String {
-        return "[Stub] LLM functionality disabled for iOS"
-    }
-
-    func set_verbose(_ on: Bool) {
-        // No-op
-    }
-
-    func configure_sampling(temp: Float, top_k: Int32, top_p: Float, seed: UInt64 = 1234) {
-        // No-op
-    }
-
-    func set_n_len(_ value: Int32) {
-        self.n_len = value
-    }
-
-    func get_n_tokens() -> Int32 {
-        return 0
-    }
-
-    func completion_init(text: String) {
-        print("[LlamaContext Stub] completion_init called with: \(text.prefix(50))...")
-        is_done = true
-    }
-
-    func completion_loop() -> String {
-        is_done = true
-        return ""
-    }
-
-    func request_stop() {
-        is_done = true
-    }
-
-    func bench(pp: Int, tg: Int, pl: Int, nr: Int = 1) -> String {
-        return "[Stub] Benchmarking disabled for iOS"
-    }
-
-    func clear() {
-        // No-op
-    }
-}
-
-#endif

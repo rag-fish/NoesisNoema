@@ -185,38 +185,89 @@ func autoPresetAdjust(_ cli: inout CLI, modelPath: String, prompt: String) {
 // MARK: - Paths
 let defaultModelFileName = "Jan-v1-4B-Q4_K_M.gguf" // development default
 
+/// Search for a model file, supporting both flat and nested directory structures
+/// (llama.cpp v0.2.0+ expects Models/<modelName>/*.gguf)
+func findModelInDirectory(_ baseDir: String, modelName: String, fm: FileManager) -> String? {
+    // Try direct file first (flat structure)
+    let directPath = "\(baseDir)/\(modelName)"
+    if fm.fileExists(atPath: directPath) {
+        return directPath
+    }
+
+    // Try nested: Models/<modelName>/*.gguf
+    let modelNameWithoutExt = (modelName as NSString).deletingPathExtension
+    let nestedDir = "\(baseDir)/\(modelNameWithoutExt)"
+    if fm.fileExists(atPath: nestedDir) {
+        do {
+            let contents = try fm.contentsOfDirectory(atPath: nestedDir)
+            if let ggufFile = contents.first(where: { $0.hasSuffix(".gguf") }) {
+                return "\(nestedDir)/\(ggufFile)"
+            }
+        } catch {
+            // Directory not accessible, continue
+        }
+    }
+
+    return nil
+}
+
 func candidateModelPaths(fileName: String) -> [String] {
     let fm = FileManager.default
     let cwd = fm.currentDirectoryPath
     var paths: [String] = []
 
-    // 1) CWD
-    paths.append("\(cwd)/\(fileName)")
+    print("🔍 [CLI] Starting model search for: \(fileName)")
+    print("   CWD: \(cwd)")
 
-    // 2) Executable directory
+    // Define base directories to search
+    var baseDirs: [String] = []
+
+    // 1) CWD + project structure
+    baseDirs.append("\(cwd)/NoesisNoema/NoesisNoema/Resources/Models")
+    baseDirs.append("\(cwd)/NoesisNoema/Resources/Models")
+    baseDirs.append("\(cwd)/Resources/Models")
+    baseDirs.append("\(cwd)/Models")
+
+    // 2) Absolute project path
+    baseDirs.append("/Users/raskolnikoff/Xcode Projects/NoesisNoema/NoesisNoema/Resources/Models")
+
+    // 3) Bundle resources
+    if let r = Bundle.main.resourceURL {
+        baseDirs.append(r.appendingPathComponent("Models").path)
+        baseDirs.append(r.appendingPathComponent("Resources/Models").path)
+        baseDirs.append(r.path)
+    }
+
+    // 4) Executable directory
     let exePath = CommandLine.arguments[0]
     let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
-    if exeDir != cwd { paths.append("\(exeDir)/\(fileName)") }
+    baseDirs.append("\(exeDir)/Models")
+    baseDirs.append("\(exeDir)/Resources/Models")
 
-    // 3) Bundle resources (rare in CLI, but handy when run inside Xcode)
-    if let r = Bundle.main.resourceURL { paths.append(r.appendingPathComponent(fileName).path) }
-
-    // 4) Conventional places (adjust as needed in your workspace)
-    paths.append("./Resources/Models/\(fileName)")
-    paths.append("./NoesisNoema/Resources/Models/\(fileName)")
-
-    // 5) User downloads (convenience)
+    // 5) Downloads
     #if !targetEnvironment(macCatalyst)
     if let home = FileManager.default.homeDirectoryForCurrentUser.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
         let decoded = home.removingPercentEncoding ?? home
-        paths.append("\(decoded)/Downloads/\(fileName)")
+        baseDirs.append("\(decoded)/Downloads")
     }
     #else
-    // Catalyst fallback: use NSHomeDirectory()
     let homeDir = NSHomeDirectory()
-    paths.append("\(homeDir)/Downloads/\(fileName)")
+    baseDirs.append("\(homeDir)/Downloads")
     #endif
-    return Array(LinkedHashSet(paths)) // preserve order, drop dups
+
+    // Search each base directory
+    for baseDir in LinkedHashSet(baseDirs) {
+        if let found = findModelInDirectory(baseDir, modelName: fileName, fm: fm) {
+            paths.append(found)
+        }
+    }
+
+    // Fallback: direct paths (for backwards compatibility)
+    paths.append("\(cwd)/\(fileName)")
+    paths.append("./\(fileName)")
+
+    print("   Generated \(paths.count) candidate paths")
+    return Array(LinkedHashSet(paths))
 }
 
 // Poor-man linked hash set for unique-preserving order
@@ -267,14 +318,73 @@ func buildPlainPrompt(question: String, context: String? = nil) -> String {
 }
 
 func cleanOutput(_ s: String) -> String {
-    // 1) Drop any <think>...</think> internal monologue blocks if present
-    let withoutThink = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
+    // Step 1: Remove all <think>...</think> blocks
+    var out = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
 
-    // 2) For Jan/Qwen-style chat templates, cut at <|im_end|> (assistant turn terminator)
-    let cutAtEnd = withoutThink.components(separatedBy: "<|im_end|>").first ?? withoutThink
+    // Step 2: Remove broken fragments
+    out = out.replacingOccurrences(of: "<\\|im(?:_[a-z]+)?", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "</im[^>]*", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "<im[^>]*", with: "", options: .regularExpression)
 
-    // 3) Trim whitespace/newlines
-    return cutAtEnd.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Step 3: Extract only the last assistant block if present
+    let assistantPattern = "(?s)<\\|im_start\\|>assistant\\s*(.*?)(?:<\\|im_end\\|>|$)"
+    if let regex = try? NSRegularExpression(pattern: assistantPattern, options: []),
+       let matches = regex.matches(in: out, options: [], range: NSRange(out.startIndex..., in: out)) as [NSTextCheckingResult]?,
+       !matches.isEmpty {
+        // Get the last assistant block
+        if let lastMatch = matches.last,
+           lastMatch.numberOfRanges >= 2,
+           let contentRange = Range(lastMatch.range(at: 1), in: out) {
+            out = String(out[contentRange])
+        }
+    }
+
+    // Step 4: Remove any remaining <|im_start|> or <|im_end|> tags
+    out = out.replacingOccurrences(of: "<\\|im_start\\|>[^<]*", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "<\\|im_end\\|>", with: "", options: .regularExpression)
+
+    // Step 5: Trim whitespace
+    return out.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// Extract final answer by filtering out meta-commentary
+func extractFinalAnswer(_ s: String) -> String {
+    let metaPatterns = [
+        "history of previous interactions",
+        "we are given",
+        "analysis",
+        "chain-of-thought",
+        "meta-commentary",
+        "reasoning",
+        "step-by-step",
+        "let me",
+        "i will",
+        "first,",
+        "second,",
+        "finally,"
+    ]
+
+    // Split into lines and filter out meta-commentary
+    let lines = s.components(separatedBy: .newlines)
+    let filteredLines = lines.filter { line in
+        let lower = line.lowercased()
+        // Keep lines that don't contain meta patterns
+        return !metaPatterns.contains(where: { lower.contains($0) })
+    }
+
+    // Join back and split into paragraphs
+    let filtered = filteredLines.joined(separator: "\n")
+    let paragraphs = filtered.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    // Find the longest paragraph (likely the actual answer)
+    if let longestParagraph = paragraphs.max(by: { $0.count < $1.count }),
+       longestParagraph.count > 20 {
+        return longestParagraph.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // Fallback: return filtered text or original if filtering removed too much
+    let result = filtered.trimmingCharacters(in: .whitespacesAndNewlines)
+    return result.isEmpty ? s.trimmingCharacters(in: .whitespacesAndNewlines) : result
 }
 
 // MARK: - Main
@@ -318,25 +428,89 @@ func printDemoAndExit() -> Never {
 if CommandLine.arguments.contains("--defaults") { printDefaultsAndExit() }
 if CommandLine.arguments.contains("--demo") { printDemoAndExit() }
 
-// Resolve model path
+// ============================================================
+// MODEL PATH RESOLUTION
+// ============================================================
+print("=== LlamaBridgeTest CLI ===")
+print("📋 Discovered LLM name: \(defaultModelFileName)")
+
 var modelPath: String?
-if let explicit = cli.modelPath, fm.fileExists(atPath: explicit) {
-    modelPath = explicit
+var matchedIndex: Int? = nil
+
+if let explicit = cli.modelPath {
+    print("🔧 Explicit model path provided: \(explicit)")
+    if fm.fileExists(atPath: explicit) {
+        modelPath = explicit
+        print("✅ Explicit path validated")
+    } else {
+        fputs("❌ ERROR: Explicit path does not exist: \(explicit)\n", stderr)
+        exit(2)
+    }
 } else {
-    for p in candidateModelPaths(fileName: defaultModelFileName) {
-        if fm.fileExists(atPath: p) { modelPath = p; break }
+    print("🔍 Auto-detecting model location...")
+    print("")
+
+    let candidates = candidateModelPaths(fileName: defaultModelFileName)
+
+    if candidates.isEmpty {
+        fputs("❌ ERROR: No candidate paths generated. This is a bug.\n", stderr)
+        exit(2)
+    }
+
+    print("   Checking \(candidates.count) candidate paths:")
+    for (index, p) in candidates.enumerated() {
+        let exists = fm.fileExists(atPath: p)
+        let status = exists ? "✅ FOUND" : "❌ not found"
+        print("   \(index + 1). \(status)")
+        print("      \(p)")
+
+        if exists && modelPath == nil {
+            modelPath = p
+            matchedIndex = index + 1
+        }
+    }
+
+    if modelPath != nil, let idx = matchedIndex {
+        print("")
+        print("✅ Model auto-detected at candidate #\(idx)")
+    } else {
+        print("")
+        fputs("❌ ERROR: Model file not found in any candidate location.\n", stderr)
+        fputs("\n", stderr)
+        fputs("   Searched: \(candidates.count) locations\n", stderr)
+        fputs("   Model name: \(defaultModelFileName)\n", stderr)
+        fputs("\n", stderr)
+        fputs("   Hint: Use -m /absolute/path/to/\(defaultModelFileName)\n", stderr)
+        fputs("         or place the model in one of:\n", stderr)
+        fputs("         - ./Resources/Models/\n", stderr)
+        fputs("         - ./NoesisNoema/Resources/Models/\n", stderr)
+        fputs("         - ~/Downloads/\n", stderr)
+        exit(2)
     }
 }
 
-print("=== LlamaBridgeTest ===")
-if modelPath == nil { print("Model auto-lookup candidates (not found):") }
-for p in candidateModelPaths(fileName: defaultModelFileName) { print("  - \(p)") }
-
 guard let modelPath else {
-    fputs("\nERROR: Could not locate model file.\n  Hint: pass -m /absolute/path/to/Jan-v1-4B-Q4_K_M.gguf or place it in one of the listed paths.\n", stderr)
+    fputs("❌ FATAL: modelPath is nil after resolution. This should not happen.\n", stderr)
     exit(2)
 }
-print("USING MODEL: \(modelPath)")
+
+print("")
+print("═══════════════════════════════════════════════════════════")
+print("📂 RESOLVED MODEL PATH:")
+print("   \(modelPath)")
+
+let fileSize = try? fm.attributesOfItem(atPath: modelPath)[.size] as? UInt64
+if let size = fileSize {
+    let sizeMB = Double(size) / (1024 * 1024)
+    let sizeGB = sizeMB / 1024
+    if sizeGB >= 1.0 {
+        print("   Size: \(String(format: "%.2f", sizeGB)) GB (\(String(format: "%.0f", sizeMB)) MB)")
+    } else {
+        print("   Size: \(String(format: "%.1f", sizeMB)) MB")
+    }
+}
+print("═══════════════════════════════════════════════════════════")
+print("")
 
 // Default prompt if none provided
 let promptText = cli.prompt ?? "What is Retrieval-Augmented Generation (RAG)? Answer in 2 sentences. If unknown, say 'I don't know.'"
@@ -347,82 +521,157 @@ autoPresetAdjust(&cli, modelPath: modelPath, prompt: promptText)
 applyPreset(&cli)
 print("PRESET: \(cli.preset ?? "(none)") temp=\(cli.temp) topK=\(cli.topK) topP=\(cli.topP) nLen=\(cli.nLen)")
 
-// === LlamaState integration ===
+// ============================================================
+// LLAMA CONTEXT INITIALIZATION
+// ============================================================
 Task {
     do {
-        // 直接 LlamaContext を使用してモデル読み込みと推論を実施（shim 経由・llama_* 直接呼び出しはしない）
+        print("🔧 Initializing llama_context...")
+        print("   Model path: \(modelPath)")
+
         let ctx = try LlamaContext.create_context(path: modelPath)
+
+        print("✅ llama_context created successfully")
+        print("")
+
+        print("🎛️  Configuring sampling parameters...")
         await ctx.set_verbose(cli.verbose)
         await ctx.configure_sampling(temp: cli.temp, top_k: cli.topK, top_p: cli.topP, seed: cli.seed)
         await ctx.set_n_len(cli.nLen)
+        print("   Temperature: \(cli.temp)")
+        print("   Top-K: \(cli.topK)")
+        print("   Top-P: \(cli.topP)")
+        print("   Max tokens: \(cli.nLen)")
+        print("✅ Sampling configured")
+        print("")
 
         func infer(_ prompt: String) async -> String {
+            print("🚀 Starting inference...")
+            print("   Prompt length: \(prompt.count) characters")
+            print("")
+
             await ctx.completion_init(text: prompt)
+            print("✅ Prompt processed, beginning token generation...")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("🔄 TOKEN STREAM:")
+            print("")
+
             var acc = ""
             var buffer = ""
             var inThink = false
+            var tokenCount = 0
+
             while await !ctx.is_done {
                 let chunk = await ctx.completion_loop()
                 if chunk.isEmpty { continue }
+
+                tokenCount += 1
+
                 buffer += chunk
 
-                // streaming processing
                 processing: while true {
+
+                    // skip think blocks
                     if inThink {
-                        if let rng = buffer.range(of: "</think>") {
-                            // drop until end tag
-                            buffer = String(buffer[rng.upperBound...])
+                        if let end = buffer.range(of: "</think>") {
+                            buffer = String(buffer[end.upperBound...])
                             inThink = false
                             continue processing
                         } else {
-                            // wait for more
-                            break processing
-                        }
-                    } else {
-                        // stop at assistant end token
-                        if let end = buffer.range(of: "<|im_end|>") {
-                            let prefix = String(buffer[..<end.lowerBound])
-                            if !prefix.isEmpty { acc += prefix }
-                            await ctx.request_stop()
-                            buffer.removeAll(keepingCapacity: true)
-                            break processing
-                        }
-                        if let rng = buffer.range(of: "<think>") {
-                            let prefix = String(buffer[..<rng.lowerBound])
-                            if !prefix.isEmpty { acc += prefix }
-                            buffer = String(buffer[rng.upperBound...])
-                            inThink = true
-                            continue processing
-                        } else {
-                            acc += buffer
-                            buffer.removeAll(keepingCapacity: true)
                             break processing
                         }
                     }
+
+                    // detect <think>
+                    if let start = buffer.range(of: "<think>") {
+                        let prefix = String(buffer[..<start.lowerBound])
+                        if !prefix.isEmpty { acc += prefix }
+                        buffer = String(buffer[start.upperBound...])
+                        inThink = true
+                        continue processing
+                    }
+
+                    // detect <|im_end|> but DO NOT discard previous data
+                    if let endTag = buffer.range(of: "<|im_end|>") {
+                        let prefix = String(buffer[..<endTag.lowerBound])
+                        if !prefix.isEmpty { acc += prefix }
+                        await ctx.request_stop()
+                        buffer.removeAll()
+                        break processing
+                    }
+
+                    // no special markers — flush buffer into acc
+                    acc += buffer
+                    buffer.removeAll()
+                    break processing
                 }
             }
             // flush any non-think residue
             if !buffer.isEmpty && !inThink { acc += buffer }
 
+            print("")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("✅ Token generation complete")
+            print("   Total tokens: \(tokenCount)")
+            print("   Raw output length: \(acc.count) characters")
+            print("")
+
             let cleaned = cleanOutput(acc)
-            // クリーニング結果が空の場合は上位で--plain再試行してもらうため、ここでは空文字を返す
             if cleaned.isEmpty {
+                print("⚠️  Output is empty after cleaning")
                 return ""
             }
-            return cleaned
+
+            // Extract final answer by filtering meta-commentary
+            let finalAnswer = extractFinalAnswer(cleaned)
+
+            print("   Cleaned output length: \(cleaned.count) characters")
+            print("   Final answer length: \(finalAnswer.count) characters")
+            return finalAnswer
         }
 
-        var finalOut = await infer(fullPrompt)
+        print("🎯 Running inference with \(cli.usePlainTemplate ? "plain" : "chat") template...")
+        print("")
+
+        let finalOut = await infer(fullPrompt)
+
         if finalOut.isEmpty && !cli.usePlainTemplate {
-            fputs("\nINFO: Empty output; retrying with plain prompt... Use --plain to force this mode.\n", stderr)
-            finalOut = await infer(buildPlainPrompt(question: promptText))
+            print("")
+            print("ℹ️  Empty output detected, retrying with plain prompt template...")
+            print("")
+            // NOTE:
+            // We are NOT retrying here because LlamaContext does not expose a reset()
+            // API. Multi-pass retry would require recreating the context, which is out
+            // of scope for this small CLI harness.
+//            await ctx.reset()
+//            finalOut = await infer(buildPlainPrompt(question: promptText))
         }
+
         if finalOut.isEmpty {
-            fputs("\nWARN: Model returned empty content (template mismatch or immediate stop). Try providing a different model or --plain.\n", stderr)
+            print("")
+            fputs("❌ WARN: Model returned empty content.\n", stderr)
+            fputs("   Possible causes:\n", stderr)
+            fputs("   - Template mismatch with model format\n", stderr)
+            fputs("   - Model immediately hit stop token\n", stderr)
+            fputs("   - Try: --plain flag for plain template\n", stderr)
+            fputs("   - Try: different model with -m flag\n", stderr)
+            print("")
+        } else {
+            print("")
+            print("═══════════════════════════════════════════════════════════")
+            print("📝 FINAL OUTPUT:")
+            print("═══════════════════════════════════════════════════════════")
+            print(finalOut)
+            print("═══════════════════════════════════════════════════════════")
+            print("")
         }
-        print("\n---\nModel completion:\n\(finalOut)\n")
     } catch {
-        fputs("ERROR running inference: \(error)\n", stderr)
+        print("")
+        print("═══════════════════════════════════════════════════════════")
+        fputs("❌ ERROR during inference pipeline:\n", stderr)
+        fputs("   \(error)\n", stderr)
+        print("═══════════════════════════════════════════════════════════")
+        print("")
     }
     exit(0)
 }
