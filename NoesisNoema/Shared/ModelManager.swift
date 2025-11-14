@@ -57,6 +57,7 @@ class ModelManager: ObservableObject {
         guard !availableModels.isEmpty else { return }
 
         // Try to restore last selection from UserDefaults
+        // SAFE: Small string ID (< 100 bytes)
         if let lastModelIDString = UserDefaults.standard.string(forKey: "lastSelectedModelID"),
            availableModels.contains(where: { $0.id == lastModelIDString }) {
             selectedModelID = ModelID(lastModelIDString)
@@ -234,7 +235,7 @@ class ModelManager: ObservableObject {
             currentModelID = spec.id
             selectedModelID = modelID
             currentLLMModel = LLMModel(name: spec.name, modelFile: spec.modelFile, version: spec.version, isEmbedded: true)
-            // Persist selection
+            // Persist selection (SAFE: Small string ID)
             UserDefaults.standard.set(spec.id, forKey: "lastSelectedModelID")
         }
     }
@@ -259,13 +260,21 @@ class ModelManager: ObservableObject {
 
     /// Full RAG implementation: retrieves chunks and generates answer with citations
     func generateAsyncAnswer(question: String) async -> String {
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎬 [ModelManager] generateAsyncAnswer CALLED")
+        print("   Question: \(question.prefix(50))...")
+        print("   Current LLM: \(currentLLMModel.name)")
+        print("   Model file: \(currentLLMModel.modelFile)")
+
         // Explicit MainActor boundary: check and set generating state
         await MainActor.run { self.isGenerating = true }
+        print("🔒 [ModelManager] Set isGenerating = true")
 
         defer {
             Task { @MainActor in
                 self.isGenerating = false
             }
+            print("🔓 [ModelManager] Will set isGenerating = false in defer")
         }
 
         let _log = SystemLog()
@@ -310,14 +319,30 @@ class ModelManager: ObservableObject {
         print("📝 [ModelManager] Built context with \(context.count) characters")
         #endif
 
-        // 3. Generate answer using LLM (background)
-        _log.logEvent(event: "[ModelManager] Calling LLM generate...")
+        // 3. Generate answer using LLM (✅ NOW ASYNC!)
+        _log.logEvent(event: "[ModelManager] Calling LLM generateAsync...")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🚀 [ModelManager] About to call currentLLMModel.generateAsync()")
         #if DEBUG
         print("🧠 [ModelManager] Calling LLM model: \(currentLLMModel.name)")
         print("🧠 [ModelManager] Model file: \(currentLLMModel.modelFile)")
+        print("🧠 [ModelManager] Prompt: \(question.prefix(80))...")
+        print("🧠 [ModelManager] Context: \(context.isEmpty ? "none" : "\(context.count) chars")")
         #endif
 
-        let answer = currentLLMModel.generate(prompt: question, context: context.isEmpty ? nil : context)
+        let answer: String
+        do {
+            print("🎯 [ModelManager] Calling generateAsync NOW...")
+            answer = try await currentLLMModel.generateAsync(prompt: question, context: context.isEmpty ? nil : context)
+            print("✅ [ModelManager] generateAsync returned: \(answer.count) chars")
+        } catch {
+            let errorMsg = "LLM generation failed: \(error.localizedDescription)"
+            _log.logEvent(event: "[ModelManager] ERROR: \(errorMsg)")
+            #if DEBUG
+            print("❌ [ModelManager] \(errorMsg)")
+            #endif
+            return errorMsg
+        }
 
         #if DEBUG
         print("💬 [ModelManager] LLM response length: \(answer.count) chars")
