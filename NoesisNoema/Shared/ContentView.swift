@@ -396,30 +396,57 @@ struct ContentView: View {
     func askRAG() async {
         let _log = SystemLog()
         let _t0 = Date()
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎬 [UI/ContentView] askRAG CALLED")
+        print("   Question: \(question.prefix(50))...")
         _log.logEvent(event: "[UI] askRAG enter qLen=\(question.count)")
 
         // Guard: empty question
-        guard !question.isEmpty else { return }
+        guard !question.isEmpty else {
+            print("❌ [UI] Guard failed: empty question")
+            return
+        }
+        print("✅ [UI] Guard passed: question not empty")
 
         // Guard: already generating
-        guard !isLoading else { return }
+        guard !isLoading else {
+            print("❌ [UI] Guard failed: already loading")
+            return
+        }
+        print("✅ [UI] Guard passed: not loading")
+
         guard !modelManager.isGenerating else {
+            print("❌ [UI] Guard failed: modelManager is generating")
             _log.logEvent(event: "[UI] askRAG blocked: already generating")
             return
         }
+        print("✅ [UI] Guard passed: modelManager not generating")
 
         // Guard: model selected
         guard modelManager.selectedModelID != nil else {
+            print("❌ [UI] Guard failed: no model selected")
             answer = "[ERROR] No model selected. Please select an LLM model from the picker."
             return
         }
+        print("✅ [UI] Guard passed: model selected = \(String(describing: modelManager.selectedModelID))")
 
         // Explicit MainActor boundary: set loading state
         isLoading = true
         answer = ""
+        print("🔒 [UI] Set isLoading = true")
 
-        // Call actual RAG inference via ModelManager (runs on background)
-        let result = await ModelManager.shared.generateAsyncAnswer(question: question)
+        // Call actual RAG inference via ModelManager (MUST run off main thread!)
+        print("🚀 [UI] About to call ModelManager.shared.generateAsyncAnswer()")
+        print("⚠️  [UI] Dispatching to background thread (Task.detached)...")
+
+        let result = await Task.detached(priority: .userInitiated) {
+            print("✅ [Background] Task.detached started")
+            let answer = await ModelManager.shared.generateAsyncAnswer(question: question)
+            print("✅ [Background] Task.detached complete: \(answer.count) chars")
+            return answer
+        }.value
+
+        print("📥 [UI] ModelManager.generateAsyncAnswer() returned: \(result.count) chars")
 
         // Explicit MainActor boundary: update UI state
         await MainActor.run {

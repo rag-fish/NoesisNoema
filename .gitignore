@@ -313,3 +313,35 @@ Package.resolved
 docs/build/
 docs/tmp/
 docs/export/
+
+## Github Copilot Request Prompt
+github-copilot-request-prompt.md
+
+# Logs
+*.log
+
+# Text dumps
+*.txt
+
+# Markdown except README
+*.md
+!README.md
+!CHANGELOG.md
+
+# Build artifacts
+build-*
+.build/
+
+# Derived data
+*.bak
+*.bak_*
+*.diff
+
+# macOS junk
+.DS_Store
+
+# SwiftPM junk
+.swiftpm/
+
+# dylibs (llama.cpp local builds)
+*.dylib
