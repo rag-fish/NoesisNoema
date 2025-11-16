@@ -16,6 +16,12 @@
 		F4C581602E4F13EC00E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
 		F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C5811C2E4F036E00E64194 /* Metal.framework */; };
 		F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4D1DB532E4F18ED006B902C /* ZIPFoundation */; };
+		F4BLDMAC2E2A466F00909132 /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; };
+		F4EMBMAC2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F4BLDIOS2E2A466F00909132 /* llama_ios.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */; };
+		F4EMBIOS2E2A466F00909132 /* llama_ios.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F4BLDCLI2E2A466F00909132 /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; };
+		F4EMBCLI2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,7 +31,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 6;
 			files = (
-			);
+			F4EMBCLI2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */,
+				);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,7 +52,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-			);
+			F4EMBIOS2E2A466F00909132 /* llama_ios.xcframework in Embed Frameworks */,
+				);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +63,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-			);
+			F4EMBMAC2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */,
+				);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,6 +82,8 @@
 		F4C5811C2E4F036E00E64194 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_macos.xcframework; path = Frameworks/xcframeworks/llama_macos.xcframework; sourceTree = "<group>"; };
+		F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_ios.xcframework; path = Frameworks/xcframeworks/llama_ios.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -152,6 +163,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4BLDMAC2E2A466F00909132 /* llama_macos.xcframework in Frameworks */,
 				F4C581542E4F12E000E64194 /* Metal.framework in Frameworks */,
 				F4C581532E4F12D700E64194 /* Accelerate.framework in Frameworks */,
 				F4C581552E4F12E000E64194 /* MetalKit.framework in Frameworks */,
@@ -163,6 +175,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4BLDCLI2E2A466F00909132 /* llama_macos.xcframework in Frameworks */,
 				F4C581602E4F13EC00E64194 /* Accelerate.framework in Frameworks */,
 				F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */,
 			);
@@ -172,6 +185,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4BLDIOS2E2A466F00909132 /* llama_ios.xcframework in Frameworks */,
 				F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */,
 				F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */,
 			);
@@ -183,6 +197,8 @@
 		F408F3402E35C1C700F621C5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */,
+				F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */,
 				F4C581202E4F037500E64194 /* Accelerate.framework */,
 				F4C5811C2E4F036E00E64194 /* Metal.framework */,
 				F4C5811D2E4F036E00E64194 /* MetalKit.framework */,
@@ -203,6 +219,7 @@
 				F41FD01D2E2A466F00909132 /* NoesisNoema */,
 				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
 				F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
+				F4SHARED01E2A466F00909132 /* Shared */,
 				F41FD01C2E2A466F00909132 /* Products */,
 				F408F3402E35C1C700F621C5 /* Frameworks */,
 				AACE160730FAA9CB4526C2D7 /* README.md */,
@@ -260,6 +277,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				F41FD01D2E2A466F00909132 /* NoesisNoema */,
+				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = NoesisNoema;
 			packageProductDependencies = (
@@ -285,6 +303,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
+				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = LlamaBridgeTest;
 			productName = LlamaBridgeTest;
@@ -307,6 +326,7 @@
 			fileSystemSynchronizedGroups = (
 				F41FD01D2E2A466F00909132 /* NoesisNoema */,
 				F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
+				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = NoesisNoemaMobile;
 			packageProductDependencies = (
@@ -572,7 +592,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = NoesisNoema/NoesisNoema.macOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Apps/macOS/NoesisNoema/NoesisNoema.macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -619,7 +639,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = NoesisNoema/NoesisNoema.macOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Apps/macOS/NoesisNoema/NoesisNoema.macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -660,7 +680,8 @@
 			};
 			name = Release;
 		};
-		F460884E2E2CD45000D4C555 /* Debug */ = {
+		
+F460884E2E2CD45000D4C555 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
@@ -672,15 +693,14 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_HARDENED_RUNTIME = NO;
-				FRAMEWORK_SEARCH_PATHS = "";
-				HEADER_SEARCH_PATHS = "";
+				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path",
 					"@loader_path",
 					"@rpath",
 				);
-				LIBRARY_SEARCH_PATHS = "";
+				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks/**";
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				OTHER_CFLAGS = (
@@ -713,15 +733,14 @@
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_HARDENED_RUNTIME = NO;
-				FRAMEWORK_SEARCH_PATHS = "";
-				HEADER_SEARCH_PATHS = "";
+				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path",
 					"@loader_path",
 					"@rpath",
 				);
-				LIBRARY_SEARCH_PATHS = "";
+				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks/**";
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				OTHER_CFLAGS = (
