@@ -71,7 +71,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
 		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -294,8 +294,6 @@
 				F46088452E2CD45000D4C555 /* Sources */,
 				F46088462E2CD45000D4C555 /* Frameworks */,
 				F4F7BAB72E37A7A40018DE75 /* Resources */,
-				F489C3102EA666B90016D2A6 /* Embed Frameworks */,
-				F48AABB92EC978350054C4D0 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
