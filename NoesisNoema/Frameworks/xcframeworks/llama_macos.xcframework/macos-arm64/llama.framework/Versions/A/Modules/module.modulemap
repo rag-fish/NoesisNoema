@@ -1,3 +1,4 @@
+// Keep umbrella header; headers are injected below. If issues arise with umbrella imports, switch to explicit header exports.
 framework module llama {
   umbrella header "llama.h"
   export *
