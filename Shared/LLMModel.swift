@@ -71,6 +71,11 @@ class LLMModel: @unchecked Sendable {
         print("🚀 [LLMModel] STEP 3: Calling runNoesisCompletion() NOW...")
         print("   modelPath: \(modelPath)")
         print("   question: \(prompt.prefix(80))...")
+
+        // RAG diagnostic logging (as requested in issue)
+        print("[RAG] generate parameters:", params)
+        print("[RAG] context length:", context?.count ?? 0)
+
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         let answer = try await runNoesisCompletion(

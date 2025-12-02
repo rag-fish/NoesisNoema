@@ -47,17 +47,18 @@ struct ChatScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Ask me anything.")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color(.secondaryLabel))
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     Spacer(minLength: 0)
                 }
                 .frame(maxHeight: .infinity)
             } else {
+                // Chat tab: Show only the latest QA (most recent)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(documentManager.qaHistory) { qa in
-                            MessageRow(qa: qa)
+                        if let latestQA = documentManager.qaHistory.last {
+                            MessageRow(qa: latestQA)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -81,7 +82,7 @@ struct ChatScreen: View {
                         .scaleEffect(1.2)
                     Text("Generating...")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color(.secondaryLabel))
+                        .foregroundColor(.secondary)
                 }
                 .padding(20)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -138,11 +139,11 @@ struct ChatHeaderView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Noesis Noema")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(.label))
+                    .foregroundColor(.primary)
 
                 Text("Model: \(modelName) · Preset: \(presetName)")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(.secondaryLabel))
+                    .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -180,7 +181,7 @@ struct ChatInputBar: View {
             Button(action: onSubmit) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 16))
-                    .foregroundStyle(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? Color(.secondaryLabel) : Color.accentColor)
+                    .foregroundColor(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? .secondary : .accentColor)
             }
             .frame(width: 32, height: 32)
             .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
@@ -198,7 +199,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 0) {
                 Text(qa.question)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color(.label))
+                    .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -210,7 +211,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 0) {
                 Text(qa.answer)
                     .font(.system(size: 14))
-                    .foregroundStyle(Color(.label))
+                    .foregroundColor(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

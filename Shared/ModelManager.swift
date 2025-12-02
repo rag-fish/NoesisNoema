@@ -294,6 +294,11 @@ class ModelManager: ObservableObject {
 
         // 1. Retrieve relevant chunks using LocalRetriever (background)
         _log.logEvent(event: "[ModelManager] Retrieving RAG context...")
+
+        // RAG diagnostic logging (as requested in issue)
+        print("[RAG] chunks loaded:", VectorStore.shared.chunks.count)
+        print("[RAG] query =", question)
+
         #if DEBUG
         print("📚 [ModelManager] Retrieving RAG context...")
         #endif
@@ -358,6 +363,12 @@ class ModelManager: ObservableObject {
             print("❌ [ModelManager] \(errorMsg)")
             #endif
             return errorMsg
+        }
+
+        // Fallback for empty response (as requested in issue)
+        if answer.isEmpty {
+            print("[RAG] WARNING: Empty response generated")
+            return "No response generated. Please try again."
         }
 
         #if DEBUG

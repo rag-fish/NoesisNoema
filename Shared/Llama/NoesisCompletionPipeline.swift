@@ -57,6 +57,9 @@ public func runNoesisCompletion(
     let prompt = buildPrompt(question: question, context: context)
     print("📝 [NoesisCompletion] Prompt built: \(prompt.count) chars")
 
+    // RAG diagnostic: Show prompt preview (as requested in issue)
+    print("[RAG] prompt preview:", String(prompt.prefix(200)))
+
     // Step 2: Create LlamaContext (fresh, like CLI does)
     print("🔧 [NoesisCompletion] Creating LlamaContext...")
     let ctx = try LlamaContext.create_context(path: modelPath)
