@@ -23,45 +23,40 @@ struct MobileHomeView: View {
 
     @State private var runtimeMode: RuntimeMode = ModelManager.shared.getRuntimeMode()
     @State private var showImporter = false
-    @State private var showSplash = true
 
     @FocusState private var questionFocused: Bool
+
+    // Keep in sync with TabBarView height
+    private let tabBarHeight: CGFloat = 60
 
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
     var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
 
     var body: some View {
-        NavigationStack {
+        GeometryReader { proxy in
+            let fullHeight = proxy.size.height
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Mode Picker Section
                     modePickerSection
-
-                    // Model Selector Section
                     modelSelectorSection
-
-                    // Prompt Input Section
                     promptInputSection
-
-                    // Action Buttons
                     actionButtonsSection
-
-                    // History Section
                     historySection
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 20)
+                .padding(.top, 16)
+                .padding(.bottom, tabBarHeight) // keep content above the tab bar
+                .frame(minHeight: fullHeight)   // ensure content at least fills the viewport
             }
-            .navigationTitle("Noesis Noema")
-            .navigationBarTitleDisplayMode(.inline)
+            .frame(width: proxy.size.width, height: fullHeight)
             .background(Color(.systemGroupedBackground))
             .scrollDismissesKeyboard(.interactively)
+            .onAppear {
+                runtimeMode = ModelManager.shared.getRuntimeMode()
+            }
         }
-        .overlay(overlayContent)
-        .onAppear {
-            runtimeMode = ModelManager.shared.getRuntimeMode()
-        }
+        .ignoresSafeArea(.all)
     }
 
     // MARK: - Mode Picker Section
@@ -80,7 +75,7 @@ struct MobileHomeView: View {
                     Text("Override").tag(RuntimeMode.override)
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: runtimeMode) { oldValue, newValue in
+                .onChange(of: runtimeMode) { newValue in
                     ModelManager.shared.setRuntimeMode(newValue)
                     if newValue == .recommended {
                         recommendedReady = true
@@ -159,7 +154,7 @@ struct MobileHomeView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .onChange(of: selectedLLMPreset) { oldValue, newValue in
+                .onChange(of: selectedLLMPreset) { newValue in
                     ModelManager.shared.setLLMPreset(name: newValue)
                 }
                 .disabled(isLoading)
@@ -193,7 +188,7 @@ struct MobileHomeView: View {
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $question)
-                    .frame(minHeight: 120, maxHeight: 220)
+                    .frame(minHeight: 100, idealHeight: 120, maxHeight: 200)
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
@@ -303,7 +298,7 @@ struct MobileHomeView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 24)
     }
 
     @ViewBuilder
@@ -315,79 +310,6 @@ struct MobileHomeView: View {
                         questionFocused = false
                         documentManager.selectedQAPair = qa
                     }
-                }
-            }
-        }
-    }
-
-    // MARK: - Overlay Content
-
-    @ViewBuilder
-    private var overlayContent: some View {
-        Group {
-            qaDetailOverlay
-            splashScreen
-        }
-    }
-
-    @ViewBuilder
-    private var qaDetailOverlay: some View {
-        if let selected = documentManager.selectedQAPair {
-            ZStack {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        if !isLoading {
-                            documentManager.selectedQAPair = nil
-                        }
-                    }
-
-                VStack {
-                    QADetailView(qapair: selected, onClose: {
-                        if !isLoading {
-                            documentManager.selectedQAPair = nil
-                        }
-                    })
-                    .padding()
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .padding()
-                }
-            }
-            .transition(.opacity)
-            .zIndex(1)
-        }
-    }
-
-    @ViewBuilder
-    private var splashScreen: some View {
-        if showSplash {
-            ZStack {
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 16) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 72))
-                        .foregroundStyle(.tint)
-
-                    Text("Noesis Noema")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                }
-            }
-            .transition(.opacity)
-            .zIndex(2)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        showSplash = false
-                    }
-                }
-            }
-            .onTapGesture {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    showSplash = false
                 }
             }
         }
@@ -428,30 +350,16 @@ struct MobileHomeView: View {
         print("   Question: \(question.prefix(50))...")
 
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            print("❌ [iOS] Guard failed: empty question")
-            return
-        }
-        print("✅ [iOS] Guard passed: question not empty")
-
-        guard !isLoading else {
-            print("❌ [iOS] Guard failed: already loading")
-            return
-        }
-        print("✅ [iOS] Guard passed: not loading")
+        guard !trimmed.isEmpty else { return }
+        guard !isLoading else { return }
 
         question = trimmed
         questionFocused = false
         isLoading = true
-        print("🔒 [iOS] Set isLoading = true")
 
         Task { @MainActor in
-            print("🚀 [iOS] Task started, calling ModelManager.generateAsyncAnswer()")
             let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-            print("📥 [iOS] ModelManager returned: \(result.count) chars")
-
             let newPair = documentManager.addQAPair(question: question, answer: result)
-
             let sources = ModelManager.shared.lastRetrievedChunks
             QAContextStore.shared.put(
                 qaId: newPair.id,
@@ -460,10 +368,8 @@ struct MobileHomeView: View {
                 sources: sources,
                 embedder: ModelManager.shared.currentEmbeddingModel
             )
-
             question = ""
             isLoading = false
-            print("✅ [iOS] Completed, isLoading = false")
         }
     }
 }

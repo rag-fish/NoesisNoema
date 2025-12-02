@@ -7,8 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		123456782E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
+		123456782E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
+		F43103452ED9802900E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
+		F43103462ED9803300E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
+		F43103472ED9803300E0307A /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
 		F4C581532E4F12D700E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
 		F4C581542E4F12E000E64194 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C5811C2E4F036E00E64194 /* Metal.framework */; };
@@ -16,44 +19,17 @@
 		F4C581602E4F13EC00E64194 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C581202E4F037500E64194 /* Accelerate.framework */; };
 		F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C5811C2E4F036E00E64194 /* Metal.framework */; };
 		F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4D1DB532E4F18ED006B902C /* ZIPFoundation */; };
-		F4BLDMAC2E2A466F00909132 /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; };
-		F4EMBMAC2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F4BLDIOS2E2A466F00909132 /* llama_ios.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */; };
-		F4EMBIOS2E2A466F00909132 /* llama_ios.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F4BLDCLI2E2A466F00909132 /* llama_macos.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; };
-		F4EMBCLI2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		F489C3102EA666B90016D2A6 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
-			files = (
-			F4EMBCLI2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */,
-				);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F48AABB92EC978350054C4D0 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F4C94BF12EC8AEF300C37A99 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-			F4EMBIOS2E2A466F00909132 /* llama_ios.xcframework in Embed Frameworks */,
-				);
+				F43103472ED9803300E0307A /* llama.xcframework in Embed Frameworks */,
+			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,18 +39,18 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-			F4EMBMAC2E2A466F00909132 /* llama_macos.xcframework in Embed Frameworks */,
-				);
+			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
 		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F43103432ED9802900E0307A /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = NoesisNoema/Frameworks/xcframeworks/llama.xcframework; sourceTree = "<group>"; };
 		F4605E302E2CAA5E00D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F4607E7A2E2CCDB900D4C555 /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F46088492E2CD45000D4C555 /* NoesisNoema */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = NoesisNoema; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,25 +58,19 @@
 		F4C5811C2E4F036E00E64194 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
-		F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_macos.xcframework; path = Frameworks/xcframeworks/llama_macos.xcframework; sourceTree = "<group>"; };
-		F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_ios.xcframework; path = Frameworks/xcframeworks/llama_ios.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */ = {
+		F4C581272E4F06A100E64194 /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoemaMobile" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				.idea/.gitignore,
-				.idea/modules.xml,
-				.idea/NoesisNoema.iml,
-				.idea/workspace.xml,
 				Assets.xcassets,
 				"Resources/Models/gpt-oss-20b-F16.gguf",
 				"Resources/Models/Llama-3.3-70B-Instruct-UD-IQ1_S.gguf",
 			);
 			target = F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */;
 		};
-		F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */ = {
+		F4ED32C42E37A18400CCE0DE /* Exceptions for "Apps/macOS/NoesisNoema" folder in "LlamaBridgeTest" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				ModelRegistry/Autotune/AutotuneService.swift,
@@ -118,35 +88,24 @@
 			);
 			target = F46088482E2CD45000D4C555 /* LlamaBridgeTest */;
 		};
-		F4EEEAAA2E50099900E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				.idea/.gitignore,
-				.idea/modules.xml,
-				.idea/NoesisNoema.iml,
-				.idea/workspace.xml,
-			);
-			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F41FD01D2E2A466F00909132 /* NoesisNoema */ = {
+		F41FD01D2E2A466F00909132 /* Apps/macOS/NoesisNoema */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F4EEEAAA2E50099900E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoema" target */,
-				F4ED32C42E37A18400CCE0DE /* Exceptions for "NoesisNoema" folder in "LlamaBridgeTest" target */,
-				F4C581272E4F06A100E64194 /* Exceptions for "NoesisNoema" folder in "NoesisNoemaMobile" target */,
+				F4ED32C42E37A18400CCE0DE /* Exceptions for "Apps/macOS/NoesisNoema" folder in "LlamaBridgeTest" target */,
+				F4C581272E4F06A100E64194 /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoemaMobile" target */,
 			);
 			path = Apps/macOS/NoesisNoema;
 			sourceTree = "<group>";
 		};
-		F460884A2E2CD45000D4C555 /* LlamaBridgeTest */ = {
+		F460884A2E2CD45000D4C555 /* Apps/CLI/LlamaBridgeTest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Apps/CLI/LlamaBridgeTest;
 			sourceTree = "<group>";
 		};
-		F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */ = {
+		F4C580FE2E4F006000E64194 /* Apps/iOS/NoesisNoemaMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Apps/iOS/NoesisNoemaMobile;
 			sourceTree = "<group>";
@@ -163,9 +122,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F4BLDMAC2E2A466F00909132 /* llama_macos.xcframework in Frameworks */,
 				F4C581542E4F12E000E64194 /* Metal.framework in Frameworks */,
 				F4C581532E4F12D700E64194 /* Accelerate.framework in Frameworks */,
+				F43103452ED9802900E0307A /* llama.xcframework in Frameworks */,
 				F4C581552E4F12E000E64194 /* MetalKit.framework in Frameworks */,
 				F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */,
 			);
@@ -175,7 +134,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F4BLDCLI2E2A466F00909132 /* llama_macos.xcframework in Frameworks */,
 				F4C581602E4F13EC00E64194 /* Accelerate.framework in Frameworks */,
 				F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */,
 			);
@@ -185,9 +143,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F4BLDIOS2E2A466F00909132 /* llama_ios.xcframework in Frameworks */,
 				F4C581212E4F037500E64194 /* Accelerate.framework in Frameworks */,
 				F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */,
+				F43103462ED9803300E0307A /* llama.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,11 +155,10 @@
 		F408F3402E35C1C700F621C5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				F4XCFWMAC2E2A466F00909132 /* llama_macos.xcframework */,
-				F4XCFWIOS2E2A466F00909132 /* llama_ios.xcframework */,
 				F4C581202E4F037500E64194 /* Accelerate.framework */,
 				F4C5811C2E4F036E00E64194 /* Metal.framework */,
 				F4C5811D2E4F036E00E64194 /* MetalKit.framework */,
+				F43103432ED9802900E0307A /* llama.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -216,9 +173,9 @@
 		F41FD0122E2A466F00909132 = {
 			isa = PBXGroup;
 			children = (
-				F41FD01D2E2A466F00909132 /* NoesisNoema */,
-				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
-				F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
+				F41FD01D2E2A466F00909132 /* Apps/macOS/NoesisNoema */,
+				F460884A2E2CD45000D4C555 /* Apps/CLI/LlamaBridgeTest */,
+				F4C580FE2E4F006000E64194 /* Apps/iOS/NoesisNoemaMobile */,
 				F4SHARED01E2A466F00909132 /* Shared */,
 				F41FD01C2E2A466F00909132 /* Products */,
 				F408F3402E35C1C700F621C5 /* Frameworks */,
@@ -240,7 +197,7 @@
 		F45991592EB76940002CCA0C /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				123456772E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift */,
+				123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -276,7 +233,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F41FD01D2E2A466F00909132 /* NoesisNoema */,
+				F41FD01D2E2A466F00909132 /* Apps/macOS/NoesisNoema */,
 				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = NoesisNoema;
@@ -300,7 +257,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F460884A2E2CD45000D4C555 /* LlamaBridgeTest */,
+				F460884A2E2CD45000D4C555 /* Apps/CLI/LlamaBridgeTest */,
 				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = LlamaBridgeTest;
@@ -322,8 +279,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F41FD01D2E2A466F00909132 /* NoesisNoema */,
-				F4C580FE2E4F006000E64194 /* NoesisNoemaMobile */,
+				F41FD01D2E2A466F00909132 /* Apps/macOS/NoesisNoema */,
+				F4C580FE2E4F006000E64194 /* Apps/iOS/NoesisNoemaMobile */,
 				F4SHARED01E2A466F00909132 /* Shared */,
 			);
 			name = NoesisNoemaMobile;
@@ -438,7 +395,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				123456782E4F999900000001 /* NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */,
+				123456782E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -678,8 +635,7 @@
 			};
 			name = Release;
 		};
-		
-F460884E2E2CD45000D4C555 /* Debug */ = {
+		F460884E2E2CD45000D4C555 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
@@ -771,9 +727,14 @@ F460884E2E2CD45000D4C555 /* Debug */ = {
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
+				FRAMEWORK_SEARCH_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.reference";
+				INFOPLIST_KEY_UILaunchScreen_Background_Color = "System Background";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
 				OTHER_CFLAGS = (
 					"-DDEBUG=1",
@@ -806,9 +767,14 @@ F460884E2E2CD45000D4C555 /* Debug */ = {
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 7NKX7G7LV3;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
+				FRAMEWORK_SEARCH_PATHS = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.reference";
+				INFOPLIST_KEY_UILaunchScreen_Background_Color = "System Background";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks/xcframeworks";
 				OTHER_CFLAGS = (
 					"-DNDEBUG=1",
