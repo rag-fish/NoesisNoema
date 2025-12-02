@@ -47,7 +47,7 @@ struct ChatScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Ask me anything.")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color(.secondaryLabel))
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     Spacer(minLength: 0)
@@ -81,7 +81,7 @@ struct ChatScreen: View {
                         .scaleEffect(1.2)
                     Text("Generating...")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color(.secondaryLabel))
                 }
                 .padding(20)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -138,11 +138,11 @@ struct ChatHeaderView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Noesis Noema")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color(.label))
 
                 Text("Model: \(modelName) · Preset: \(presetName)")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -180,7 +180,7 @@ struct ChatInputBar: View {
             Button(action: onSubmit) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 16))
-                    .foregroundColor(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? .secondary : .accentColor)
+                    .foregroundStyle(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? Color(.secondaryLabel) : Color.accentColor)
             }
             .frame(width: 32, height: 32)
             .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
@@ -198,7 +198,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 0) {
                 Text(qa.question)
                     .font(.system(size: 14))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color(.label))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -210,7 +210,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 0) {
                 Text(qa.answer)
                     .font(.system(size: 14))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(Color(.label))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

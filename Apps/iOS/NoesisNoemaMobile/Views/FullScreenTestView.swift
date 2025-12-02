@@ -16,11 +16,11 @@ struct FullScreenTestView: View {
             VStack(spacing: 20) {
                 Text("Full Screen OK")
                     .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.gray)
+                    .foregroundStyle(Color(.systemGray))
 
                 Text("If you see gaps, the issue is at system level")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

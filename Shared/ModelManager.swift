@@ -298,7 +298,11 @@ class ModelManager: ObservableObject {
         print("📚 [ModelManager] Retrieving RAG context...")
         #endif
         let retriever = LocalRetriever(store: VectorStore.shared)
+        #if os(iOS)
+        let chunks = retriever.retrieve(query: question, k: 3, trace: false) // iOS: Use topK=3 for performance
+        #else
         let chunks = retriever.retrieve(query: question, k: 5, trace: false)
+        #endif
 
         #if DEBUG
         print("📚 [ModelManager] Retrieved \(chunks.count) chunks")
@@ -317,6 +321,12 @@ class ModelManager: ObservableObject {
         _log.logEvent(event: "[ModelManager] Context length: \(context.count) chars")
         #if DEBUG
         print("📝 [ModelManager] Built context with \(context.count) characters")
+        if context.isEmpty {
+            print("⚠️ [ModelManager] WARNING: Context is EMPTY - RAG will not work!")
+            print("   VectorStore has \(VectorStore.shared.chunks.count) chunks")
+        } else {
+            print("📝 [ModelManager] Context preview: \(context.prefix(200))...")
+        }
         #endif
 
         // 3. Generate answer using LLM (✅ NOW ASYNC!)
@@ -333,8 +343,14 @@ class ModelManager: ObservableObject {
         let answer: String
         do {
             print("🎯 [ModelManager] Calling generateAsync NOW...")
+            // Always pass context, even if empty (let LLM decide)
             answer = try await currentLLMModel.generateAsync(prompt: question, context: context.isEmpty ? nil : context)
             print("✅ [ModelManager] generateAsync returned: \(answer.count) chars")
+            #if DEBUG
+            if answer.isEmpty {
+                print("❌ [ModelManager] ERROR: LLM returned EMPTY answer!")
+            }
+            #endif
         } catch {
             let errorMsg = "LLM generation failed: \(error.localizedDescription)"
             _log.logEvent(event: "[ModelManager] ERROR: \(errorMsg)")

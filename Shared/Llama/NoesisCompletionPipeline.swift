@@ -178,13 +178,14 @@ public func runNoesisCompletion(
 private func buildPrompt(question: String, context: String?) -> String {
     let sys = """
     You are Noesis/Noema on-device RAG assistant.
-    Answer with the final answer only. Do not include analysis, chain-of-thought, self-talk, or meta-commentary.
-    If you are about to write analysis or planning, stop and output only the final answer.
-    When context is provided, use only that context.
+    Answer questions using the provided context.
+    Be concise and direct. Do not include meta-commentary or analysis.
     """
     var user = "Question: \(question)"
     if let ctx = context, !ctx.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        user += "\nContext:\n\(ctx)"
+        user += "\n\nContext:\n\(ctx)"
+    } else {
+        print("⚠️ [buildPrompt] WARNING: No context provided - answering without RAG")
     }
     return """
     <|im_start|>system

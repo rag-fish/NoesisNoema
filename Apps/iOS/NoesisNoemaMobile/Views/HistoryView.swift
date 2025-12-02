@@ -75,22 +75,22 @@ struct HistoryRowView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(qa.question)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(Color(.label))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 Text(formattedDate)
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
 
                 Text("•")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
 
                 Text(modelName)
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
                     .lineLimit(1)
             }
         }
@@ -130,12 +130,12 @@ struct HistoryDetailSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Question")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color(.secondaryLabel))
                             .textCase(.uppercase)
 
                         Text(qa.question)
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(Color(.label))
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
@@ -144,12 +144,12 @@ struct HistoryDetailSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Answer")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color(.secondaryLabel))
                             .textCase(.uppercase)
 
                         Text(qa.answer)
                             .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(Color(.label))
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -159,7 +159,7 @@ struct HistoryDetailSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Feedback")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color(.secondaryLabel))
                             .textCase(.uppercase)
 
                         HStack(spacing: 12) {
@@ -187,7 +187,7 @@ struct HistoryDetailSheet: View {
                     if let date = qa.date {
                         Text("Answered at: \(date.formatted(.dateTime))")
                             .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color(.secondaryLabel))
                             .padding(.top, 4)
                     }
                 }
