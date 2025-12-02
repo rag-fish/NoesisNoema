@@ -1,0 +1,23 @@
+{
+  "images" : [
+    {
+      "filename" : "Manuskript2_Zuschnitt.jpg",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "Manuskript2_Zuschnitt 1.jpg",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "Manuskript2_Zuschnitt 2.jpg",
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

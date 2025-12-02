@@ -350,3 +350,7 @@ build-*
 tools/
 .build/
 .DS_Store
+
+# LLM models
+*.gguf
+Apps/macOS/NoesisNoema/Resources/Models/*.gguf
