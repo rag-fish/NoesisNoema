@@ -54,10 +54,11 @@ struct ChatScreen: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
+                // Chat tab: Show only the latest QA (most recent)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(documentManager.qaHistory) { qa in
-                            MessageRow(qa: qa)
+                        if let latestQA = documentManager.qaHistory.last {
+                            MessageRow(qa: latestQA)
                         }
                     }
                     .padding(.horizontal, 16)

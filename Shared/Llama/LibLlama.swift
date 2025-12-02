@@ -115,7 +115,7 @@ actor LlamaContext {
         }
 
         #if os(iOS)
-        let n_threads = max(1, min(4, ProcessInfo.processInfo.processorCount))
+        let n_threads = 4 // Fixed at 4 for iOS performance
         #else
         let n_threads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
         #endif
@@ -123,7 +123,7 @@ actor LlamaContext {
 
         var ctx_params = llama_context_default_params()
         #if os(iOS)
-        ctx_params.n_ctx = 1024 // 軽量化
+        ctx_params.n_ctx = 1024 // Lightweight for iOS
         #else
         ctx_params.n_ctx = 2048
         #endif
@@ -137,7 +137,7 @@ actor LlamaContext {
         }
 
         #if os(iOS)
-        return LlamaContext(model: model, context: context, initialNLen: 256)
+        return LlamaContext(model: model, context: context, initialNLen: 256) // Reduced token limit for iOS
         #else
         return LlamaContext(model: model, context: context)
         #endif

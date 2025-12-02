@@ -1,0 +1,295 @@
+diff --git a/Apps/iOS/NoesisNoemaMobile/Views/ChatView.swift b/Apps/iOS/NoesisNoemaMobile/Views/ChatView.swift
+index ae996dc..7c9f270 100644
+--- a/Apps/iOS/NoesisNoemaMobile/Views/ChatView.swift
++++ b/Apps/iOS/NoesisNoemaMobile/Views/ChatView.swift
+@@ -47,7 +47,7 @@ struct ChatScreen: View {
+                 VStack(alignment: .leading, spacing: 0) {
+                     Text("Ask me anything.")
+                         .font(.system(size: 16, weight: .medium))
+-                        .foregroundColor(.secondary)
++                        .foregroundStyle(Color(.secondaryLabel))
+                         .padding(.horizontal, 16)
+                         .padding(.top, 16)
+                     Spacer(minLength: 0)
+@@ -81,7 +81,7 @@ struct ChatScreen: View {
+                         .scaleEffect(1.2)
+                     Text("Generating...")
+                         .font(.system(size: 14, weight: .medium))
+-                        .foregroundColor(.secondary)
++                        .foregroundStyle(Color(.secondaryLabel))
+                 }
+                 .padding(20)
+                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+@@ -138,11 +138,11 @@ struct ChatHeaderView: View {
+             VStack(alignment: .leading, spacing: 4) {
+                 Text("Noesis Noema")
+                     .font(.system(size: 18, weight: .semibold))
+-                    .foregroundColor(.primary)
++                    .foregroundStyle(Color(.label))
+
+                 Text("Model: \(modelName) · Preset: \(presetName)")
+                     .font(.system(size: 12, weight: .medium))
+-                    .foregroundColor(.secondary)
++                    .foregroundStyle(Color(.secondaryLabel))
+             }
+             .padding(.horizontal, 16)
+             .padding(.vertical, 12)
+@@ -180,7 +180,7 @@ struct ChatInputBar: View {
+             Button(action: onSubmit) {
+                 Image(systemName: "arrow.up")
+                     .font(.system(size: 16))
+-                    .foregroundColor(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? .secondary : .accentColor)
++                    .foregroundStyle(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? Color(.secondaryLabel) : Color.accentColor)
+             }
+             .frame(width: 32, height: 32)
+             .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+@@ -198,7 +198,7 @@ struct MessageRow: View {
+             HStack(alignment: .top, spacing: 0) {
+                 Text(qa.question)
+                     .font(.system(size: 14))
+-                    .foregroundColor(.primary)
++                    .foregroundStyle(Color(.label))
+                     .fixedSize(horizontal: false, vertical: true)
+                 Spacer(minLength: 0)
+             }
+@@ -210,7 +210,7 @@ struct MessageRow: View {
+             HStack(alignment: .top, spacing: 0) {
+                 Text(qa.answer)
+                     .font(.system(size: 14))
+-                    .foregroundColor(.primary)
++                    .foregroundStyle(Color(.label))
+                     .fixedSize(horizontal: false, vertical: true)
+                 Spacer(minLength: 0)
+             }
+diff --git a/Apps/iOS/NoesisNoemaMobile/Views/FullScreenTestView.swift b/Apps/iOS/NoesisNoemaMobile/Views/FullScreenTestView.swift
+index 1a9a4af..2f959d6 100644
+--- a/Apps/iOS/NoesisNoemaMobile/Views/FullScreenTestView.swift
++++ b/Apps/iOS/NoesisNoemaMobile/Views/FullScreenTestView.swift
+@@ -16,11 +16,11 @@ struct FullScreenTestView: View {
+             VStack(spacing: 20) {
+                 Text("Full Screen OK")
+                     .font(.system(size: 24, weight: .semibold))
+-                    .foregroundColor(.gray)
++                    .foregroundStyle(Color(.systemGray))
+
+                 Text("If you see gaps, the issue is at system level")
+                     .font(.system(size: 12))
+-                    .foregroundColor(.secondary)
++                    .foregroundStyle(Color(.secondaryLabel))
+                     .multilineTextAlignment(.center)
+             }
+             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+diff --git a/Apps/iOS/NoesisNoemaMobile/Views/HistoryView.swift b/Apps/iOS/NoesisNoemaMobile/Views/HistoryView.swift
+index 26dca1a..fc59a92 100644
+--- a/Apps/iOS/NoesisNoemaMobile/Views/HistoryView.swift
++++ b/Apps/iOS/NoesisNoemaMobile/Views/HistoryView.swift
+@@ -75,22 +75,22 @@ struct HistoryRowView: View {
+         VStack(alignment: .leading, spacing: 6) {
+             Text(qa.question)
+                 .font(.system(size: 16, weight: .medium))
+-                .foregroundColor(.primary)
++                .foregroundStyle(Color(.label))
+                 .lineLimit(2)
+                 .fixedSize(horizontal: false, vertical: true)
+
+             HStack(spacing: 8) {
+                 Text(formattedDate)
+                     .font(.system(size: 13))
+-                    .foregroundColor(.secondary)
++                    .foregroundStyle(Color(.secondaryLabel))
+
+                 Text("•")
+                     .font(.system(size: 13))
+-                    .foregroundColor(.secondary)
++                    .foregroundStyle(Color(.secondaryLabel))
+
+                 Text(modelName)
+                     .font(.system(size: 13))
+-                    .foregroundColor(.secondary)
++                    .foregroundStyle(Color(.secondaryLabel))
+                     .lineLimit(1)
+             }
+         }
+@@ -130,12 +130,12 @@ struct HistoryDetailSheet: View {
+                     VStack(alignment: .leading, spacing: 8) {
+                         Text("Question")
+                             .font(.system(size: 13, weight: .semibold))
+-                            .foregroundColor(.secondary)
++                            .foregroundStyle(Color(.secondaryLabel))
+                             .textCase(.uppercase)
+
+                         Text(qa.question)
+                             .font(.system(size: 16, weight: .medium))
+-                            .foregroundColor(.primary)
++                            .foregroundStyle(Color(.label))
+                             .fixedSize(horizontal: false, vertical: true)
+                     }
+
+@@ -144,12 +144,12 @@ struct HistoryDetailSheet: View {
+                     VStack(alignment: .leading, spacing: 8) {
+                         Text("Answer")
+                             .font(.system(size: 13, weight: .semibold))
+-                            .foregroundColor(.secondary)
++                            .foregroundStyle(Color(.secondaryLabel))
+                             .textCase(.uppercase)
+
+                         Text(qa.answer)
+                             .font(.system(size: 15, weight: .regular))
+-                            .foregroundColor(.primary)
++                            .foregroundStyle(Color(.label))
+                             .textSelection(.enabled)
+                             .fixedSize(horizontal: false, vertical: true)
+                     }
+@@ -159,7 +159,7 @@ struct HistoryDetailSheet: View {
+                     VStack(alignment: .leading, spacing: 12) {
+                         Text("Feedback")
+                             .font(.system(size: 13, weight: .semibold))
+-                            .foregroundColor(.secondary)
++                            .foregroundStyle(Color(.secondaryLabel))
+                             .textCase(.uppercase)
+
+                         HStack(spacing: 12) {
+@@ -187,7 +187,7 @@ struct HistoryDetailSheet: View {
+                     if let date = qa.date {
+                         Text("Answered at: \(date.formatted(.dateTime))")
+                             .font(.system(size: 13))
+-                            .foregroundColor(.secondary)
++                            .foregroundStyle(Color(.secondaryLabel))
+                             .padding(.top, 4)
+                     }
+                 }
+diff --git a/Shared/LLMModel.swift b/Shared/LLMModel.swift
+index e59762a..e8b9e52 100644
+--- a/Shared/LLMModel.swift
++++ b/Shared/LLMModel.swift
+@@ -151,6 +151,24 @@ class LLMModel: @unchecked Sendable {
+         // Get preset from ModelManager
+         let presetName = await ModelManager.shared.currentLLMPreset
+
++        #if os(iOS)
++        // iOS: Use reduced token limits for performance
++        switch presetName {
++        case "factual":
++            return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.85, nLen: 256)
++        case "balanced":
++            return LlamaRuntimeParams(temp: 0.5, topK: 60, topP: 0.9, nLen: 256)
++        case "creative":
++            return LlamaRuntimeParams(temp: 0.9, topK: 100, topP: 0.95, nLen: 384)
++        case "json":
++            return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.9, nLen: 256)
++        case "code":
++            return LlamaRuntimeParams(temp: 0.3, topK: 50, topP: 0.9, nLen: 320)
++        default: // "auto" or unknown
++            return LlamaRuntimeParams(temp: 0.5, topK: 60, topP: 0.9, nLen: 256)
++        }
++        #else
++        // macOS: Standard token limits
+         switch presetName {
+         case "factual":
+             return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.85, nLen: 384)
+@@ -165,6 +183,7 @@ class LLMModel: @unchecked Sendable {
+         default: // "auto" or unknown
+             return .balanced
+         }
++        #endif
+     }
+
+     /// Legacy method for loading model (kept for compatibility)
+diff --git a/Shared/Llama/LibLlama.swift b/Shared/Llama/LibLlama.swift
+index e38a2d7..fb6d26a 100644
+--- a/Shared/Llama/LibLlama.swift
++++ b/Shared/Llama/LibLlama.swift
+@@ -115,7 +115,7 @@ actor LlamaContext {
+         }
+
+         #if os(iOS)
+-        let n_threads = max(1, min(4, ProcessInfo.processInfo.processorCount))
++        let n_threads = 4 // Fixed at 4 for iOS performance
+         #else
+         let n_threads = max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
+         #endif
+@@ -123,7 +123,7 @@ actor LlamaContext {
+
+         var ctx_params = llama_context_default_params()
+         #if os(iOS)
+-        ctx_params.n_ctx = 1024 // 軽量化
++        ctx_params.n_ctx = 1024 // Lightweight for iOS
+         #else
+         ctx_params.n_ctx = 2048
+         #endif
+@@ -137,7 +137,7 @@ actor LlamaContext {
+         }
+
+         #if os(iOS)
+-        return LlamaContext(model: model, context: context, initialNLen: 256)
++        return LlamaContext(model: model, context: context, initialNLen: 256) // Reduced token limit for iOS
+         #else
+         return LlamaContext(model: model, context: context)
+         #endif
+diff --git a/Shared/Llama/NoesisCompletionPipeline.swift b/Shared/Llama/NoesisCompletionPipeline.swift
+index 1098905..882b3b2 100644
+--- a/Shared/Llama/NoesisCompletionPipeline.swift
++++ b/Shared/Llama/NoesisCompletionPipeline.swift
+@@ -178,13 +178,14 @@ public func runNoesisCompletion(
+ private func buildPrompt(question: String, context: String?) -> String {
+     let sys = """
+     You are Noesis/Noema on-device RAG assistant.
+-    Answer with the final answer only. Do not include analysis, chain-of-thought, self-talk, or meta-commentary.
+-    If you are about to write analysis or planning, stop and output only the final answer.
+-    When context is provided, use only that context.
++    Answer questions using the provided context.
++    Be concise and direct. Do not include meta-commentary or analysis.
+     """
+     var user = "Question: \(question)"
+     if let ctx = context, !ctx.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+-        user += "\nContext:\n\(ctx)"
++        user += "\n\nContext:\n\(ctx)"
++    } else {
++        print("⚠️ [buildPrompt] WARNING: No context provided - answering without RAG")
+     }
+     return """
+     <|im_start|>system
+diff --git a/Shared/ModelManager.swift b/Shared/ModelManager.swift
+index 3242c51..9700118 100644
+--- a/Shared/ModelManager.swift
++++ b/Shared/ModelManager.swift
+@@ -298,7 +298,11 @@ class ModelManager: ObservableObject {
+         print("📚 [ModelManager] Retrieving RAG context...")
+         #endif
+         let retriever = LocalRetriever(store: VectorStore.shared)
++        #if os(iOS)
++        let chunks = retriever.retrieve(query: question, k: 3, trace: false) // iOS: Use topK=3 for performance
++        #else
+         let chunks = retriever.retrieve(query: question, k: 5, trace: false)
++        #endif
+
+         #if DEBUG
+         print("📚 [ModelManager] Retrieved \(chunks.count) chunks")
+@@ -317,6 +321,12 @@ class ModelManager: ObservableObject {
+         _log.logEvent(event: "[ModelManager] Context length: \(context.count) chars")
+         #if DEBUG
+         print("📝 [ModelManager] Built context with \(context.count) characters")
++        if context.isEmpty {
++            print("⚠️ [ModelManager] WARNING: Context is EMPTY - RAG will not work!")
++            print("   VectorStore has \(VectorStore.shared.chunks.count) chunks")
++        } else {
++            print("📝 [ModelManager] Context preview: \(context.prefix(200))...")
++        }
+         #endif
+
+         // 3. Generate answer using LLM (✅ NOW ASYNC!)
+@@ -333,8 +343,14 @@ class ModelManager: ObservableObject {
+         let answer: String
+         do {
+             print("🎯 [ModelManager] Calling generateAsync NOW...")
++            // Always pass context, even if empty (let LLM decide)
+             answer = try await currentLLMModel.generateAsync(prompt: question, context: context.isEmpty ? nil : context)
+             print("✅ [ModelManager] generateAsync returned: \(answer.count) chars")
++            #if DEBUG
++            if answer.isEmpty {
++                print("❌ [ModelManager] ERROR: LLM returned EMPTY answer!")
++            }
++            #endif
+         } catch {
+             let errorMsg = "LLM generation failed: \(error.localizedDescription)"
+             _log.logEvent(event: "[ModelManager] ERROR: \(errorMsg)")

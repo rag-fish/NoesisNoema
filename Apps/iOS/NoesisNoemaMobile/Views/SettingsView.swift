@@ -59,18 +59,18 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Model")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Current Model")
                             .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.secondary)
 
                         Text(modelManager.currentLLMModel.name)
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.primary)
+                            .foregroundColor(.primary)
                     }
 
                     Spacer()
@@ -81,7 +81,7 @@ struct SettingsView: View {
                     } else if runtimeMode == .override {
                         Text("Custom")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundColor(.orange)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.orange.opacity(0.15), in: Capsule())
@@ -103,7 +103,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Preset")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             Picker("Preset", selection: $selectedLLMPreset) {
                 ForEach(availableLLMPresets, id: \.self) { preset in
@@ -117,7 +117,7 @@ struct SettingsView: View {
 
             Text("Auto adjusts parameters based on your model. Choose Balanced, Creative, or Precise for specific behaviors.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -127,7 +127,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Runtime Parameters")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             Toggle("Use Recommended", isOn: $useRecommended)
                 .onChange(of: useRecommended) { newValue in
@@ -147,11 +147,11 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Override Panel")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
 
                     Text("Manual parameter tuning is available here. Use with caution.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
 
                     Button("Reset to Recommended") {
                         ModelManager.shared.resetToRecommended()
@@ -169,16 +169,16 @@ struct SettingsView: View {
             if let warn = autotuneWarning {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
+                        .foregroundColor(.yellow)
                     Text(warn)
                         .font(.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
             }
 
             Text("Recommended settings are automatically optimized for your device. Override only if you need manual control.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -188,7 +188,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("RAG Document")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             Button {
                 showImporter = true
@@ -207,17 +207,17 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Last Imported")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                     Text(path)
                         .font(.system(size: 14))
-                        .foregroundStyle(.primary)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
                 }
             }
 
             Text("Import a .zip file containing documents for retrieval-augmented generation.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -227,7 +227,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Advanced")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             Toggle("Print Tokens", isOn: $debugPrintTokens)
                 .font(.system(size: 15))
@@ -240,7 +240,7 @@ struct SettingsView: View {
 
             Text("Debug options for development. These are placeholder toggles and do not affect functionality yet.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
         }
     }
 

@@ -71,6 +71,11 @@ class LLMModel: @unchecked Sendable {
         print("🚀 [LLMModel] STEP 3: Calling runNoesisCompletion() NOW...")
         print("   modelPath: \(modelPath)")
         print("   question: \(prompt.prefix(80))...")
+
+        // RAG diagnostic logging (as requested in issue)
+        print("[RAG] generate parameters:", params)
+        print("[RAG] context length:", context?.count ?? 0)
+
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         let answer = try await runNoesisCompletion(
@@ -151,6 +156,24 @@ class LLMModel: @unchecked Sendable {
         // Get preset from ModelManager
         let presetName = await ModelManager.shared.currentLLMPreset
 
+        #if os(iOS)
+        // iOS: Use reduced token limits for performance
+        switch presetName {
+        case "factual":
+            return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.85, nLen: 256)
+        case "balanced":
+            return LlamaRuntimeParams(temp: 0.5, topK: 60, topP: 0.9, nLen: 256)
+        case "creative":
+            return LlamaRuntimeParams(temp: 0.9, topK: 100, topP: 0.95, nLen: 384)
+        case "json":
+            return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.9, nLen: 256)
+        case "code":
+            return LlamaRuntimeParams(temp: 0.3, topK: 50, topP: 0.9, nLen: 320)
+        default: // "auto" or unknown
+            return LlamaRuntimeParams(temp: 0.5, topK: 60, topP: 0.9, nLen: 256)
+        }
+        #else
+        // macOS: Standard token limits
         switch presetName {
         case "factual":
             return LlamaRuntimeParams(temp: 0.2, topK: 40, topP: 0.85, nLen: 384)
@@ -165,6 +188,7 @@ class LLMModel: @unchecked Sendable {
         default: // "auto" or unknown
             return .balanced
         }
+        #endif
     }
 
     /// Legacy method for loading model (kept for compatibility)
