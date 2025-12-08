@@ -17,6 +17,11 @@ class VectorStore {
     var chunks: [Chunk]
     var embeddingModel: EmbeddingModel
     var isEmbedded: Bool
+
+    // PERFORMANCE: Cache for chunk lookup by hash
+    private var chunkCache: [String: [Chunk]] = [:]
+    private let cacheQueue = DispatchQueue(label: "com.noesis.vectorstore.cache", attributes: .concurrent)
+
     /// Initializes a VectorStore with an embedding model and an optional initial set of chunks.
     /// - Parameters:
     ///  - embeddingModel: The model used to generate embeddings for text.
@@ -159,8 +164,28 @@ class VectorStore {
             let dt = Date().timeIntervalSince(_t0)
             _log.logEvent(event: String(format: "[VectorStore] ragAnswer exit (%.2f ms)", dt*1000))
         }
+
+        // PERFORMANCE: Check cache first
+        let cacheKey = "\(query):\(topK)"
+        if let cached = cacheQueue.sync(execute: { chunkCache[cacheKey] }) {
+            let context = cached.map { $0.content }.joined(separator: "\n---\n")
+            _log.logEvent(event: "[VectorStore] Cache hit for query")
+            return context.isEmpty ? "" : "[RAG Context]\n" + context
+        }
+
         // Retrieve relevant chunks for the query
         let relevantChunks = retrieveChunks(for: query, topK: topK)
+
+        // Cache the result
+        cacheQueue.async(flags: .barrier) { [weak self] in
+            self?.chunkCache[cacheKey] = relevantChunks
+            // Limit cache size
+            if let count = self?.chunkCache.count, count > 100 {
+                let oldest = self?.chunkCache.keys.prefix(20)
+                oldest?.forEach { self?.chunkCache.removeValue(forKey: $0) }
+            }
+        }
+
         // Concatenate their contents to form the context string
         var context = relevantChunks.map { $0.content }.joined(separator: "\n---\n")
         // 軽いトリムと安全上限

@@ -99,13 +99,21 @@ struct ChatScreen: View {
         question = trimmed
         questionFocused = false
         isLoading = true
-        Task { @MainActor in
-            let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-            let newPair = documentManager.addQAPair(question: question, answer: result)
-            let sources = ModelManager.shared.lastRetrievedChunks
-            QAContextStore.shared.put(qaId: newPair.id, question: newPair.question, answer: newPair.answer, sources: sources, embedder: ModelManager.shared.currentEmbeddingModel)
-            question = ""
-            isLoading = false
+
+        // PERFORMANCE: Run entire RAG pipeline off main thread
+        Task.detached(priority: .userInitiated) {
+            let result = await ModelManager.shared.generateAsyncAnswer(question: trimmed)
+
+            await MainActor.run {
+                let newPair = documentManager.addQAPair(question: trimmed, answer: result)
+                Task {
+                    let sources = await MainActor.run { ModelManager.shared.lastRetrievedChunks }
+                    let embedder = await MainActor.run { ModelManager.shared.currentEmbeddingModel }
+                    QAContextStore.shared.put(qaId: newPair.id, question: newPair.question, answer: newPair.answer, sources: sources, embedder: embedder)
+                }
+                question = ""
+                isLoading = false
+            }
         }
     }
 }

@@ -34,12 +34,15 @@ public struct LlamaRuntimeParams {
 /// Unified completion pipeline - the SINGLE source of truth for inference
 /// Extracted from working CLI (LlamaBridgeTest/main.swift)
 /// ⚠️ NO @MainActor - must run on background thread to avoid blocking UI
+/// PERFORMANCE: Runs entirely off main thread
 public func runNoesisCompletion(
     question: String,
     context: String?,
     modelPath: String,
     params: LlamaRuntimeParams = .balanced
 ) async throws -> String {
+
+    let perfStart = Date()
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -54,16 +57,22 @@ public func runNoesisCompletion(
     SystemLog().logEvent(event: "[NoesisCompletion] Starting pipeline: q=\(question.count)chars ctx=\(context?.count ?? 0)chars")
 
     // Step 1: Build prompt (matches CLI logic)
+    let promptStart = Date()
     let prompt = buildPrompt(question: question, context: context)
-    print("📝 [NoesisCompletion] Prompt built: \(prompt.count) chars")
+    let promptTime = Date().timeIntervalSince(promptStart)
+    print("📝 [NoesisCompletion] Prompt built: \(prompt.count) chars in \(String(format: "%.2f", promptTime*1000))ms")
+    SystemLog().logEvent(event: String(format: "[PERF] Prompt build: %.2f ms", promptTime*1000))
 
     // RAG diagnostic: Show prompt preview (as requested in issue)
     print("[RAG] prompt preview:", String(prompt.prefix(200)))
 
     // Step 2: Create LlamaContext (fresh, like CLI does)
     print("🔧 [NoesisCompletion] Creating LlamaContext...")
+    let ctxStart = Date()
     let ctx = try LlamaContext.create_context(path: modelPath)
-    print("✅ [NoesisCompletion] LlamaContext created successfully")
+    let ctxTime = Date().timeIntervalSince(ctxStart)
+    print("✅ [NoesisCompletion] LlamaContext created successfully in \(String(format: "%.2f", ctxTime*1000))ms")
+    SystemLog().logEvent(event: String(format: "[PERF] Context creation: %.2f ms", ctxTime*1000))
 
     // Step 3: Configure sampling (matches CLI)
     print("🎛️  [NoesisCompletion] Configuring sampling...")
@@ -77,8 +86,11 @@ public func runNoesisCompletion(
     print("🚀 [NoesisCompletion] BEFORE completion_init()")
     print("   Prompt length: \(prompt.count)")
     print("   Prompt preview: \(prompt.prefix(200))...")
+    let tokenizeStart = Date()
     await ctx.completion_init(text: prompt)
-    print("✅ [NoesisCompletion] AFTER completion_init() - Prompt tokenized")
+    let tokenizeTime = Date().timeIntervalSince(tokenizeStart)
+    print("✅ [NoesisCompletion] AFTER completion_init() - Prompt tokenized in \(String(format: "%.2f", tokenizeTime*1000))ms")
+    SystemLog().logEvent(event: String(format: "[PERF] Tokenization: %.2f ms", tokenizeTime*1000))
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("🔄 ENTERING TOKEN GENERATION LOOP")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -166,12 +178,18 @@ public func runNoesisCompletion(
     print("   Raw preview: \(acc.prefix(200))...")
 
     // Step 6: Clean output (matches CLI)
+    let cleanStart = Date()
     let cleaned = cleanOutput(acc)
     let finalAnswer = extractFinalAnswer(cleaned)
+    let cleanTime = Date().timeIntervalSince(cleanStart)
+
+    let totalTime = Date().timeIntervalSince(perfStart)
 
     print("✅ [NoesisCompletion] Final answer: \(finalAnswer.count) chars")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    SystemLog().logEvent(event: "[NoesisCompletion] Complete: \(tokenCount) tokens, \(finalAnswer.count) chars")
+    print("📊 [PERF] Total pipeline time: \(String(format: "%.2f", totalTime*1000))ms")
+    SystemLog().logEvent(event: String(format: "[NoesisCompletion] Complete: %d tokens, %d chars, %.2f ms total", tokenCount, finalAnswer.count, totalTime*1000))
+    SystemLog().logEvent(event: String(format: "[PERF] Cleanup: %.2f ms", cleanTime*1000))
 
     return finalAnswer
 }

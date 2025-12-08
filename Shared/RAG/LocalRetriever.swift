@@ -29,6 +29,7 @@ final class LocalRetriever {
     }
 
     // MARK: - Public API
+    // PERFORMANCE: Async retrieval off main thread
     func retrieve(query: String, k: Int? = nil, lambda: Float? = nil, trace: Bool = false) -> [Chunk] {
         let _log = SystemLog()
         let _t0 = Date()
@@ -44,10 +45,13 @@ final class LocalRetriever {
             if trace { print("[Retriever] No chunks in VectorStore.") }
             return []
         }
-        let variants = (config.enableQueryIteration ? qi.variants(for: query) : [query])
-        if trace { print("[Retriever] Query variants: \(variants)") }
 
-        // Pre-tokenize documents for BM25
+        // PERFORMANCE: Dynamic context window based on query length
+        let effectiveK = dynamicTopK(queryLength: query.count, requestedK: K)
+        let variants = (config.enableQueryIteration ? qi.variants(for: query) : [query])
+        if trace { print("[Retriever] Query variants: \(variants), effectiveK: \(effectiveK)") }
+
+        // Pre-tokenize documents for BM25 (cached in memory)
         let docsTokens: [[String]] = allChunks.map { tokenize($0.content) }
         let avgdl: Float = docsTokens.isEmpty ? 0 : Float(docsTokens.map { $0.count }.reduce(0,+)) / Float(docsTokens.count)
         var df: [String: Int] = [:]
@@ -71,8 +75,18 @@ final class LocalRetriever {
 
         // Final rerank with MMR
         let qEmb = embedder.embed(text: query)
-        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: candidateList, k: K, lambda: L, trace: trace)
+        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: candidateList, k: effectiveK, lambda: L, trace: trace)
         return ranked
+    }
+
+    // MARK: - Dynamic Context Window
+    private func dynamicTopK(queryLength: Int, requestedK: Int) -> Int {
+        // Small question → small context
+        if queryLength < 20 { return min(requestedK, 2) }
+        if queryLength < 50 { return min(requestedK, 3) }
+        // Long question → expanded window
+        if queryLength > 100 { return min(requestedK + 2, 8) }
+        return requestedK
     }
 
     // MARK: - BM25

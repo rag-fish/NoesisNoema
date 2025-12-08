@@ -259,14 +259,20 @@ class ModelManager: ObservableObject {
     func isFullyLocal() -> Bool { true }
 
     /// Full RAG implementation: retrieves chunks and generates answer with citations
-    func generateAsyncAnswer(question: String) async -> String {
+    /// PERFORMANCE: Moved off @MainActor - runs entirely on background thread
+    nonisolated func generateAsyncAnswer(question: String) async -> String {
+        // Measure total time
+        let perfStart = Date()
+
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print("🎬 [ModelManager] generateAsyncAnswer CALLED")
         print("   Question: \(question.prefix(50))...")
-        print("   Current LLM: \(currentLLMModel.name)")
-        print("   Model file: \(currentLLMModel.modelFile)")
 
-        // Explicit MainActor boundary: check and set generating state
+        let currentModel = await MainActor.run { self.currentLLMModel }
+        print("   Current LLM: \(currentModel.name)")
+        print("   Model file: \(currentModel.modelFile)")
+
+        // Set generating state on MainActor
         await MainActor.run { self.isGenerating = true }
         print("🔒 [ModelManager] Set isGenerating = true")
 
@@ -278,39 +284,44 @@ class ModelManager: ObservableObject {
         }
 
         let _log = SystemLog()
-        let _t0 = Date()
         _log.logEvent(event: "[ModelManager] generateAsyncAnswer enter qLen=\(question.count)")
         #if DEBUG
         print("🚀 [ModelManager] Starting generation for question: \(question.prefix(50))...")
         #endif
 
         defer {
-            let dt = Date().timeIntervalSince(_t0)
+            let dt = Date().timeIntervalSince(perfStart)
             _log.logEvent(event: String(format: "[ModelManager] generateAsyncAnswer exit (%.2f ms)", dt*1000))
             #if DEBUG
             print("✅ [ModelManager] Generation completed in \(String(format: "%.2f", dt*1000))ms")
             #endif
         }
 
-        // 1. Retrieve relevant chunks using LocalRetriever (background)
+        // PERFORMANCE: Stage 1 - Retrieve relevant chunks (off main thread)
+        let retrieveStart = Date()
         _log.logEvent(event: "[ModelManager] Retrieving RAG context...")
-
-        // RAG diagnostic logging (as requested in issue)
         print("[RAG] chunks loaded:", VectorStore.shared.chunks.count)
         print("[RAG] query =", question)
 
         #if DEBUG
         print("📚 [ModelManager] Retrieving RAG context...")
         #endif
-        let retriever = LocalRetriever(store: VectorStore.shared)
-        #if os(iOS)
-        let chunks = retriever.retrieve(query: question, k: 3, trace: false) // iOS: Use topK=3 for performance
-        #else
-        let chunks = retriever.retrieve(query: question, k: 5, trace: false)
-        #endif
+
+        // Run retrieval in background
+        let chunks = await Task.detached(priority: .userInitiated) {
+            let retriever = LocalRetriever(store: VectorStore.shared)
+            #if os(iOS)
+            return retriever.retrieve(query: question, k: 3, trace: false)
+            #else
+            return retriever.retrieve(query: question, k: 5, trace: false)
+            #endif
+        }.value
+
+        let retrieveTime = Date().timeIntervalSince(retrieveStart)
+        _log.logEvent(event: String(format: "[PERF] Retrieval: %.2f ms", retrieveTime*1000))
 
         #if DEBUG
-        print("📚 [ModelManager] Retrieved \(chunks.count) chunks")
+        print("📚 [ModelManager] Retrieved \(chunks.count) chunks in \(String(format: "%.2f", retrieveTime*1000))ms")
         if !chunks.isEmpty {
             print("📚 [ModelManager] Context preview: \(chunks.map { $0.content.prefix(50) })")
         }
@@ -321,11 +332,14 @@ class ModelManager: ObservableObject {
             self.lastRetrievedChunks = chunks
         }
 
-        // 2. Build context from chunks (background)
+        // PERFORMANCE: Stage 2 - Build context (off main thread)
+        let contextStart = Date()
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
-        _log.logEvent(event: "[ModelManager] Context length: \(context.count) chars")
+        let contextTime = Date().timeIntervalSince(contextStart)
+
+        _log.logEvent(event: String(format: "[PERF] Context build: %.2f ms, length: %d chars", contextTime*1000, context.count))
         #if DEBUG
-        print("📝 [ModelManager] Built context with \(context.count) characters")
+        print("📝 [ModelManager] Built context with \(context.count) characters in \(String(format: "%.2f", contextTime*1000))ms")
         if context.isEmpty {
             print("⚠️ [ModelManager] WARNING: Context is EMPTY - RAG will not work!")
             print("   VectorStore has \(VectorStore.shared.chunks.count) chunks")
@@ -334,13 +348,14 @@ class ModelManager: ObservableObject {
         }
         #endif
 
-        // 3. Generate answer using LLM (✅ NOW ASYNC!)
+        // PERFORMANCE: Stage 3 - Generate answer using LLM (off main thread)
+        let genStart = Date()
         _log.logEvent(event: "[ModelManager] Calling LLM generateAsync...")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print("🚀 [ModelManager] About to call currentLLMModel.generateAsync()")
         #if DEBUG
-        print("🧠 [ModelManager] Calling LLM model: \(currentLLMModel.name)")
-        print("🧠 [ModelManager] Model file: \(currentLLMModel.modelFile)")
+        print("🧠 [ModelManager] Calling LLM model: \(currentModel.name)")
+        print("🧠 [ModelManager] Model file: \(currentModel.modelFile)")
         print("🧠 [ModelManager] Prompt: \(question.prefix(80))...")
         print("🧠 [ModelManager] Context: \(context.isEmpty ? "none" : "\(context.count) chars")")
         #endif
@@ -348,9 +363,10 @@ class ModelManager: ObservableObject {
         let answer: String
         do {
             print("🎯 [ModelManager] Calling generateAsync NOW...")
-            // Always pass context, even if empty (let LLM decide)
-            answer = try await currentLLMModel.generateAsync(prompt: question, context: context.isEmpty ? nil : context)
-            print("✅ [ModelManager] generateAsync returned: \(answer.count) chars")
+            answer = try await currentModel.generateAsync(prompt: question, context: context.isEmpty ? nil : context)
+            let genTime = Date().timeIntervalSince(genStart)
+            _log.logEvent(event: String(format: "[PERF] Generation: %.2f ms", genTime*1000))
+            print("✅ [ModelManager] generateAsync returned: \(answer.count) chars in \(String(format: "%.2f", genTime*1000))ms")
             #if DEBUG
             if answer.isEmpty {
                 print("❌ [ModelManager] ERROR: LLM returned EMPTY answer!")
@@ -365,7 +381,6 @@ class ModelManager: ObservableObject {
             return errorMsg
         }
 
-        // Fallback for empty response (as requested in issue)
         if answer.isEmpty {
             print("[RAG] WARNING: Empty response generated")
             return "No response generated. Please try again."
