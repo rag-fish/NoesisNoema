@@ -14,42 +14,59 @@ Empower your own AGI — no cloud, no SaaS, just your device and your knowledge.
 
 ---
 
-## What’s New (Aug 2025) 🔥
+## What’s New in v0.3 (Dec 2025) 🔥
 
-The on‑device experience leveled up across macOS and iOS:
+This release delivers the first fully unified and polished mobile + desktop experience.
 
-- iOS Universal App (iPhone/iPad; shipped)
-  - Fresh iOS screenshot available in `docs/assets/noesisnoema_ios.png` (see above)
-  - Always‑visible History, QADetail overlays on top (swipe‑down or ✖︎ to close)
-  - Multiline input with placeholder, larger tap targets, equal‑width action buttons
-  - Global loading lock to prevent duplicate queries; answer only appended once
-  - Keyboard UX: tap outside or scroll to dismiss
-  - Startup splash overlay: temporary "Noesis Noema" title on launch
+### iOS (Major Overhaul)
+- Full‑screen edge‑to‑edge layout (iPhone 17 Pro Max verified)
+- New compact header with philosophical manuscript background (Husserl)
+- Stable layout across light/dark mode
+- Restored correct answer rendering (white‑on‑white bug fixed)
+- RAG answers now load reliably on‑device using the unified pipeline
+- History view correctly loads threads and supports per‑question detail
 
-- Deep Search retrieval pipeline
-  - Two-stage retrieval: LocalRetriever + QueryIterator with MMR re‑ranking
-  - Works across multiple RAGpacks; better relevance and source diversity
-  - Tuned defaults per device; fast even on iPhone
-- Feedback loop (local‑only)
-  - Thumbs up/down captured via RewardBus
-  - ParamBandit tunes retrieval params per session (topK, mmrLambda, minScore)
-  - 100% offline; no telemetry
-- Output hygiene & stability
-  - Streaming filter removes `<think>…</think>` and control tokens; stop at `<|im_end|>`
-  - Final normalization unifies model differences for clean, copy‑ready answers
-  - Runtime guard detects broken llama.framework loads; lightweight SystemLog
-- RAGpack import is stricter and safer
-  - Validates presence of `chunks.json` and `embeddings.csv` and enforces count match
-  - De‑duplicates identical chunks across multiple RAGpacks
+### macOS
+- Parity refinements with the new iOS interface
+- Improved consistency in RAG retrieval behavior
 
-### Added
-- Experimental support for GPT‑OSS‑20B (`gpt-oss-20b-Q4_K_S`, released 2025‑08‑08). Place the model at `Resources/Models/gpt-oss-20b-Q4_K_S.gguf` and select it in the LLM picker (macOS/iOS).
-- LLM Presets (Pocket, Balanced, Pro Max) with device‑tuned defaults (threads, GPU layers, batch size, context length, decoding params).
-- Liquid Glass design across macOS and iOS with accessibility‑aware fallbacks (respects Reduce Transparency; solid fallback).
+### Core RAG Engine
+- Unified RAGpack v2 pipeline
+- Cleaner answer normalization
+- Reduced UI blocking during inference
+- Pre‑flight guards around model loading and tokenizer workflows
 
-macOS keeps its “workstation feel”; iOS now brings the same private RAG, in your pocket. 📱💻
+### Stability
+- Eliminated inconsistent safe‑area behavior across navigation wrappers
+- Fixed residual navigation‑controller padding issues from older builds
 
 ---
+
+## Performance Issues Identified (Dec 2025) ⚡
+
+During the development of v0.3, several bottlenecks surfaced during real‑device testing on iPhone 17 Pro Max. These findings now drive our v0.4 optimization cycle.
+
+1. Tokenizer execution performing work on the main thread
+2. Repeated loading of embeddings, tokenizer vocab, and metadata
+3. Non‑streaming generation resulting in synchronous UI stalls
+4. RAGpack v2 `.zip` extraction missing an effective caching layer
+5. Oversized default context window causing unnecessary compute
+6. Swift Concurrency task switching overhead during retrieval
+
+These are addressed under branch:
+`feature/rag-perf-optimization-2025`.
+
+## Optimization Plan (v0.3 → v0.4) 🚀
+
+- Move tokenizer and embedding lookup off the MainActor
+- Preload embeddings asynchronously at app startup
+- Implement llama.cpp streaming callbacks to eliminate blocking
+- Introduce aggressive caching layers for embeddings, tokenizer vocab, and RAGpack metadata
+- Dynamically scale context window based on query type
+- Add precise instrumentation for each phase (tokenize / retrieve / generate)
+- Maintain API compatibility across macOS & iOS targets
+
+These changes aim to deliver a smoother, significantly faster private‑RAG experience.
 
 ## Features ✨
 
@@ -61,8 +78,12 @@ macOS keeps its “workstation feel”; iOS now brings the same private RAG, in 
 - Feedback & learning: thumbs up/down feeds ParamBandit to auto‑tune retrieval (session‑scoped, offline)
 - Modern UX
   - Two‑pane macOS UI
-  - iOS: History always visible; QADetail overlays; copy‑able answers; smooth keyboard handling
-  - Multiline question input; equal‑width Ask / Choose RAGpack buttons
+  - iOS (v0.3)
+    - Stable full‑screen layout; compact header with manuscript background
+    - Multiline input restored with proper dark/light mode rendering
+    - Clear Ask / History / Settings tab design
+    - QADetail overlays functioning with correct dismiss gestures
+    - Reliable answer rendering with proper color handling
 - Clean answers, consistently
   - `<think>…</think>` is filtered on the fly; control tokens removed; stop tokens respected
 - Thin, future‑proof core
@@ -152,14 +173,12 @@ Importer safeguards:
 
 ## UX Details that Matter 💅
 
-- iOS
-  - Interface preview: see screenshot [noesisnoema_ios.png](docs/assets/noesisnoema_ios.png)
-  - Multiline input with placeholder; Return adds a newline (does not send)
-  - Only the Ask button can start inference (no accidental double sends)
-  - During generation: global overlay lock; all inputs disabled (no duplicate queries)
-  - Tap outside or scroll History to dismiss the keyboard
-  - QADetail overlays History; close with swipe‑down or ✖︎; answers are text‑selectable and copyable
-  - Scroll indicators visible in answers to clarify vertical scroll
+- iOS v0.3
+  - Full‑screen, stable layout using updated HostingController stack
+  - Correct rendering across dark/light modes
+  - Persistent History tab with selectable past threads
+  - Clean answer display with scroll indicators
+  - Manuscript‑style header background with automatic scaling
 - macOS
   - Two‑pane layout with History and Detail; same output cleaning; quick import
 
