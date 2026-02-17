@@ -27,7 +27,9 @@ class MinimalClientViewModel: ObservableObject {
 
         let userPrompt = prompt
 
-        // Invocation boundary: call through ModelManager
+        // NOTE: Direct execution without Router.
+        // Router layer will be introduced in X-2.
+        // This is temporary and aligned with MVP stage.
         let result = await Task.detached(priority: .userInitiated) {
             await ModelManager.shared.generateAsyncAnswer(question: userPrompt)
         }.value
