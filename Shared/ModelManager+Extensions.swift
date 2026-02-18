@@ -8,32 +8,6 @@ import Foundation
 /// ModelManager extensions for enhanced functionality
 extension ModelManager {
 
-    /// OOMリカバリー付きモデルロード
-    func loadModelWithFallback(id: String) async throws {
-        do {
-            try await loadModel(id: id)
-        } catch InferenceError.outOfMemory {
-            // OOM検出時、縮小パラメータでリトライ
-            SystemLog().logEvent(event: "[ModelManager] OOM detected, retrying with reduced params")
-
-            if let spec = await registry.getModelSpec(id: id) {
-                var reducedParams = spec.runtimeParams
-                reducedParams.nCtx = reducedParams.nCtx / 2
-                reducedParams.nBatch = reducedParams.nBatch / 2
-                reducedParams.nGpuLayers = 0 // CPU強制
-
-                await registry.updateRuntimeParams(for: id, params: reducedParams)
-
-                errorMessage = "Retrying with reduced memory settings..."
-                try await loadModel(id: id)
-            }
-        } catch {
-            errorMessage = "Failed to load model: \(error.localizedDescription)"
-            SystemLog().logEvent(event: "[ModelManager] Load failed: \(error)")
-            throw error
-        }
-    }
-
     /// Validate model compatibility before loading
     func validateModel(id: String) async -> ModelValidationResult? {
         guard let spec = await registry.getModelSpec(id: id) else {

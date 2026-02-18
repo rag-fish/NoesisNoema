@@ -12,8 +12,7 @@ import SwiftUI
 struct NoesisNoemaApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(AppSettings.shared)
+            MinimalClientView()
         }
     }
 }

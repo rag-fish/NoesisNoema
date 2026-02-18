@@ -9,8 +9,7 @@ import SwiftUI
 
 struct RootView: View {
     var body: some View {
-        TabRootView()
-            .preferredColorScheme(.light) // Force Light Mode to fix Dark Mode visibility issues
+        MinimalClientView()
     }
 }
 
