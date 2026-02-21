@@ -39,14 +39,7 @@ struct Router {
         switch policyResult.effectiveAction {
         case .block(let reason):
             // Policy blocks execution entirely
-            return RoutingDecision(
-                routeTarget: .blocked,
-                model: "",
-                reason: reason,
-                ruleId: .POLICY_BLOCK,
-                fallbackAllowed: false,
-                requiresConfirmation: false
-            )
+            throw RoutingError.policyViolation(reason: reason)
 
         case .forceLocal:
             // Policy forces local execution

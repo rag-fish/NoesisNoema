@@ -10,7 +10,6 @@ import Foundation
 enum ExecutionRoute: String, Codable, Equatable {
     case local = "local"
     case cloud = "cloud"
-    case blocked = "blocked"  // Used when policy blocks execution
 }
 
 /// The routing decision produced by the Router

@@ -126,16 +126,73 @@ final class RouterDeterminismTests: XCTestCase {
             effectiveAction: .block(reason: "Sensitive content detected")
         )
 
-        // Act
-        let decision = try Router.route(
-            question: question,
-            runtimeState: state,
-            policyResult: policy
+        // Act & Assert: Should throw policyViolation error
+        XCTAssertThrowsError(
+            try Router.route(question: question, runtimeState: state, policyResult: policy)
+        ) { error in
+            guard let routingError = error as? RoutingError,
+                  case .policyViolation(let reason) = routingError else {
+                XCTFail("Expected RoutingError.policyViolation, got \(error)")
+                return
+            }
+            XCTAssertEqual(reason, "Sensitive content detected")
+        }
+    }
+
+    /// Test: POLICY_BLOCK throws exception with correct reason
+    func testPolicyBlock_ThrowsException() throws {
+        // Arrange: Multiple scenarios with policy block
+        let scenarios: [(String, NoemaQuestion, String)] = [
+            ("Local privacy", makeQuestion(privacyLevel: .local), "Blocked: local mode"),
+            ("Cloud privacy", makeQuestion(privacyLevel: .cloud), "Blocked: cloud mode"),
+            ("Auto mode", makeQuestion(privacyLevel: .auto), "Blocked: auto mode"),
+            ("Large content", makeQuestion(content: String(repeating: "x", count: 10000), privacyLevel: .auto), "Blocked: large content")
+        ]
+
+        for (scenario, question, expectedReason) in scenarios {
+            let state = makeRuntimeState()
+            let policy = PolicyEvaluationResult(
+                effectiveAction: .block(reason: expectedReason)
+            )
+
+            // Act & Assert
+            XCTAssertThrowsError(
+                try Router.route(question: question, runtimeState: state, policyResult: policy),
+                "Scenario '\(scenario)' should throw"
+            ) { error in
+                guard let routingError = error as? RoutingError,
+                      case .policyViolation(let reason) = routingError else {
+                    XCTFail("Scenario '\(scenario)': Expected RoutingError.policyViolation, got \(error)")
+                    return
+                }
+                XCTAssertEqual(reason, expectedReason, "Scenario '\(scenario)': reason should match")
+            }
+        }
+    }
+
+    /// Test: POLICY_BLOCK does not return a routing decision
+    func testPolicyBlock_DoesNotReturnDecision() throws {
+        // Arrange
+        let question = makeQuestion(privacyLevel: .auto)
+        let state = makeRuntimeState()
+        let policy = PolicyEvaluationResult(
+            effectiveAction: .block(reason: "Test block")
         )
 
-        // Assert: Should be blocked despite cloud privacy level
-        XCTAssertEqual(decision.routeTarget, .blocked)
-        XCTAssertEqual(decision.ruleId, .POLICY_BLOCK)
+        // Act & Assert: Should throw, not return
+        do {
+            let _ = try Router.route(question: question, runtimeState: state, policyResult: policy)
+            XCTFail("Router should throw RoutingError.policyViolation, not return a decision")
+        } catch let error as RoutingError {
+            // Expected: policy violation error
+            guard case .policyViolation = error else {
+                XCTFail("Expected policyViolation error, got \(error)")
+                return
+            }
+            // Success - exception was thrown as required
+        } catch {
+            XCTFail("Expected RoutingError.policyViolation, got \(error)")
+        }
     }
 
     /// Test: Policy FORCE_LOCAL overrides auto mode
