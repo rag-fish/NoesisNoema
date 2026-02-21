@@ -2193,6 +2193,670 @@ The following questions must be resolved before implementation:
 
 ---
 
+# SECTION 7 — Authority Ownership and Boundary Model
+
+## 7.1 Overview
+
+This section explicitly defines **authority ownership layers** within the NoesisNoema architecture. Authority ownership determines **who owns decision-making power**, **who may mutate state**, and **what computational guarantees each component provides** (determinism, side-effect freedom, I/O boundaries).
+
+This is a **documentation refinement only**. No code logic changes are required. The purpose is to make implicit architectural contracts explicit and auditable.
+
+---
+
+## 7.2 Authority Ownership Layers
+
+The NoesisNoema system operates across **four distinct authority layers**:
+
+### Layer 1: Client Authority (Trusted)
+
+**Definition:** The client application (NoesisNoema Swift app) is the **source of truth** for all execution decisions. The client operates on behalf of the human user and is considered **trusted** within the user's device boundary.
+
+**Ownership:**
+- All routing decisions
+- All policy evaluations
+- Session state (authoritative copy)
+- Memory lifecycle management
+- Privacy boundary enforcement
+
+**Key Principle:** The client **may veto any execution**. No server-side logic can override client decisions.
+
+---
+
+### Layer 2: Server Authority (Untrusted, Controlled)
+
+**Definition:** The server (noema-agent) is a **controlled execution environment**. It is considered **untrusted** from the client's perspective and operates as a stateless service that executes explicit instructions.
+
+**Ownership:**
+- Model inference execution (for cloud routes)
+- Temporary session state mirroring (45-minute timeout)
+- Response generation
+
+**Constraints:**
+- Server **may never override client routing decisions**
+- Server **may never self-route** (no autonomous model selection)
+- Server **may never persist state beyond session timeout**
+- Server **must return trace_id** in all responses
+
+**Key Principle:** The server is an **execution boundary**, not a **decision boundary**.
+
+---
+
+### Layer 3: Pure Function Domain (No Authority)
+
+**Definition:** Certain components are implemented as **pure functions** with **no authority** to perform I/O, mutate global state, or make non-deterministic decisions.
+
+**Characteristics:**
+- **Deterministic:** Same inputs → same outputs (always)
+- **Side-effect free:** No I/O, no global state mutation, no logging
+- **Referentially transparent:** Can be memoized, parallelized, or replaced with cached results
+
+**Key Principle:** Pure functions **must not cross authority boundaries**. They receive all required context as parameters and return decisions as values.
+
+---
+
+### Layer 4: External Dependency Boundary
+
+**Definition:** External systems (network, disk, system APIs) are **uncontrolled dependencies** that may introduce non-determinism, latency, or failure.
+
+**Examples:**
+- Network I/O (HTTP requests to server)
+- Disk I/O (SwiftData persistence, log writes)
+- System APIs (model inference, cryptographic random number generation)
+
+**Key Principle:** External dependencies are **isolated** to specific components. Pure functions never directly invoke external dependencies.
+
+---
+
+## 7.3 Component Authority Classification
+
+This subsection classifies each architectural component by its authority layer, decision-making power, state mutation rights, determinism guarantees, and I/O permissions.
+
+---
+
+### 7.3.1 Router
+
+**Authority Layer:** Pure Function (No Authority)
+
+**Decision Authority:** None (the Router is a pure decision function, not an executor)
+
+**State Mutation:** None (no global state, no persistent state, no network calls)
+
+**Determinism:** **Fully deterministic**
+- Given `(NoemaQuestion, RuntimeState, PolicyEvaluationResult)`, the Router **always** produces the same `RoutingDecision`
+- No time-based branching, no randomness, no ML-based inference
+
+**I/O Permissions:** **None**
+- No network calls
+- No disk writes
+- No logging (logging is the caller's responsibility)
+
+**Implementation Contract:**
+```swift
+func route(
+    question: NoemaQuestion,
+    runtimeState: RuntimeState,
+    policyResult: PolicyEvaluationResult
+) -> RoutingDecision
+```
+
+**Alignment with Section 2.5:** The Router is implemented as a pure function with strict, ordered evaluation rules. All routing decisions are deterministic and traceable via `RoutingRuleId`.
+
+---
+
+### 7.3.2 Policy Engine
+
+**Authority Layer:** Pure Function (No Authority)
+
+**Decision Authority:** None (evaluates constraints, does not execute them)
+
+**State Mutation:** None (reads constraints from storage, but does not modify them during evaluation)
+
+**Determinism:** **Fully deterministic**
+- Given `(NoemaQuestion, RuntimeState, constraints)`, the Policy Engine **always** produces the same `PolicyEvaluationResult`
+- Constraint evaluation is boolean logic (no probabilistic inference)
+
+**I/O Permissions:** **None during evaluation**
+- Constraint definitions are loaded from storage **before** evaluation begins
+- During evaluation, the Policy Engine operates as a pure function
+- No network calls, no disk writes during evaluation
+
+**Implementation Contract:**
+```swift
+func evaluateConstraints(
+    question: NoemaQuestion,
+    runtimeState: RuntimeState
+) throws -> PolicyEvaluationResult
+```
+
+**Alignment with Section 3.7:** The Policy Engine uses deterministic conflict resolution with strict precedence rules (BLOCK > FORCE_LOCAL > FORCE_CLOUD > REQUIRE_CONFIRMATION > WARN).
+
+---
+
+### 7.3.3 Constraint Evaluator
+
+**Authority Layer:** Pure Function (No Authority)
+
+**Decision Authority:** None (evaluates individual constraint conditions)
+
+**State Mutation:** None
+
+**Determinism:** **Fully deterministic**
+- Condition evaluation is boolean: `evaluateCondition(condition, question, state) -> Bool`
+- No fuzzy matching, no ML-based classification
+
+**I/O Permissions:** **None**
+
+**Implementation Contract:**
+```swift
+private func evaluateCondition(
+    _ condition: ConditionRule,
+    question: NoemaQuestion,
+    runtimeState: RuntimeState
+) -> Bool
+```
+
+**Alignment with Section 3.4:** Constraint conditions are evaluated using explicit operators (`contains`, `exceeds`, `equals`) with deterministic semantics.
+
+---
+
+### 7.3.4 ExecutionCoordinator
+
+**Authority Layer:** Client Authority
+
+**Decision Authority:** **Execution lifecycle management**
+- Determines **when** to execute (after policy + routing)
+- Determines **whether** to attempt fallback (based on `fallbackAllowed` flag)
+- Requests user confirmation for fallback
+
+**State Mutation:** **Yes**
+- Writes to `ExecutionLog` (local storage)
+- Updates session state (in-memory and SwiftData)
+
+**Determinism:** **Non-deterministic**
+- Execution timing depends on network latency, model inference time
+- Fallback may or may not occur depending on execution success/failure
+
+**I/O Permissions:** **Full I/O**
+- Invokes LocalExecutor or CloudExecutor (which perform I/O)
+- Writes to local storage (logs, session state)
+- Displays UI dialogs (user confirmation)
+
+**Implementation Contract:**
+```swift
+func execute(
+    question: NoemaQuestion,
+    decision: RoutingDecision,
+    traceId: UUID
+) async throws -> NoemaResponse
+```
+
+**Alignment with Section 5.7:** ExecutionCoordinator enforces the three human-control invariants: (1) execution is user-triggered, (2) fallback requires confirmation, (3) no automatic retry.
+
+---
+
+### 7.3.5 Local Executor
+
+**Authority Layer:** External Dependency Boundary
+
+**Decision Authority:** None (executes models as instructed)
+
+**State Mutation:** **Yes**
+- May mutate internal model state (e.g., KV cache in llama.cpp)
+- Does **not** mutate session state or application state
+
+**Determinism:** **Non-deterministic**
+- Model inference timing is non-deterministic
+- Model outputs may vary due to sampling (temperature > 0)
+
+**I/O Permissions:** **Model I/O only**
+- Reads model weights from disk
+- Performs compute (GPU/CPU inference)
+- Streams output tokens
+
+**Implementation Contract:**
+```swift
+func executeLocal(
+    question: NoemaQuestion,
+    model: String
+) async throws -> NoemaResponse
+```
+
+**Alignment with Section 2.3:** Local Executor is invoked when `RoutingDecision.route == .local`. It never makes routing decisions itself.
+
+---
+
+### 7.3.6 Cloud Executor
+
+**Authority Layer:** External Dependency Boundary
+
+**Decision Authority:** None (sends HTTP requests as instructed)
+
+**State Mutation:** **No local state mutation**
+- Sends request payload to server
+- Receives response payload from server
+- Does **not** mutate client state (response is passed to caller)
+
+**Determinism:** **Non-deterministic**
+- Network latency varies
+- Server execution time varies
+- Server may be unavailable (error)
+
+**I/O Permissions:** **Network I/O only**
+- Sends HTTPS requests to noema-agent server
+- Enforces TLS
+- Propagates `trace_id`
+
+**Implementation Contract:**
+```swift
+func executeCloud(
+    question: NoemaQuestion,
+    model: String,
+    traceId: UUID
+) async throws -> NoemaResponse
+```
+
+**Alignment with Section 2.3:** Cloud Executor is invoked when `RoutingDecision.route == .cloud`. The server receives an explicit `task_type` and never self-routes (Section 1.3).
+
+---
+
+### 7.3.7 Logging Layer
+
+**Authority Layer:** External Dependency Boundary
+
+**Decision Authority:** None (passive recording only)
+
+**State Mutation:** **Yes**
+- Appends to `RoutingLog`, `ExecutionLog`, `ConstraintLog` (local storage)
+
+**Determinism:** **Non-deterministic**
+- Disk write timing varies
+- Storage may be full (error)
+
+**I/O Permissions:** **Disk I/O only**
+- Writes to SwiftData (SQLite)
+- No network calls (logs are local-only by default)
+
+**Implementation Contract:**
+```swift
+func logRouting(decision: RoutingDecision, traceId: UUID)
+func logExecution(result: ExecutionResult, traceId: UUID)
+func logConstraint(evaluation: PolicyEvaluationResult, traceId: UUID)
+```
+
+**Alignment with Section 5.2:** Logging Layer captures all routing decisions, execution attempts, and policy evaluations. Logs are user-inspectable via Execution History UI (Section 5.3).
+
+**Critical Constraint:** Logging **never triggers execution**. Logs are passive records only (Section 6.5).
+
+---
+
+### 7.3.8 UI Layer
+
+**Authority Layer:** Client Authority
+
+**Decision Authority:** **User interaction and presentation**
+- Captures user input (prompt submission)
+- Displays execution results
+- Requests user confirmation (fallback, constraint prompts)
+
+**State Mutation:** **Yes**
+- Updates UI state (SwiftUI `@State`, `@Published`)
+- Triggers execution via `QuestionViewModel`
+
+**Determinism:** **Non-deterministic**
+- User actions are inherently non-deterministic
+
+**I/O Permissions:** **UI I/O only**
+- Renders views
+- Captures keyboard/touch input
+- Displays dialogs
+
+**Implementation Contract:**
+```swift
+struct ChatView: View {
+    func onSubmit(prompt: String) {
+        viewModel.submitQuestion(prompt)
+    }
+}
+```
+
+**Alignment with Section 5.7:** UI Layer enforces that **every execution is human-triggered** (Invariant 1). The UI displays confirmation dialogs for fallback (Invariant 2) and provides "Retry" buttons (Invariant 3).
+
+---
+
+## 7.4 Authority Boundary Diagram
+
+This diagram illustrates the **client-side deterministic domain**, **invocation boundary**, and **remote execution boundary**.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            CLIENT AUTHORITY DOMAIN                           │
+│                           (Trusted, User-Controlled)                         │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                      DETERMINISTIC DECISION DOMAIN                      │ │
+│  │                           (Pure Functions)                              │ │
+│  │                                                                         │ │
+│  │  ┌──────────────────────┐       ┌──────────────────────┐               │ │
+│  │  │   Policy Engine      │       │   Router Engine      │               │ │
+│  │  │                      │       │                      │               │ │
+│  │  │ • Evaluate           │       │ • Deterministic      │               │ │
+│  │  │   constraints        │──────▶│   routing rules      │               │ │
+│  │  │ • Conflict           │       │ • Model selection    │               │ │
+│  │  │   resolution         │       │ • Fallback logic     │               │ │
+│  │  │                      │       │                      │               │ │
+│  │  │ No I/O | No State    │       │ No I/O | No State    │               │ │
+│  │  └──────────────────────┘       └──────────────────────┘               │ │
+│  │                                           │                             │ │
+│  │                                           │ RoutingDecision             │ │
+│  └───────────────────────────────────────────┼─────────────────────────────┘ │
+│                                              │                               │
+│  ════════════════════════════════════════════▼════════════════════════════   │
+│                         INVOCATION BOUNDARY                                  │
+│                    (Transition from Pure → Impure)                           │
+│  ════════════════════════════════════════════════════════════════════════   │
+│                                              │                               │
+│  ┌───────────────────────────────────────────┼─────────────────────────────┐ │
+│  │                 EXECUTION DOMAIN (Impure, I/O-Performing)               │ │
+│  │                                           │                             │ │
+│  │                          ┌────────────────▼────────────────┐            │ │
+│  │                          │  Execution Coordinator          │            │ │
+│  │                          │                                 │            │ │
+│  │                          │ • Lifecycle management          │            │ │
+│  │                          │ • Fallback handling             │            │ │
+│  │                          │ • Logging orchestration         │            │ │
+│  │                          └────────┬──────────────┬─────────┘            │ │
+│  │                                   │              │                      │ │
+│  │                                   │              │                      │ │
+│  │                 ┌─────────────────▼──┐   ┌──────▼──────────────────┐   │ │
+│  │                 │  Local Executor    │   │   Cloud Executor        │   │ │
+│  │                 │                    │   │                         │   │ │
+│  │                 │ • Model inference  │   │ • HTTP client           │   │ │
+│  │                 │ • Streaming        │   │ • TLS enforcement       │   │ │
+│  │                 │                    │   │ • trace_id propagation  │   │ │
+│  │                 └────────────────────┘   └──────┬──────────────────┘   │ │
+│  │                                                  │                      │ │
+│  └──────────────────────────────────────────────────┼──────────────────────┘ │
+│                                                     │                        │
+└─────────────────────────────────────────────────────┼────────────────────────┘
+                                                      │
+                 ═════════════════════════════════════▼═══════════════
+                          REMOTE EXECUTION BOUNDARY
+                         (Network, Untrusted Server)
+                 ═════════════════════════════════════════════════════
+                                                      │
+                                    ┌─────────────────▼─────────────────┐
+                                    │    Server (noema-agent)           │
+                                    │                                   │
+                                    │ • Stateless execution engine      │
+                                    │ • Receives task_type (no routing) │
+                                    │ • Returns trace_id                │
+                                    │ • 45-minute session timeout       │
+                                    │                                   │
+                                    └───────────────────────────────────┘
+```
+
+---
+
+## 7.5 Authority Invariants
+
+This subsection defines **architectural invariants** that must **always** hold in the NoesisNoema system. These invariants are enforceable through code review, testing, and architectural audits.
+
+---
+
+### Invariant 1: Client May Always Veto Execution
+
+**Statement:** The client application has **unconditional authority** to reject any execution request, regardless of server state, network conditions, or policy constraints.
+
+**Enforcement:**
+- If `privacy_level == .local` and network is required, execution is **structurally impossible** (request is never constructed)
+- If Policy Engine returns `.block` action, execution is terminated before routing
+- If user declines fallback confirmation, execution is cancelled
+
+**Test:** Verify that when `privacy_level == .local`, no network request is sent, even if the server is reachable.
+
+**Alignment:** Section 2.3 (Rule 1), Section 3.7 (BLOCK action precedence), Section 5.7 (Invariant 1)
+
+---
+
+### Invariant 2: Server May Never Override Client Routing Decision
+
+**Statement:** The server **must** execute the requested `task_type` as specified by the client. The server **may not**:
+- Substitute a different model
+- Escalate to a more powerful model
+- Fallback to a weaker model
+- Route to a different execution path
+
+**Enforcement:**
+- Server API contract requires `task_type` field in all requests
+- Server rejects requests without valid `task_type` (HTTP 400)
+- Server returns structured error if requested `task_type` is unavailable (HTTP 503)
+
+**Test:** Send a request with `task_type: "local_llm"` to the server. Verify that the server returns an error (not silently routes to cloud model).
+
+**Alignment:** Section 1.3 (Server must not self-route), Section 2.2 (`task_type` encoding)
+
+---
+
+### Invariant 3: Pure Functions Must Not Cross Authority Boundary
+
+**Statement:** Components classified as **Pure Functions** (Router, Policy Engine, Constraint Evaluator) **must not**:
+- Perform I/O (network, disk, logging)
+- Mutate global state
+- Invoke non-deterministic APIs (random numbers, current time)
+- Call components in higher authority layers (ExecutionCoordinator, Executors)
+
+**Enforcement:**
+- Pure functions accept all required context as parameters
+- Pure functions return decisions as values (no side effects)
+- Code review enforces purity contract
+
+**Test:** Unit test pure functions with identical inputs. Verify that outputs are identical across multiple invocations.
+
+**Alignment:** Section 2.5 (Router as pure function), Section 3.6 (Policy Engine determinism)
+
+---
+
+### Invariant 4: Execution Always Requires Explicit Human Intent
+
+**Statement:** **No execution may occur** without an explicit user action (button press, keyboard shortcut, voice command).
+
+**Forbidden:**
+- Background execution triggered by timers
+- Auto-execution on app launch
+- Pre-emptive execution based on predictive text
+- Server-initiated execution (push notifications)
+
+**Enforcement:**
+- All execution entry points are gated by UI event handlers
+- No background threads may invoke `ExecutionCoordinator.execute()`
+
+**Test:** Verify that when the app is backgrounded, no execution occurs. Verify that when the app resumes, no pending executions are auto-triggered.
+
+**Alignment:** Section 1.4 (Invocation contract), Section 5.7 (Invariant 1: Every execution is human-triggered)
+
+---
+
+### Invariant 5: Fallback Requires User Confirmation
+
+**Statement:** Fallback from local → cloud execution is **only permitted** when:
+1. `RoutingDecision.fallbackAllowed == true` (determined by Router)
+2. User has explicitly confirmed via UI dialog
+
+**Enforcement:**
+- ExecutionCoordinator checks `fallbackAllowed` flag before attempting fallback
+- If `fallbackAllowed == false`, error is displayed immediately (no prompt)
+- If `fallbackAllowed == true`, confirmation dialog is displayed
+- User's choice is logged in `ExecutionLog.fallbackConfirmed`
+
+**Test:** Trigger local execution failure with `fallbackAllowed == false`. Verify that no fallback occurs. Trigger local execution failure with `fallbackAllowed == true`. Verify that fallback only occurs after user confirmation.
+
+**Alignment:** Section 2.3 (Rule 3: Local failure handling), Section 5.7 (Invariant 2: Fallback requires user confirmation)
+
+---
+
+### Invariant 6: Privacy Boundaries Are Structurally Enforced
+
+**Statement:** When `privacy_level == .local`, the client **never constructs a network request**, regardless of server state, network availability, or execution failure.
+
+**Enforcement:**
+- Router returns `route: .local` when `privacy_level == .local` (Section 2.3, Rule 1)
+- ExecutionCoordinator invokes `LocalExecutor` for local routes
+- No code path exists that allows local route to construct HTTP request
+
+**Test:** Set `privacy_level == .local`, trigger execution, monitor network traffic. Verify zero network packets are sent.
+
+**Alignment:** Section 1.2 (Client-side routing is non-negotiable), Section 2.3 (Rule 1: Privacy enforcement)
+
+---
+
+### Invariant 7: No Silent Recovery or Automatic Retry
+
+**Statement:** If execution fails, the system **must not** automatically retry. All retries require explicit user action.
+
+**Forbidden:**
+- Exponential backoff retry loops
+- Automatic retry on network timeout
+- Silent retry with modified routing decision
+
+**Permitted:**
+- User presses "Retry" button → new execution attempt
+- User modifies prompt → new `NoemaQuestion` is created
+
+**Enforcement:**
+- ExecutionCoordinator does not implement retry logic
+- Error dialogs provide "Retry" button that re-invokes execution pipeline
+
+**Test:** Trigger network error, verify that no automatic retry occurs. Verify that "Retry" button triggers a new execution attempt.
+
+**Alignment:** Section 5.7 (Invariant 3: No automatic retry), Section 6.6 (Error doctrine: No silent recovery)
+
+---
+
+## 7.6 Authority Invariants Checklist (Code Review)
+
+This checklist can be used during code review to verify compliance with authority ownership contracts.
+
+### Router / Policy Engine / Constraint Evaluator (Pure Functions)
+
+- [ ] Function signature includes all required context as parameters (no global state access)
+- [ ] Function returns decision as value (no side effects)
+- [ ] No I/O operations (no `URLSession`, no `FileManager`, no `SwiftData` writes)
+- [ ] No logging calls (logging is caller's responsibility)
+- [ ] No randomness (no `arc4random`, no `UUID()` generation)
+- [ ] No time-based branching (no `Date.now()` comparisons)
+- [ ] Unit tests verify determinism (same inputs → same outputs)
+
+### ExecutionCoordinator
+
+- [ ] All execution entry points are user-triggered (no timers, no background threads)
+- [ ] Fallback only occurs if `fallbackAllowed == true` **and** user confirmed
+- [ ] All routing decisions are logged before execution
+- [ ] All execution results are logged (success or error)
+- [ ] `trace_id` is propagated to all sub-components
+
+### Local Executor / Cloud Executor
+
+- [ ] Executors never make routing decisions (receive explicit model name)
+- [ ] Executors never modify routing decisions
+- [ ] Executors return structured errors (no silent failures)
+- [ ] Cloud Executor enforces TLS (no plaintext HTTP)
+- [ ] Cloud Executor propagates `trace_id` in request payload
+
+### Server API
+
+- [ ] Server API requires `task_type` in all requests
+- [ ] Server rejects requests without `task_type` (HTTP 400)
+- [ ] Server returns structured error if `task_type` unavailable (HTTP 503)
+- [ ] Server returns `trace_id` in all responses (success or error)
+- [ ] Server never self-routes (no prompt analysis for model selection)
+
+### UI Layer
+
+- [ ] All execution is gated by user actions (button press, keyboard shortcut)
+- [ ] Fallback confirmation dialog is displayed when `fallbackAllowed == true`
+- [ ] Error dialogs display `trace_id` (truncated, copyable)
+- [ ] "Retry" button re-invokes execution pipeline (no silent retry)
+
+### Logging Layer
+
+- [ ] Logs are passive records (no execution triggered by logging)
+- [ ] Logs include `trace_id` for all events
+- [ ] Logs do not include raw prompt content by default (use `content_hash`)
+- [ ] Logs are stored locally (not transmitted to server by default)
+
+---
+
+## 7.7 Alignment with Existing Design Sections
+
+This section explicitly cross-references the Authority Ownership Model with existing design sections to ensure consistency.
+
+### Section 2.5 — Routing Determinism
+
+**Alignment:** The Router is classified as a **Pure Function (No Authority)**. Section 2.5 formalizes the Router's purity contract: deterministic, side-effect free, no I/O. The Authority Ownership Model (Section 7.3.1) reinforces this contract and adds it to the code review checklist (Section 7.6).
+
+**Key Link:** Section 7.3.1 (Router classification) → Section 2.5 (Router as pure function)
+
+---
+
+### Section 3.7 — Policy Conflict Resolution
+
+**Alignment:** The Policy Engine is classified as a **Pure Function (No Authority)**. Section 3.7 defines deterministic conflict resolution rules (BLOCK > FORCE_LOCAL > FORCE_CLOUD > REQUIRE_CONFIRMATION > WARN). The Authority Ownership Model (Section 7.3.2) ensures that the Policy Engine operates as a pure function that evaluates constraints without performing I/O.
+
+**Key Link:** Section 7.3.2 (Policy Engine classification) → Section 3.7 (Deterministic conflict resolution)
+
+---
+
+### Section 5.7 — Human Control Guarantees
+
+**Alignment:** Section 5.7 defines three human-control invariants:
+1. Every execution is human-triggered
+2. Fallback requires user confirmation
+3. No automatic retry
+
+The Authority Ownership Model (Section 7.5) elevates these to **architectural invariants** (Invariants 4, 5, 7) and adds enforcement mechanisms and test criteria.
+
+**Key Link:** Section 7.5 (Authority Invariants) → Section 5.7 (Human Control Guarantees)
+
+---
+
+### Section 1.3 — Server Must Not Self-Route
+
+**Alignment:** The server is classified as **Server Authority (Untrusted, Controlled)**. Section 1.3 forbids the server from making routing decisions. The Authority Ownership Model (Section 7.2, Layer 2) codifies this as an authority boundary constraint, and Invariant 2 (Section 7.5) makes it testable.
+
+**Key Link:** Section 7.2 (Server Authority Layer) → Section 1.3 (Server must not self-route) → Section 7.5 (Invariant 2)
+
+---
+
+### Section 1.2 — Client-Side Routing is Non-Negotiable
+
+**Alignment:** The client is classified as **Client Authority (Trusted)**. Section 1.2 argues that client-side routing is essential for human controllability, determinism, and privacy enforcement. The Authority Ownership Model (Section 7.2, Layer 1) formalizes this ownership and defines what "client authority" means in concrete terms.
+
+**Key Link:** Section 7.2 (Client Authority Layer) → Section 1.2 (Why routing must live client-side)
+
+---
+
+## 7.8 Summary: Authority Ownership Principles
+
+This section codifies the following principles:
+
+1. **Client owns all decision-making** — Routing, policy evaluation, and execution control are client-side responsibilities.
+
+2. **Pure functions enforce determinism** — The Router and Policy Engine operate as pure functions with no I/O, no state mutation, and no non-deterministic behavior.
+
+3. **Invocation boundary is explicit** — The transition from pure decision-making (Router) to impure execution (ExecutionCoordinator) is a clearly defined architectural boundary.
+
+4. **Server is a controlled, untrusted service** — The server executes explicit instructions but has no authority to make routing decisions or override client choices.
+
+5. **Privacy boundaries are structural, not policy-based** — When `privacy_level == .local`, network requests are never constructed (not just "not sent").
+
+6. **Human control is paramount** — All execution is user-triggered, fallback requires confirmation, and no automatic retry is permitted.
+
+7. **Invariants are testable** — Each invariant includes enforcement mechanisms and test criteria for code review and automated testing.
+
+These principles align with the RAGfish core design philosophy: **client authority, deterministic execution, structural privacy enforcement, and human sovereignty**.
+
+---
+
 # CONCLUSION
 
 This design document establishes a **comprehensive blueprint** for implementing Client Authority Hardening in NoesisNoema.
