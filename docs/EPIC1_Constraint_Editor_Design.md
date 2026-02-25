@@ -335,9 +335,10 @@ Phase 4 is considered **complete** when the following criteria are met:
    - **Validation errors displayed inline** (red text below field)
 
 6. **Integration with Production Flow**
-   - Add `policyRules: [PolicyRule]` to `AppSettings.shared`
-   - Load rules on app startup via `ConstraintStore.load()`
-   - Pass rules to `PolicyEngine.evaluate()` in execution coordinator
+   - Define `PolicyRulesProvider` protocol for dependency injection
+   - ConstraintEditor updates `PolicyRulesStore` (concrete implementation)
+   - ExecutionCoordinator receives rules via initializer injection
+   - **No global mutable state (no AppSettings.shared pattern)**
    - **No Router modification**
    - **No PolicyEngine modification**
 
@@ -380,6 +381,311 @@ Phase 4 is considered **complete** when the following criteria are met:
 
 **Condition Fields (Phase 4):**
 - `"content"`, `"token_count"`, `"intent"`, `"privacy_level"`
+
+---
+
+### Dependency Injection Pattern (Phase 4)
+
+To avoid global mutable state, Phase 4 uses **dependency injection** for policy rules.
+
+#### PolicyRulesProvider Protocol
+
+```swift
+/// Protocol for providing policy rules to execution components
+protocol PolicyRulesProvider {
+    /// Returns the current set of policy rules
+    func getPolicyRules() -> [PolicyRule]
+}
+```
+
+#### PolicyRulesStore Implementation
+
+```swift
+/// Concrete implementation that loads rules from ConstraintStore
+class PolicyRulesStore: PolicyRulesProvider {
+    private let constraintStore: ConstraintStore
+    private var cachedRules: [PolicyRule] = []
+
+    init(constraintStore: ConstraintStore = ConstraintStore.shared) {
+        self.constraintStore = constraintStore
+        self.loadRules()
+    }
+
+    /// Load rules once at initialization
+    private func loadRules() {
+        do {
+            self.cachedRules = try constraintStore.load()
+        } catch {
+            // Error handling defined in Section 1A.2.1
+            print("Failed to load policy rules: \(error)")
+            self.cachedRules = []
+        }
+    }
+
+    func getPolicyRules() -> [PolicyRule] {
+        return cachedRules
+    }
+
+    /// Called by ConstraintEditor after saving new rules
+    /// Does NOT reload automatically - requires app restart
+    func notifyRulesUpdated() {
+        // In Phase 4: no-op (requires app restart)
+        // In Phase 5: could trigger reload
+    }
+}
+```
+
+#### ExecutionCoordinator Integration
+
+```swift
+class ExecutionCoordinator {
+    private let policyRulesProvider: PolicyRulesProvider
+
+    init(policyRulesProvider: PolicyRulesProvider) {
+        self.policyRulesProvider = policyRulesProvider
+    }
+
+    func execute(question: NoemaQuestion, runtimeState: RuntimeState) async throws -> NoemaResponse {
+        // Get rules via dependency injection
+        let rules = policyRulesProvider.getPolicyRules()
+
+        // Policy evaluation
+        let policyResult = try PolicyEngine.evaluate(
+            question: question,
+            runtimeState: runtimeState,
+            rules: rules  // ← Injected here
+        )
+
+        // Router invocation
+        let routingDecision = try Router.route(
+            question: question,
+            runtimeState: runtimeState,
+            policyResult: policyResult
+        )
+
+        // ... execution logic
+    }
+}
+```
+
+#### App Initialization
+
+```swift
+@main
+struct NoesisNoemaApp: App {
+    // Initialize PolicyRulesStore once at app startup
+    private let policyRulesStore = PolicyRulesStore()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(policyRulesStore)  // For ConstraintEditor
+        }
+    }
+}
+```
+
+**Key Guarantees:**
+1. **No global mutable state** — `PolicyRulesStore` is instantiated once in app initialization
+2. **Dependency injection** — `ExecutionCoordinator` receives provider via initializer
+3. **Immutable after load** — Rules loaded once at startup, not modified during runtime
+4. **ConstraintEditor decoupled** — Editor updates JSON file, does not mutate runtime state
+
+---
+
+### Persistence Error Handling (Phase 4)
+
+#### Error Scenarios and Behavior
+
+**Scenario 1: JSON file does not exist**
+```swift
+func load() throws -> [PolicyRule] {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        // Return empty array (no error thrown)
+        return []
+    }
+    // ... continue loading
+}
+```
+**Behavior:** Return empty array. This is expected on first app launch.
+
+---
+
+**Scenario 2: JSON decoding fails (malformed file)**
+```swift
+func load() throws -> [PolicyRule] {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        return []
+    }
+
+    let data = try Data(contentsOf: fileURL)
+
+    do {
+        let decoder = JSONDecoder()
+        return try decoder.decode([PolicyRule].self, from: data)
+    } catch {
+        // Decoding failed - return empty array but propagate error for logging
+        print("⚠️ Failed to decode policy rules: \(error)")
+        return []  // Graceful degradation
+    }
+}
+```
+**Behavior:** Return empty array AND log error. App continues without constraints.
+
+---
+
+**Scenario 3: File I/O error (permissions, disk full)**
+```swift
+func save(_ rules: [PolicyRule]) throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    let data = try encoder.encode(rules)
+
+    do {
+        try data.write(to: fileURL, options: .atomic)
+    } catch {
+        // Surface error to UI
+        throw ConstraintStoreError.writeFailed(underlyingError: error)
+    }
+}
+
+enum ConstraintStoreError: Error, LocalizedError {
+    case writeFailed(underlyingError: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .writeFailed(let error):
+            return "Failed to save constraints: \(error.localizedDescription)"
+        }
+    }
+}
+```
+**Behavior:** Throw error. ConstraintEditorViewModel catches and displays to user.
+
+---
+
+**UI Error Display:**
+```swift
+// In ConstraintEditorViewModel
+func saveConstraints() {
+    isSaving = true
+    saveError = nil
+
+    // ... validation
+
+    do {
+        try constraintStore.save(policyRules)
+        isSaving = false
+    } catch {
+        saveError = error  // Display in UI
+        isSaving = false
+    }
+}
+```
+
+**In ConstraintEditorView:**
+```swift
+if let error = viewModel.saveError {
+    Text("⚠️ \(error.localizedDescription)")
+        .foregroundColor(.red)
+}
+```
+
+**Critical Guarantee:** **No crashes allowed.** All file I/O errors are caught and handled gracefully.
+
+---
+
+### Loading Lifecycle (Phase 4)
+
+#### Startup Sequence
+
+```
+1. App Launch
+   ↓
+2. PolicyRulesStore.init()
+   ↓
+3. PolicyRulesStore.loadRules()
+   ├─ If file exists → decode and cache
+   └─ If file missing or decode fails → cache empty array
+   ↓
+4. PolicyRulesStore.cachedRules = [...]
+   ↓
+5. ExecutionCoordinator.init(policyRulesProvider: policyRulesStore)
+   ↓
+6. App Ready
+```
+
+#### Runtime Behavior
+
+**During app session:**
+- `cachedRules` remains **immutable**
+- `getPolicyRules()` returns **same array** every time
+- ConstraintEditor can **edit JSON file** but changes **do not affect runtime**
+
+**After editing constraints:**
+```
+User edits constraint
+  ↓
+ConstraintEditorViewModel.saveConstraints()
+  ↓
+ConstraintStore.save([PolicyRule])
+  ↓
+Write to policy-constraints.json
+  ↓
+PolicyRulesStore.notifyRulesUpdated()  // No-op in Phase 4
+  ↓
+User sees: "✅ Constraints saved. Restart app to apply changes."
+```
+
+**Phase 4 Limitation:** **Restart required** to apply constraint changes in production execution.
+
+**Phase 5 Enhancement:** Hot reload — `notifyRulesUpdated()` reloads `cachedRules` and notifies observers.
+
+---
+
+### No Global Mutable State Guarantee
+
+**Prohibited Pattern (NOT used in Phase 4):**
+```swift
+// ❌ WRONG: Global mutable singleton
+class AppSettings {
+    static let shared = AppSettings()
+    var policyRules: [PolicyRule] = []  // Mutable global state
+
+    func updateRules(_ rules: [PolicyRule]) {
+        self.policyRules = rules  // Global mutation
+    }
+}
+```
+
+**Correct Pattern (Phase 4):**
+```swift
+// ✅ CORRECT: Dependency injection with immutable state
+class PolicyRulesStore: PolicyRulesProvider {
+    private var cachedRules: [PolicyRule] = []  // Private, loaded once
+
+    init(constraintStore: ConstraintStore) {
+        self.cachedRules = /* load once */
+    }
+
+    func getPolicyRules() -> [PolicyRule] {
+        return cachedRules  // Immutable view
+    }
+}
+
+// Injected into ExecutionCoordinator (not accessed globally)
+let coordinator = ExecutionCoordinator(policyRulesProvider: policyRulesStore)
+```
+
+**Guarantees:**
+1. `PolicyRulesStore` is instantiated **once** at app startup
+2. `cachedRules` is loaded **once** in `init()`
+3. `cachedRules` is **never mutated** after initialization (in Phase 4)
+4. No component can access rules via global state (must receive via dependency injection)
+
+**Verification:**
+- `grep -r "AppSettings.shared" Shared/Policy` → no matches
+- `grep -r "\.shared" Shared/Policy` → only `ConstraintStore.shared` (file I/O utility)
 
 ---
 
@@ -473,21 +779,36 @@ Phase 4 is considered **complete** when the following criteria are met:
          │                │                │
          ▼                ▼                ▼
 ┌─────────────────┐  ┌────────────┐  ┌────────────────────────┐
-│ Domain Model    │  │ Pure       │  │ Persistence            │
+│ Domain Model    │  │ Pure       │  │ Dependency Injection   │
 │                 │  │ Functions  │  │                        │
-│ EditablePolicyRule  │ PolicyEngine  │ ConstraintStore        │
-│ (mutable)       │  │ (unchanged)│  │ • load() -> [Policy..] │
-│   ↕             │  │            │  │ • save([Policy...])    │
-│ PolicyRule      │  │ Router     │  │ (JSON file I/O)        │
-│ (immutable)     │  │ (unchanged)│  │                        │
+│ EditablePolicyRule  │ PolicyEngine  │ PolicyRulesProvider    │
+│ (mutable)       │  │ (unchanged)│  │ (protocol)             │
+│   ↕             │  │            │  │   ↓                    │
+│ PolicyRule      │  │ Router     │  │ PolicyRulesStore       │
+│ (immutable)     │  │ (unchanged)│  │ (loaded once at init)  │
+│                 │  │            │  │   ↓                    │
+│                 │  │            │  │ ConstraintStore        │
+│                 │  │            │  │ • load() -> [Policy..] │
+│                 │  │            │  │ • save([Policy...])    │
+│                 │  │            │  │ (JSON file I/O)        │
 └─────────────────┘  └────────────┘  └────────────────────────┘
+                          ▲
+                          │ Injected via protocol
+                          │
+                    ┌─────┴─────────────────────┐
+                    │ ExecutionCoordinator      │
+                    │ (receives PolicyRules     │
+                    │  via dependency injection)│
+                    └───────────────────────────┘
 ```
 
-**Key Simplifications:**
+**Key Architectural Principles:**
 - No `SimulationViewModel` (deferred to Phase 5)
 - No `SimulationView` (deferred to Phase 5)
 - No template system (deferred to Phase 5)
 - No execution history integration (deferred to Phase 5)
+- **No global mutable state** (dependency injection via `PolicyRulesProvider`)
+- **Immutable after load** (rules loaded once at app startup)
 
 ---
 
@@ -673,7 +994,7 @@ Form {
 - After: `git diff main -- Shared/Routing/Router.swift` → empty
 
 **Integration Point:**
-The Router receives `PolicyEvaluationResult` from the PolicyEngine, which in turn receives `[PolicyRule]` from `AppSettings.shared.policyRules`. The Constraint Editor modifies the JSON file, which is loaded into `AppSettings` on startup. No Router code changes required.
+The Router receives `PolicyEvaluationResult` from the PolicyEngine, which in turn receives `[PolicyRule]` from `PolicyRulesProvider` (injected into ExecutionCoordinator). The Constraint Editor modifies the JSON file, which is loaded into `PolicyRulesStore` on app startup. No Router code changes required.
 
 ---
 
@@ -691,10 +1012,10 @@ The PolicyEngine's `evaluate()` function already accepts `rules: [PolicyRule]` a
 
 ---
 
-### ConstraintEditor Injects Rules Only Via Dependency
+### ConstraintEditor Uses Dependency Injection
 
 **Statement:**
-The Constraint Editor **does not directly call** the PolicyEngine or Router. It only manipulates the `[PolicyRule]` array in `AppSettings.shared.policyRules`.
+The Constraint Editor **does not directly call** the PolicyEngine or Router. It only manipulates the JSON file via `ConstraintStore`.
 
 **Data Flow:**
 
@@ -707,26 +1028,30 @@ ConstraintStore.save([PolicyRule])
   ↓
 Write to policy-constraints.json
   ↓
-(On app restart or manual reload)
+(On app restart)
   ↓
-AppSettings.shared.loadPolicyRules()
+PolicyRulesStore.init()
+  ↓
+PolicyRulesStore.loadRules()
   ↓
 ConstraintStore.load() -> [PolicyRule]
   ↓
-AppSettings.shared.policyRules = [...]
+PolicyRulesStore.cachedRules = [...]
   ↓
 (During execution)
   ↓
-ExecutionCoordinator invokes PolicyEngine.evaluate(
-    question: question,
-    runtimeState: state,
-    rules: AppSettings.shared.policyRules  ← injected here
-)
+ExecutionCoordinator.execute(...)
+  ↓
+let rules = policyRulesProvider.getPolicyRules()  ← injected via protocol
+  ↓
+PolicyEngine.evaluate(question, state, rules)
   ↓
 Router.route(question, state, policyResult)
 ```
 
 **No direct coupling** between ConstraintEditor and PolicyEngine/Router.
+
+**No global mutable state** — `PolicyRulesStore` injected via dependency injection.
 
 ---
 
@@ -735,15 +1060,15 @@ Router.route(question, state, policyResult)
 ### Phase 4 Tasks (Non-Negotiable)
 
 - [ ] **Step 1:** Create `EditablePolicyRule` model with converters
-- [ ] **Step 2:** Implement `ConstraintStore` (JSON read/write)
-- [ ] **Step 3:** Add `policyRules` property to `AppSettings`
+- [ ] **Step 2:** Implement `ConstraintStore` (JSON read/write with error handling)
+- [ ] **Step 3:** Define `PolicyRulesProvider` protocol and `PolicyRulesStore` implementation
 - [ ] **Step 4:** Implement `ConstraintEditorViewModel` (CRUD + validation)
 - [ ] **Step 5:** Create `ConstraintEditorView` (simple list)
 - [ ] **Step 6:** Create `ConstraintDetailView` (modal edit form)
-- [ ] **Step 7:** Integrate: Load rules in `AppSettings.init()`, pass to `PolicyEngine.evaluate()`
-- [ ] **Step 8:** Write unit tests (model conversion, persistence, validation)
+- [ ] **Step 7:** Integrate: Inject `PolicyRulesStore` into `ExecutionCoordinator`
+- [ ] **Step 8:** Write unit tests (model conversion, persistence, validation, error handling)
 - [ ] **Step 9:** Write UI tests (CRUD operations)
-- [ ] **Step 10:** Document JSON schema
+- [ ] **Step 10:** Document JSON schema and dependency injection pattern
 
 **Estimated Effort:** 12 hours (1.5 days)
 
@@ -764,13 +1089,15 @@ Phase 4 is **complete** when:
 3. ✅ Developer can enable/disable constraints
 4. ✅ Developer can delete constraints
 5. ✅ Constraints are persisted to `policy-constraints.json`
-6. ✅ Constraints are loaded on app startup via `AppSettings`
-7. ✅ Constraints are passed to `PolicyEngine.evaluate()` in production flow
+6. ✅ Constraints are loaded on app startup via `PolicyRulesStore`
+7. ✅ Constraints are passed to `PolicyEngine.evaluate()` via dependency injection
 8. ✅ Validation prevents saving malformed constraints (name, conditions, action)
-9. ✅ Router is unchanged (verified by `git diff`)
-10. ✅ PolicyEngine is unchanged (verified by `git diff`)
-11. ✅ Unit tests pass (model conversion, persistence, validation)
-12. ✅ UI tests pass (CRUD operations)
+9. ✅ Persistence errors handled gracefully (no crashes)
+10. ✅ Router is unchanged (verified by `git diff`)
+11. ✅ PolicyEngine is unchanged (verified by `git diff`)
+12. ✅ No global mutable state (verified by code review)
+13. ✅ Unit tests pass (model conversion, persistence, validation, error handling)
+14. ✅ UI tests pass (CRUD operations)
 
 **Not Required for Phase 4:**
 - ❌ Simulation mode
