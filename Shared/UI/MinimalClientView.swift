@@ -16,8 +16,20 @@ class MinimalClientViewModel: ObservableObject {
     @Published var response: String = ""
     @Published var isProcessing: Bool = false
 
+    // EPIC1 Phase 4-A: ExecutionCoordinator injected via dependency
+    private var executionCoordinator: ExecutionCoordinating
+
+    init(executionCoordinator: ExecutionCoordinating) {
+        self.executionCoordinator = executionCoordinator
+    }
+
+    // Allow updating coordinator from environment
+    func setCoordinator(_ coordinator: ExecutionCoordinating) {
+        self.executionCoordinator = coordinator
+    }
+
     /// Explicit submit action - user-initiated only
-    /// Routing: User → submit() → ModelManager (invocation boundary)
+    /// Routing: User → submit() → ExecutionCoordinator (invocation boundary)
     func submit() async {
         guard !prompt.isEmpty else { return }
         guard !isProcessing else { return }
@@ -27,14 +39,17 @@ class MinimalClientViewModel: ObservableObject {
 
         let userPrompt = prompt
 
-        // NOTE: Direct execution without Router.
-        // Router layer will be introduced in X-2.
-        // This is temporary and aligned with MVP stage.
-        let result = await Task.detached(priority: .userInitiated) {
-            await ModelManager.shared.generateAsyncAnswer(question: userPrompt)
-        }.value
+        // Phase 4-A: Route through ExecutionCoordinator
+        // ExecutionCoordinator delegates to ModelManager (preserves current behavior)
+        // Router + PolicyEngine integration deferred to Phase 5
+        do {
+            let request = NoemaRequest(query: userPrompt)
+            let result = try await executionCoordinator.execute(request: request)
+            response = result.text
+        } catch {
+            response = "Error: \(error.localizedDescription)"
+        }
 
-        response = result
         prompt = ""
         isProcessing = false
     }
@@ -43,7 +58,15 @@ class MinimalClientViewModel: ObservableObject {
 /// X-1 Minimal Client Interface
 /// Cross-platform SwiftUI view with explicit user control
 struct MinimalClientView: View {
-    @StateObject private var viewModel = MinimalClientViewModel()
+    @EnvironmentObject private var executionCoordinator: ExecutionCoordinator
+    @StateObject private var viewModel: MinimalClientViewModel
+
+    init() {
+        // Initialize with temporary coordinator (will be replaced by environment object)
+        _viewModel = StateObject(wrappedValue: MinimalClientViewModel(
+            executionCoordinator: ExecutionCoordinator()
+        ))
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -103,6 +126,10 @@ struct MinimalClientView: View {
             Spacer()
         }
         .padding()
+        .onAppear {
+            // Update ViewModel with injected ExecutionCoordinator from environment
+            viewModel.setCoordinator(executionCoordinator)
+        }
     }
 }
 
