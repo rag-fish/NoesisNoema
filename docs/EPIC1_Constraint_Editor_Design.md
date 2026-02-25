@@ -274,6 +274,555 @@ Phase 4 is considered **complete** when the following criteria are met:
 
 ---
 
+# SECTION 1A — Phase4 MVP Scope Lock
+
+## 1A.1 Purpose of This Section
+
+**Context:** The original design document (Sections 1-9) describes the full vision for the Constraint Editor, including features like template libraries, advanced operators, and execution history integration.
+
+**Problem:** Phase 4 must deliver a **strict MVP** that validates core architecture without scope creep.
+
+**This section defines:**
+1. **Exactly what will be implemented** in Phase 4 (minimal viable product)
+2. **Exactly what is deferred** to Phase 5+
+3. **Simplified architecture** for MVP implementation
+4. **Explicit guarantees** about what is NOT changed (Router, PolicyEngine)
+
+---
+
+## 1A.2 What WILL Be Implemented in Phase4
+
+### Core Functionality (Non-Negotiable)
+
+1. **ConstraintStore (Persistence Layer)**
+   - Read `[PolicyRule]` from JSON file in Application Support directory
+   - Write `[PolicyRule]` to JSON file
+   - Location: `~/Library/Application Support/NoesisNoema/policy-constraints.json`
+   - **No caching, no validation in store** — just read/write
+
+2. **EditablePolicyRule Model (Domain Layer)**
+   - Mutable wrapper around immutable `PolicyRule`
+   - Properties: `id`, `name`, `type`, `enabled`, `priority`, `conditions`, `action`
+   - Converters: `toPolicyRule()` and `init(from: PolicyRule)`
+   - **No template system** — constraints created from scratch
+
+3. **ConstraintEditorViewModel (Business Logic)**
+   - Load constraints from `ConstraintStore` on init
+   - Save constraints to `ConstraintStore` on save
+   - CRUD operations: `addConstraint()`, `deleteConstraint()`, `toggleConstraint()`
+   - **Basic validation only:**
+     - Name cannot be empty
+     - At least one condition required
+     - Action-specific validation (e.g., block requires reason)
+   - **No priority conflict detection** (deferred to Phase 5)
+
+4. **ConstraintEditorView (UI Layer)**
+   - **Simple list view** with constraints displayed as rows
+   - Each row shows: checkbox (enable/disable), name, priority, type
+   - **No master-detail** — edit in modal sheet
+   - **No simulation mode** — deferred to Phase 5
+   - Buttons: `[+ New]`, `[Edit]`, `[Delete]`
+
+5. **ConstraintDetailView (Edit Form)**
+   - Modal sheet with form fields:
+     - Name (TextField)
+     - Type (Picker: privacy, cost, performance, intent)
+     - Priority (TextField with number formatter)
+     - Enabled (Toggle)
+     - Conditions (List with Add/Remove)
+     - Action (Picker with conditional fields)
+   - Save/Cancel buttons
+   - **Validation errors displayed inline** (red text below field)
+
+6. **Integration with Production Flow**
+   - Add `policyRules: [PolicyRule]` to `AppSettings.shared`
+   - Load rules on app startup via `ConstraintStore.load()`
+   - Pass rules to `PolicyEngine.evaluate()` in execution coordinator
+   - **No Router modification**
+   - **No PolicyEngine modification**
+
+---
+
+### Minimal JSON Schema (Phase 4)
+
+```json
+[
+  {
+    "id": "uuid-string",
+    "name": "Constraint Name",
+    "type": "privacy",
+    "enabled": true,
+    "priority": 1,
+    "conditions": [
+      {
+        "field": "content",
+        "operator": "contains",
+        "value": "SSN|password"
+      }
+    ],
+    "action": {
+      "type": "block",
+      "reason": "Contains sensitive data"
+    }
+  }
+]
+```
+
+**Action Types (Phase 4):**
+- `"block"` (requires `reason`)
+- `"forceLocal"` (no additional fields)
+- `"forceCloud"` (no additional fields)
+- `"requireConfirmation"` (requires `prompt`)
+- `"warn"` (requires `message`)
+
+**Condition Operators (Phase 4):**
+- `"contains"`, `"notContains"`, `"equals"`, `"notEquals"`, `"exceeds"`, `"lessThan"`
+
+**Condition Fields (Phase 4):**
+- `"content"`, `"token_count"`, `"intent"`, `"privacy_level"`
+
+---
+
+## 1A.3 What Is DEFERRED to Phase5+
+
+### Explicitly Out of Scope for Phase 4
+
+1. **Simulation Mode**
+   - Input test questions and runtime states
+   - Execute `PolicyEngine.evaluate()` in isolation
+   - Display results and verify determinism
+   - **Reason for deferral:** Complex UI, not required for MVP validation
+
+2. **Master-Detail Layout**
+   - Split view with constraint list on left, editor on right
+   - **Reason for deferral:** Simplified to modal sheet for MVP
+
+3. **Constraint Templates Library**
+   - Pre-defined templates (e.g., "Block Sensitive Data")
+   - Template picker UI
+   - **Reason for deferral:** Nice-to-have, not core functionality
+
+4. **Priority Conflict Detection**
+   - Warn when two constraints have same priority
+   - Auto-increment priority on add
+   - **Reason for deferral:** Determinism is still guaranteed by UUID ordering
+
+5. **Advanced Validation**
+   - Regex pattern validation in condition values
+   - Dependency checking between constraints
+   - **Reason for deferral:** Basic validation is sufficient for MVP
+
+6. **Execution History Integration**
+   - Display which constraints triggered in past executions
+   - Link constraints to trace IDs
+   - **Reason for deferral:** Requires ExecutionCoordinator changes (Phase 5)
+
+7. **Real-Time Constraint Reload**
+   - File system watcher to detect external changes
+   - Auto-reload when JSON is modified
+   - **Reason for deferral:** Manual reload is sufficient for MVP
+
+8. **Constraint Import/Export**
+   - Export constraints as JSON file
+   - Import constraints from file
+   - **Reason for deferral:** Advanced feature, not required for testing
+
+9. **Constraint Provenance Tracking**
+   - `createdAt`, `modifiedAt`, `createdBy` fields
+   - Audit trail for compliance
+   - **Reason for deferral:** Not required for MVP validation
+
+10. **OR Logic Between Conditions**
+    - Currently only AND logic is supported
+    - OR logic requires PolicyEngine changes
+    - **Reason for deferral:** PolicyEngine is unchanged in Phase 4
+
+---
+
+## 1A.4 Simplified Architecture Diagram (MVP)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Phase 4 MVP Architecture                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         View Layer (SwiftUI)                     │
+│  ┌────────────────────────┐    ┌─────────────────────────────┐  │
+│  │ ConstraintEditorView   │───▶│ ConstraintDetailView        │  │
+│  │ (List with +/Edit/Del) │    │ (Modal Sheet)               │  │
+│  └────────────┬───────────┘    └─────────────────────────────┘  │
+└───────────────┼──────────────────────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     ViewModel Layer                              │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ ConstraintEditorViewModel                                │   │
+│  │ • constraints: [EditablePolicyRule]                      │   │
+│  │ • loadConstraints()                                      │   │
+│  │ • saveConstraints()                                      │   │
+│  │ • addConstraint()                                        │   │
+│  │ • deleteConstraint(id:)                                  │   │
+│  │ • toggleConstraint(id:)                                  │   │
+│  │ • validateAll() -> [ValidationError]                     │   │
+│  └────────────────────┬─────────────────────────────────────┘   │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │
+         ┌────────────────┼────────────────┐
+         │                │                │
+         ▼                ▼                ▼
+┌─────────────────┐  ┌────────────┐  ┌────────────────────────┐
+│ Domain Model    │  │ Pure       │  │ Persistence            │
+│                 │  │ Functions  │  │                        │
+│ EditablePolicyRule  │ PolicyEngine  │ ConstraintStore        │
+│ (mutable)       │  │ (unchanged)│  │ • load() -> [Policy..] │
+│   ↕             │  │            │  │ • save([Policy...])    │
+│ PolicyRule      │  │ Router     │  │ (JSON file I/O)        │
+│ (immutable)     │  │ (unchanged)│  │                        │
+└─────────────────┘  └────────────┘  └────────────────────────┘
+```
+
+**Key Simplifications:**
+- No `SimulationViewModel` (deferred to Phase 5)
+- No `SimulationView` (deferred to Phase 5)
+- No template system (deferred to Phase 5)
+- No execution history integration (deferred to Phase 5)
+
+---
+
+## 1A.5 Minimal SwiftUI View Hierarchy
+
+```
+ConstraintEditorView (List)
+│
+├─ ForEach(constraints) { constraint in
+│   ConstraintRow(constraint)
+│   ├─ Toggle (enabled)
+│   ├─ Text (name)
+│   ├─ Text (priority)
+│   ├─ Badge (type: privacy/cost/performance/intent)
+│   ├─ Button("Edit") → .sheet(ConstraintDetailView)
+│   └─ Button("Delete") → deleteConstraint()
+│  }
+│
+└─ Button("+ New") → addConstraint()
+```
+
+**ConstraintDetailView (Modal Sheet):**
+```
+Form {
+  Section("Basic Info") {
+    TextField("Name", text: $constraint.name)
+    Picker("Type", selection: $constraint.type)
+    TextField("Priority", value: $constraint.priority)
+    Toggle("Enabled", isOn: $constraint.enabled)
+  }
+
+  Section("Conditions") {
+    ForEach(constraint.conditions) { condition in
+      ConditionRow(condition)
+      ├─ Picker("Field")
+      ├─ Picker("Operator")
+      └─ TextField("Value")
+    }
+    Button("+ Add Condition")
+  }
+
+  Section("Action") {
+    Picker("Action Type", selection: $actionType)
+    if actionType == .block {
+      TextField("Reason", text: $blockReason)
+    }
+    // ... other action-specific fields
+  }
+
+  Section {
+    Button("Cancel") { dismiss() }
+    Button("Save") { saveAndDismiss() }
+  }
+}
+```
+
+**No Simulation Panel** — Deferred to Phase 5.
+
+---
+
+## 1A.6 Exact JSON Schema (MVP)
+
+### File Location
+
+```
+~/Library/Application Support/NoesisNoema/policy-constraints.json
+```
+
+### Schema Definition
+
+```json
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "type", "enabled", "priority", "conditions", "action"],
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "type": "string",
+        "enum": ["privacy", "cost", "performance", "intent"]
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "priority": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "conditions": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["field", "operator", "value"],
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": ["content", "token_count", "intent", "privacy_level"]
+            },
+            "operator": {
+              "type": "string",
+              "enum": ["contains", "notContains", "equals", "notEquals", "exceeds", "lessThan"]
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "action": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["block", "forceLocal", "forceCloud", "requireConfirmation", "warn"]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Required if type == block"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Required if type == requireConfirmation"
+          },
+          "message": {
+            "type": "string",
+            "description": "Required if type == warn"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Example (Minimal)
+
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Block Sensitive Data",
+    "type": "privacy",
+    "enabled": true,
+    "priority": 1,
+    "conditions": [
+      {
+        "field": "content",
+        "operator": "contains",
+        "value": "SSN|password"
+      }
+    ],
+    "action": {
+      "type": "block",
+      "reason": "Contains sensitive data"
+    }
+  }
+]
+```
+
+**No additional metadata** (e.g., `createdAt`, `modifiedAt`) in Phase 4.
+
+---
+
+## 1A.7 Explicit Non-Modification Guarantees
+
+### Router is Unchanged
+
+**Statement:**
+`Shared/Routing/Router.swift` will **not be modified** in Phase 4.
+
+**Verification:**
+- Before: `git diff main -- Shared/Routing/Router.swift` → empty
+- After: `git diff main -- Shared/Routing/Router.swift` → empty
+
+**Integration Point:**
+The Router receives `PolicyEvaluationResult` from the PolicyEngine, which in turn receives `[PolicyRule]` from `AppSettings.shared.policyRules`. The Constraint Editor modifies the JSON file, which is loaded into `AppSettings` on startup. No Router code changes required.
+
+---
+
+### PolicyEngine is Unchanged
+
+**Statement:**
+`Shared/Policy/PolicyEngine.swift` will **not be modified** in Phase 4.
+
+**Verification:**
+- Before: `git diff feature/epic1-policy-engine -- Shared/Policy/PolicyEngine.swift` → empty
+- After: `git diff feature/epic1-policy-engine -- Shared/Policy/PolicyEngine.swift` → empty
+
+**Integration Point:**
+The PolicyEngine's `evaluate()` function already accepts `rules: [PolicyRule]` as a parameter. The Constraint Editor creates/edits `PolicyRule` instances that are persisted to JSON, then loaded and passed to the PolicyEngine. No PolicyEngine code changes required.
+
+---
+
+### ConstraintEditor Injects Rules Only Via Dependency
+
+**Statement:**
+The Constraint Editor **does not directly call** the PolicyEngine or Router. It only manipulates the `[PolicyRule]` array in `AppSettings.shared.policyRules`.
+
+**Data Flow:**
+
+```
+User edits constraint in ConstraintEditorView
+  ↓
+ConstraintEditorViewModel.saveConstraints()
+  ↓
+ConstraintStore.save([PolicyRule])
+  ↓
+Write to policy-constraints.json
+  ↓
+(On app restart or manual reload)
+  ↓
+AppSettings.shared.loadPolicyRules()
+  ↓
+ConstraintStore.load() -> [PolicyRule]
+  ↓
+AppSettings.shared.policyRules = [...]
+  ↓
+(During execution)
+  ↓
+ExecutionCoordinator invokes PolicyEngine.evaluate(
+    question: question,
+    runtimeState: state,
+    rules: AppSettings.shared.policyRules  ← injected here
+)
+  ↓
+Router.route(question, state, policyResult)
+```
+
+**No direct coupling** between ConstraintEditor and PolicyEngine/Router.
+
+---
+
+## 1A.8 MVP Implementation Checklist (Strict)
+
+### Phase 4 Tasks (Non-Negotiable)
+
+- [ ] **Step 1:** Create `EditablePolicyRule` model with converters
+- [ ] **Step 2:** Implement `ConstraintStore` (JSON read/write)
+- [ ] **Step 3:** Add `policyRules` property to `AppSettings`
+- [ ] **Step 4:** Implement `ConstraintEditorViewModel` (CRUD + validation)
+- [ ] **Step 5:** Create `ConstraintEditorView` (simple list)
+- [ ] **Step 6:** Create `ConstraintDetailView` (modal edit form)
+- [ ] **Step 7:** Integrate: Load rules in `AppSettings.init()`, pass to `PolicyEngine.evaluate()`
+- [ ] **Step 8:** Write unit tests (model conversion, persistence, validation)
+- [ ] **Step 9:** Write UI tests (CRUD operations)
+- [ ] **Step 10:** Document JSON schema
+
+**Estimated Effort:** 12 hours (1.5 days)
+
+**Reduced from original 20 hours** due to:
+- No simulation mode (saved 2 hours)
+- No master-detail layout (saved 2 hours)
+- No template system (saved 2 hours)
+- No advanced validation (saved 2 hours)
+
+---
+
+## 1A.9 Acceptance Criteria (MVP)
+
+Phase 4 is **complete** when:
+
+1. ✅ Developer can create a new constraint via UI
+2. ✅ Developer can edit an existing constraint
+3. ✅ Developer can enable/disable constraints
+4. ✅ Developer can delete constraints
+5. ✅ Constraints are persisted to `policy-constraints.json`
+6. ✅ Constraints are loaded on app startup via `AppSettings`
+7. ✅ Constraints are passed to `PolicyEngine.evaluate()` in production flow
+8. ✅ Validation prevents saving malformed constraints (name, conditions, action)
+9. ✅ Router is unchanged (verified by `git diff`)
+10. ✅ PolicyEngine is unchanged (verified by `git diff`)
+11. ✅ Unit tests pass (model conversion, persistence, validation)
+12. ✅ UI tests pass (CRUD operations)
+
+**Not Required for Phase 4:**
+- ❌ Simulation mode
+- ❌ Master-detail layout
+- ❌ Priority conflict detection
+- ❌ Execution history integration
+- ❌ Template library
+- ❌ Advanced operators (OR logic, regex)
+
+---
+
+## 1A.10 Summary: What Changed from Original Design
+
+### Original Design (Sections 1-9)
+
+- Master-detail layout
+- Simulation mode with determinism verification
+- Template library
+- Advanced validation (priority conflicts, dependency checking)
+- Execution history integration
+- Real-time constraint reload
+- Import/export functionality
+
+**Estimated Effort:** 20 hours (2.5 days)
+
+### MVP Design (This Section)
+
+- Simple list with modal edit sheet
+- No simulation mode (deferred to Phase 5)
+- No template library (deferred to Phase 5)
+- Basic validation only (name, conditions, action)
+- No execution history integration (deferred to Phase 5)
+- Manual reload only
+- No import/export (deferred to Phase 6)
+
+**Estimated Effort:** 12 hours (1.5 days)
+
+**Reduction:** 40% less scope, 40% less time
+
+### Why This Matters
+
+The MVP design:
+1. **Validates core architecture** (EditablePolicyRule ↔ PolicyRule conversion)
+2. **Proves integration works** (ConstraintStore → AppSettings → PolicyEngine)
+3. **Demonstrates UI feasibility** (SwiftUI CRUD operations)
+4. **Maintains determinism guarantees** (PolicyEngine unchanged)
+5. **Enables incremental refinement** (Phase 5 adds simulation, Phase 6 adds templates)
+
+**Phase 4 is a foundation, not a complete product.** It proves the concept and enables future enhancement without rework.
+
+---
+
 # SECTION 2 — Architecture
 
 ## 2.1 Component Overview
