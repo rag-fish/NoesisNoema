@@ -2885,3 +2885,277 @@ The core principles are:
 ---
 
 **End of Document**
+
+---
+
+# SECTION 6 — Phase 5 Implementation Status
+
+## 6.1 Phase 5-B: Policy-Based Routing Wiring (Complete)
+
+**Date Completed:** 2026-02-25
+**Status:** ✅ Implemented and Tested
+
+### Implementation Summary
+
+Phase 5-B successfully wired PolicyEngine and Router into the ExecutionCoordinator without modifying their internal logic, achieving full policy-based routing.
+
+### Call Stack (User Question → Executor)
+
+```
+User Input (MinimalClientView)
+    ↓
+MinimalClientViewModel.submit()
+    ↓
+NoemaRequest(query, sessionId)
+    ↓
+ExecutionCoordinator.execute(request)
+    ↓
+    ├─ buildNoemaQuestion(request) → NoemaQuestion
+    ├─ buildRuntimeState() → RuntimeState
+    ├─ PolicyRulesProvider.getPolicyRules() → [PolicyRule]
+    ↓
+PolicyEngine.evaluate(question, runtimeState, rules)
+    ↓
+PolicyEvaluationResult (effectiveAction, triggeredRuleIds)
+    ↓
+Router.route(question, runtimeState, policyResult)
+    ↓
+RoutingDecision (routeTarget, model, reason, ruleId)
+    ↓
+Execution Dispatch:
+    ├─ .local → executeLocal(question, model)
+    │     ↓
+    │   ModelManager.generateAsyncAnswer()
+    │
+    └─ .cloud → executeCloud(question, model)
+          ↓
+        [Not implemented in Phase 5-B]
+    ↓
+NoemaResponse(text, sessionId)
+    ↓
+MinimalClientView (display)
+```
+
+### Key Components
+
+**1. ExecutionCoordinator (Shared/Execution/ExecutionCoordinator.swift)**
+
+Responsibilities:
+- Build NoemaQuestion from NoemaRequest
+- Build RuntimeState from current environment
+- Invoke PolicyEngine with policy rules
+- Invoke Router with policy evaluation result
+- Dispatch execution based on RoutingDecision
+- Handle errors and fallbacks
+- Provide observability logging
+
+**2. NoemaQuestion Construction**
+
+```swift
+private func buildNoemaQuestion(from request: NoemaRequest) -> NoemaQuestion {
+    return NoemaQuestion(
+        id: UUID(),
+        content: request.query,
+        privacyLevel: .auto,  // Phase 5-B: Default (UI picker deferred)
+        intent: nil,           // Phase 5-B: No classifier yet
+        sessionId: request.sessionId
+    )
+}
+```
+
+**3. RuntimeState Construction**
+
+```swift
+private func buildRuntimeState() -> RuntimeState {
+    let localModelCapability = LocalModelCapability(
+        modelName: modelManager.currentModelID ?? "unknown",
+        maxTokens: 8192,  // Safe default
+        supportedIntents: [.informational, .analytical, .retrieval],
+        available: true   // Phase 5-B: Assume available
+    )
+
+    return RuntimeState(
+        localModelCapability: localModelCapability,
+        networkState: .online,  // Phase 5-B: Assume online
+        tokenThreshold: 4096,
+        cloudModelName: "gpt-4"
+    )
+}
+```
+
+**4. Execution Dispatch**
+
+```swift
+switch routingDecision.routeTarget {
+case .local:
+    log("▶️ Executing LOCAL route with model: \(routingDecision.model)")
+    responseText = try await executeLocal(question: request.query, model: routingDecision.model)
+
+case .cloud:
+    log("▶️ Executing CLOUD route with model: \(routingDecision.model)")
+    responseText = try await executeCloud(question: request.query, model: routingDecision.model)
+}
+```
+
+### Observability
+
+ExecutionCoordinator logs all key decision points:
+
+- `📥 Question received` — Request entry
+- `📝 NoemaQuestion constructed` — Input validation
+- `🔧 RuntimeState` — Environment detection
+- `📋 Loaded N policy rule(s)` — Policy loading
+- `✅ PolicyEngine: action=X` — Policy decision
+- `🚀 Router decision: route=X` — Routing decision
+- `▶️ Executing X route` — Execution path
+- `✅ Execution complete` — Success
+- `❌ Error: X` — Failures
+
+### Policy Enforcement
+
+**Policy Blocking:**
+```
+User Query: "What's my password?"
+    ↓
+PolicyEngine: BLOCK (reason: "Sensitive data detected")
+    ↓
+ExecutionCoordinator: Returns error response
+    ↓
+Response: "❌ Request blocked by policy: Sensitive data detected"
+```
+
+**Policy Force Local:**
+```
+User Query: "This is private information"
+    ↓
+PolicyEngine: FORCE_LOCAL
+    ↓
+Router: routeTarget=.local (policy constraint)
+    ↓
+ExecutionCoordinator: executeLocal()
+    ↓
+Local Model Execution
+```
+
+**Policy Force Cloud:**
+```
+User Query: "Analyze this complex dataset"
+    ↓
+PolicyEngine: FORCE_CLOUD
+    ↓
+Router: routeTarget=.cloud (policy constraint)
+    ↓
+ExecutionCoordinator: executeCloud()
+    ↓
+[Phase 5-B: Returns "not implemented" error]
+```
+
+### Testing
+
+**Test File:** `Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift`
+
+**Test Coverage:**
+- ✅ Policy blocking prevents execution
+- ✅ Policy blocking allows non-matching content
+- ✅ Policy force-local routes to local
+- ✅ NoemaQuestion construction
+- ✅ RuntimeState construction
+- ✅ Empty rules default to auto routing
+- ✅ Multiple rules evaluated in priority order
+- ✅ Disabled rules are ignored
+- ✅ Cloud execution returns error (not implemented)
+- ✅ Full execution flow with logging
+- ✅ No policy rules provider defaults to empty
+
+**Test Results:** 11/11 tests passing ✅
+
+### Phase 5-B Limitations
+
+**What IS Implemented:**
+- ✅ PolicyEngine integration
+- ✅ Router integration
+- ✅ Policy blocking enforcement
+- ✅ Policy force-local enforcement
+- ✅ Local execution path
+- ✅ Observability logging
+- ✅ Error handling
+
+**What IS NOT Implemented (Deferred):**
+- ❌ Cloud execution infrastructure
+- ❌ Network reachability detection (assumes online)
+- ❌ Local model capability introspection (uses defaults)
+- ❌ Intent classification
+- ❌ Privacy level UI picker (defaults to .auto)
+- ❌ Confirmation UI (auto-approves)
+- ❌ Fallback retry logic
+- ❌ Structured logging (trace_id)
+
+### Verification of Design Constraints
+
+**Hard Constraint Compliance:**
+
+| Constraint | Status | Evidence |
+|------------|--------|----------|
+| ❌ Do NOT modify Router.swift | ✅ PASS | No changes to Router.swift |
+| ❌ Do NOT modify PolicyEngine.swift | ✅ PASS | No changes to PolicyEngine.swift |
+| ❌ Do NOT modify PolicyRule semantics | ✅ PASS | PolicyRule unchanged |
+| ❌ Do NOT modify RoutingDecision semantics | ✅ PASS | RoutingDecision unchanged |
+| ❌ Do NOT change ConstraintStore behavior | ✅ PASS | ConstraintStore unchanged |
+| ❌ Do NOT change PolicyRulesStore behavior | ✅ PASS | PolicyRulesStore unchanged |
+| ❌ Do NOT introduce global mutable state | ✅ PASS | All state is local |
+
+**Design Compliance:**
+
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| All execution through ExecutionCoordinator | ✅ PASS | MinimalClientView uses ExecutionCoordinator |
+| Routing is explicit and observable | ✅ PASS | All decisions logged |
+| PolicyEngine invoked with rules | ✅ PASS | `PolicyEngine.evaluate()` called |
+| Router invoked with policy result | ✅ PASS | `Router.route()` called |
+| Execution dispatched by RoutingDecision | ✅ PASS | Switch on `routeTarget` |
+| Tests validate wiring | ✅ PASS | 11/11 tests passing |
+
+### No Modifications to Core Components
+
+**Confirmed via git diff:**
+
+```bash
+# Router.swift
+git diff HEAD -- Shared/Routing/Router.swift
+# Result: No changes
+
+# PolicyEngine.swift
+git diff HEAD -- Shared/Policy/PolicyEngine.swift
+# Result: No changes
+
+# PolicyRule.swift
+git diff HEAD -- Shared/Policy/PolicyRule.swift
+# Result: No changes
+
+# RoutingDecision.swift
+git diff HEAD -- Shared/Routing/RoutingDecision.swift
+# Result: No changes
+```
+
+All wiring changes isolated to **ExecutionCoordinator.swift only** ✅
+
+### Phase 5-B Sign-Off
+
+**Status:** ✅ **COMPLETE**
+
+**Deliverables:**
+- ✅ ExecutionCoordinator wiring implemented
+- ✅ PolicyEngine integration verified
+- ✅ Router integration verified
+- ✅ Observability logging added
+- ✅ 11 unit tests passing
+- ✅ Design constraints honored
+- ✅ Zero modifications to Router/PolicyEngine
+
+**Ready for Phase 5-C:** Network detection, cloud execution, confirmation UI
+
+**Commit:** [To be added after commit]
+
+---
+
+**End of Phase 5-B Implementation Status**
