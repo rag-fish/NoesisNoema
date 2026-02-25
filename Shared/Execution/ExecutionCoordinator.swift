@@ -48,6 +48,7 @@ protocol ExecutionCoordinating {
 
 /// Centralized execution coordinator
 /// Phase 4-A: Delegates to ModelManager (existing behavior)
+/// Phase 4-B: PolicyRulesStore injected but not used yet
 /// Future phases: Will integrate Router + PolicyEngine
 @MainActor
 final class ExecutionCoordinator: ExecutionCoordinating {
@@ -55,19 +56,29 @@ final class ExecutionCoordinator: ExecutionCoordinating {
     // MARK: - Dependencies
 
     private let modelManager: ModelManager
+    private let policyRulesProvider: PolicyRulesProvider?  // Phase 4-B: Injected but not used
 
     // MARK: - Initialization
 
-    init(modelManager: ModelManager = ModelManager.shared) {
+    init(
+        modelManager: ModelManager = ModelManager.shared,
+        policyRulesProvider: PolicyRulesProvider? = nil  // Optional for Phase 4-B
+    ) {
         self.modelManager = modelManager
+        self.policyRulesProvider = policyRulesProvider
     }
 
     // MARK: - ExecutionCoordinating
 
     func execute(request: NoemaRequest) async throws -> NoemaResponse {
-        // Phase 4-A: Direct delegation to existing ModelManager
-        // No Router, no PolicyEngine integration yet
-        // This preserves current behavior exactly
+        // Phase 4-B: PolicyRulesProvider injected but not used yet
+        // Integration deferred to Phase 5
+        // let rules = policyRulesProvider?.getPolicyRules() ?? []
+        // let policyResult = try PolicyEngine.evaluate(question, state, rules)
+        // let routingDecision = try Router.route(question, state, policyResult)
+
+        // Phase 4-A/4-B: Direct delegation to existing ModelManager
+        // Preserves current behavior exactly
 
         let responseText = await modelManager.generateAsyncAnswer(question: request.query)
 
