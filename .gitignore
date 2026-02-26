@@ -354,3 +354,9 @@ tools/
 # LLM models
 *.gguf
 Apps/macOS/NoesisNoema/Resources/Models/*.gguf
+
+# Swift-only enforcement
+/scripts
+*.py
+*.rb
+*.sh
