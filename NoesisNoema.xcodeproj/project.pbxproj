@@ -7,7 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		123456782E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
+		123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */; };
+		3BE0D06DBE51EA61C49B20D7 /* RouterDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A4079BF1E06152C05F1195 /* RouterDeterminismTests.swift */; };
+		90DD96BF78F6C3E5E1528861 /* ExecutionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9246BDD144950A28830E1858 /* ExecutionCoordinatorTests.swift */; };
+		A16D37888219FCA9C8D12447 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8698D14F44276007E4859BD1 /* Cocoa.framework */; };
+		A476F34DE8D7F73BBFADE852 /* PolicyEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F1B2495A7E0820DC5556C8 /* PolicyEngineTests.swift */; };
+		E6D4E479EBBDC08E8CE5CF38 /* ConstraintPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB65DB6A71A0CB34F9B0AB33 /* ConstraintPersistenceTests.swift */; };
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
 		F43103452ED9802900E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
 		F43103462ED9803300E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
@@ -20,6 +25,16 @@
 		F4C581612E4F13EC00E64194 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4C5811C2E4F036E00E64194 /* Metal.framework */; };
 		F4D1DB542E4F18ED006B902C /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4D1DB532E4F18ED006B902C /* ZIPFoundation */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7B6892A76D56FA06C5BDE923 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F41FD0132E2A466F00909132 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F41FD01A2E2A466F00909132;
+			remoteInfo = NoesisNoema;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		F4C94BF12EC8AEF300C37A99 /* Embed Frameworks */ = {
@@ -46,8 +61,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
+		14F1B2495A7E0820DC5556C8 /* PolicyEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; path = Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift; sourceTree = "<group>"; };
+		3D471EF851EED4EAF7691876 /* NoesisNoemaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NoesisNoemaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		80A4079BF1E06152C05F1195 /* RouterDeterminismTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; path = Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift; sourceTree = "<group>"; };
+		8698D14F44276007E4859BD1 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		9246BDD144950A28830E1858 /* ExecutionCoordinatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; path = Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift; sourceTree = "<group>"; };
 		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
+		CB65DB6A71A0CB34F9B0AB33 /* ConstraintPersistenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; path = Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F43103432ED9802900E0307A /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = NoesisNoema/Frameworks/xcframeworks/llama.xcframework; sourceTree = "<group>"; };
@@ -61,6 +82,21 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		626A131745102C4AAA94216D /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoema" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Tests/CitationPopoverSnapshotTests/CitationPopoverSnapshotTests_iOS.swift,
+				Tests/CitationPopoverSnapshotTests/CitationPopoverSnapshotTests_macOS.swift,
+				Tests/ConnectivityGuardTests/ConnectivityGuardTests.swift,
+				Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift,
+				Tests/ModelRegistryTests/ModelCompatibilityTests.swift,
+				Tests/ModelRegistryTests/ModelRegistryTests.swift,
+				Tests/PolicyEngineTests/ConstraintPersistenceTests.swift,
+				Tests/PolicyEngineTests/PolicyEngineTests.swift,
+				Tests/RouterTests/RouterDeterminismTests.swift,
+			);
+			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
+		};
 		F4C581272E4F06A100E64194 /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoemaMobile" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -94,6 +130,7 @@
 		F41FD01D2E2A466F00909132 /* Apps/macOS/NoesisNoema */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				626A131745102C4AAA94216D /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoema" target */,
 				F4ED32C42E37A18400CCE0DE /* Exceptions for "Apps/macOS/NoesisNoema" folder in "LlamaBridgeTest" target */,
 				F4C581272E4F06A100E64194 /* Exceptions for "Apps/macOS/NoesisNoema" folder in "NoesisNoemaMobile" target */,
 			);
@@ -102,22 +139,36 @@
 		};
 		F460884A2E2CD45000D4C555 /* Apps/CLI/LlamaBridgeTest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Apps/CLI/LlamaBridgeTest;
 			sourceTree = "<group>";
 		};
 		F4C580FE2E4F006000E64194 /* Apps/iOS/NoesisNoemaMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Apps/iOS/NoesisNoemaMobile;
 			sourceTree = "<group>";
 		};
 		F4SHARED01E2A466F00909132 /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		27D991BA20A4051F1C3698D2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A16D37888219FCA9C8D12447 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F41FD0182E2A466F00909132 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -152,6 +203,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		502A8FD41346F1DAF895F128 /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				8698D14F44276007E4859BD1 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
 		F408F3402E35C1C700F621C5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -159,6 +218,7 @@
 				F4C5811C2E4F036E00E64194 /* Metal.framework */,
 				F4C5811D2E4F036E00E64194 /* MetalKit.framework */,
 				F43103432ED9802900E0307A /* llama.xcframework */,
+				502A8FD41346F1DAF895F128 /* OS X */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -190,6 +250,7 @@
 				F41FD01B2E2A466F00909132 /* NoesisNoema.app */,
 				F46088492E2CD45000D4C555 /* NoesisNoema */,
 				F4C580FD2E4F006000E64194 /* NoesisNoema.app */,
+				3D471EF851EED4EAF7691876 /* NoesisNoemaTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -197,7 +258,7 @@
 		F45991592EB76940002CCA0C /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */,
+				123456772E4F999900000001 /* NoesisNoemaMobileApp.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -219,6 +280,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		70A34E92BC3A773F74B8AAE3 /* NoesisNoemaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D0C0694D1A2641378B0C802 /* Build configuration list for PBXNativeTarget "NoesisNoemaTests" */;
+			buildPhases = (
+				8A8F87176588EA450389CAA1 /* Sources */,
+				27D991BA20A4051F1C3698D2 /* Frameworks */,
+				3A31F0C128AEBF5804F0CFA6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1EE7127701897258B23E531 /* PBXTargetDependency */,
+			);
+			name = NoesisNoemaTests;
+			productName = NoesisNoemaTests;
+			productReference = 3D471EF851EED4EAF7691876 /* NoesisNoemaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		F41FD01A2E2A466F00909132 /* NoesisNoema */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F41FD0262E2A467000909132 /* Build configuration list for PBXNativeTarget "NoesisNoema" */;
@@ -348,11 +427,19 @@
 				F41FD01A2E2A466F00909132 /* NoesisNoema */,
 				F46088482E2CD45000D4C555 /* LlamaBridgeTest */,
 				F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */,
+				70A34E92BC3A773F74B8AAE3 /* NoesisNoemaTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		3A31F0C128AEBF5804F0CFA6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F41FD0192E2A466F00909132 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -377,6 +464,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		8A8F87176588EA450389CAA1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				90DD96BF78F6C3E5E1528861 /* ExecutionCoordinatorTests.swift in Sources */,
+				A476F34DE8D7F73BBFADE852 /* PolicyEngineTests.swift in Sources */,
+				3BE0D06DBE51EA61C49B20D7 /* RouterDeterminismTests.swift in Sources */,
+				E6D4E479EBBDC08E8CE5CF38 /* ConstraintPersistenceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F41FD0172E2A466F00909132 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -395,13 +493,52 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				123456782E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */,
+				123456782E4F999900000001 /* NoesisNoemaMobileApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A1EE7127701897258B23E531 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NoesisNoema;
+			target = F41FD01A2E2A466F00909132 /* NoesisNoema */;
+			targetProxy = 7B6892A76D56FA06C5BDE923 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A4A5F570C476F4AE66B02E69 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noesis.NoesisNoemaTests;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NoesisNoema.app/Contents/MacOS/NoesisNoema";
+			};
+			name = Debug;
+		};
+		E0F7A6655466DF064F61403E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noesis.NoesisNoemaTests;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NoesisNoema.app/Contents/MacOS/NoesisNoema";
+			};
+			name = Release;
+		};
 		F41FD0242E2A467000909132 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -800,6 +937,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6D0C0694D1A2641378B0C802 /* Build configuration list for PBXNativeTarget "NoesisNoemaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E0F7A6655466DF064F61403E /* Release */,
+				A4A5F570C476F4AE66B02E69 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F41FD0162E2A466F00909132 /* Build configuration list for PBXProject "NoesisNoema" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
