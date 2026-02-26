@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import OSLog
 
 // MARK: - Request/Response Models
 
@@ -56,6 +57,10 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
     private let modelManager: ModelManager
     private let policyRulesProvider: PolicyRulesProvider?
+
+    // MARK: - Structured Logging
+
+    private let logger = Logger(subsystem: "NoesisNoema", category: "Execution")
 
     // MARK: - Initialization
 
@@ -134,8 +139,10 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         // STEP 6: Handle confirmation requirement
         if routingDecision.requiresConfirmation {
-            log("⚠️ Confirmation required (auto-approved for Phase 5-B)")
-            // Phase 5-B: Auto-approve (confirmation UI deferred to Phase 5-C)
+            // TODO: Phase 5-C - Implement confirmation UI
+            // Current behavior: Auto-approve (explicit bypass for Phase 5-B)
+            logger.warning("⚠️ Confirmation required but bypassed: rule=\(routingDecision.ruleId.rawValue) route=\(routingDecision.routeTarget.rawValue) model=\(routingDecision.model)")
+            logger.info("📋 Confirmation UI deferred to Phase 5-C (explicit auto-approval)")
         }
 
         // STEP 7: Execute based on routing decision
@@ -227,9 +234,9 @@ final class ExecutionCoordinator: ExecutionCoordinating {
         }
     }
 
-    /// Lightweight logging helper
+    /// Structured logging helper
     private func log(_ message: String) {
-        print("[ExecutionCoordinator] \(message)")
+        logger.info("\(message, privacy: .public)")
     }
 }
 
