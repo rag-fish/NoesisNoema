@@ -103,6 +103,10 @@
 				Assets.xcassets,
 				"Resources/Models/gpt-oss-20b-F16.gguf",
 				"Resources/Models/Llama-3.3-70B-Instruct-UD-IQ1_S.gguf",
+				Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift,
+				Tests/PolicyEngineTests/ConstraintPersistenceTests.swift,
+				Tests/PolicyEngineTests/PolicyEngineTests.swift,
+				Tests/RouterTests/RouterDeterminismTests.swift,
 			);
 			target = F4C580FC2E4F006000E64194 /* NoesisNoemaMobile */;
 		};

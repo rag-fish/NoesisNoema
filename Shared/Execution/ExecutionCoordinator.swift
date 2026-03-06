@@ -99,7 +99,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
                 runtimeState: runtimeState,
                 rules: rules
             )
-            log("✅ PolicyEngine: action=\(policyResult.effectiveAction), rules=\(policyResult.triggeredRuleIds.map { $0.rawValue })")
+            log("✅ PolicyEngine: action=\(policyResult.effectiveAction), rules=\(policyResult.appliedConstraints.map { $0.uuidString })")
         } catch RoutingError.policyViolation(let reason) {
             log("❌ Policy BLOCKED execution: \(reason)")
             return NoemaResponse(
@@ -126,7 +126,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
                 text: "❌ Cannot execute cloud route: Network unavailable",
                 sessionId: request.sessionId
             )
-        } catch RoutingError.localModelUnavailable {
+        } catch RoutingError.invalidConfiguration(let reason) where reason.contains("local") {
             log("❌ Routing failed: Local model unavailable")
             return NoemaResponse(
                 text: "❌ Cannot execute local route: Local model unavailable",

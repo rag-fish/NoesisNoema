@@ -8,11 +8,13 @@
 import SwiftUI
 
 struct RootView: View {
+    let executionCoordinator: ExecutionCoordinating
+
     var body: some View {
-        MinimalClientView()
+        MinimalClientView(executionCoordinator: executionCoordinator)
     }
 }
 
 #Preview {
-    RootView()
+    RootView(executionCoordinator: ExecutionCoordinator())
 }
