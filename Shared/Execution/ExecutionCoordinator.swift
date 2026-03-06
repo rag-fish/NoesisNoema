@@ -49,6 +49,7 @@ protocol ExecutionCoordinating {
 
 /// Centralized execution coordinator
 /// Phase 5-B: Full policy-based routing wired
+/// EPIC2: Integrated with ConstraintRuntime layer
 /// Integrates PolicyEngine + Router without modifying their internals
 @MainActor
 final class ExecutionCoordinator: ExecutionCoordinating {
@@ -57,6 +58,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
     private let modelManager: ModelManager
     private let policyRulesProvider: PolicyRulesProvider?
+    private let constraintRuntime: ConstraintRuntime
 
     // MARK: - Structured Logging
 
@@ -66,18 +68,52 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
     init(
         modelManager: ModelManager = ModelManager.shared,
-        policyRulesProvider: PolicyRulesProvider? = nil
+        policyRulesProvider: PolicyRulesProvider? = nil,
+        constraintRuntime: ConstraintRuntime = ConstraintRuntime(
+            constraints: [
+                .requiresUserIntent,
+                .maxTokens(4096),
+                .noToolUse
+            ]
+        )
     ) {
         self.modelManager = modelManager
         self.policyRulesProvider = policyRulesProvider
+        self.constraintRuntime = constraintRuntime
     }
 
     // MARK: - ExecutionCoordinating
 
     func execute(request: NoemaRequest) async throws -> NoemaResponse {
-        // Phase 5-B: Full policy-based routing execution flow
+        // EPIC2: Execution flow with ConstraintRuntime validation
+        // ExecutionCoordinator → ConstraintRuntime.validate → Agent execution
 
         log("📥 Question received: sessionId=\(request.sessionId)")
+
+        // STEP 0: Constraint validation (EPIC2)
+        let constraintResult: ConstraintResult
+        do {
+            try constraintRuntime.validate(request: request)
+            constraintResult = .passed
+            log("✅ ConstraintRuntime: validation passed")
+        } catch let violation as ConstraintViolation {
+            constraintResult = .violated(violation)
+            log("❌ ConstraintRuntime: validation failed - \(violation.reason)")
+
+            // Log the failed validation
+            let errorResult: Result<NoemaResponse, Error> = .failure(violation)
+            constraintRuntime.logExecution(
+                request: request,
+                constraintResult: constraintResult,
+                executionResult: errorResult
+            )
+
+            // Return constraint violation error response
+            return NoemaResponse(
+                text: "❌ Constraint violation: \(violation.reason)",
+                sessionId: request.sessionId
+            )
+        }
 
         // STEP 1: Build NoemaQuestion from request
         let question = buildNoemaQuestion(from: request)
@@ -170,10 +206,19 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         log("✅ Execution complete: sessionId=\(request.sessionId)")
 
-        return NoemaResponse(
+        let response = NoemaResponse(
             text: responseText,
             sessionId: request.sessionId
         )
+
+        // EPIC2: Log successful execution
+        constraintRuntime.logExecution(
+            request: request,
+            constraintResult: constraintResult,
+            executionResult: .success(response)
+        )
+
+        return response
     }
 
     // MARK: - Private Helpers
