@@ -33,7 +33,9 @@ struct ConstraintDetailView: View {
                         Text("Priority")
                         Spacer()
                         TextField("Priority", value: $constraint.priority, format: .number)
+                            #if os(iOS)
                             .keyboardType(.numberPad)
+                            #endif
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
                     }
@@ -108,7 +110,9 @@ struct ConstraintDetailView: View {
                 }
             }
             .navigationTitle("Edit Constraint")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)

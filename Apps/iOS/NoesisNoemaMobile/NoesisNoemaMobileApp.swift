@@ -24,8 +24,7 @@ struct NoesisNoemaMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(executionCoordinator)
+            RootView(executionCoordinator: executionCoordinator)
         }
     }
 }

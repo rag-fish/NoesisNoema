@@ -23,8 +23,7 @@ struct NoesisNoemaApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MinimalClientView()
-                .environmentObject(executionCoordinator)
+            MinimalClientView(executionCoordinator: executionCoordinator)
         }
     }
 }

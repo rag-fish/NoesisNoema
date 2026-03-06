@@ -23,11 +23,6 @@ class MinimalClientViewModel: ObservableObject {
         self.executionCoordinator = executionCoordinator
     }
 
-    // Allow updating coordinator from environment
-    func setCoordinator(_ coordinator: ExecutionCoordinating) {
-        self.executionCoordinator = coordinator
-    }
-
     /// Explicit submit action - user-initiated only
     /// Routing: User → submit() → ExecutionCoordinator (invocation boundary)
     func submit() async {
@@ -58,13 +53,11 @@ class MinimalClientViewModel: ObservableObject {
 /// X-1 Minimal Client Interface
 /// Cross-platform SwiftUI view with explicit user control
 struct MinimalClientView: View {
-    @EnvironmentObject private var executionCoordinator: ExecutionCoordinator
     @StateObject private var viewModel: MinimalClientViewModel
 
-    init() {
-        // Initialize with temporary coordinator (will be replaced by environment object)
+    init(executionCoordinator: ExecutionCoordinating) {
         _viewModel = StateObject(wrappedValue: MinimalClientViewModel(
-            executionCoordinator: ExecutionCoordinator()
+            executionCoordinator: executionCoordinator
         ))
     }
 
@@ -126,13 +119,9 @@ struct MinimalClientView: View {
             Spacer()
         }
         .padding()
-        .onAppear {
-            // Update ViewModel with injected ExecutionCoordinator from environment
-            viewModel.setCoordinator(executionCoordinator)
-        }
     }
 }
 
 #Preview {
-    MinimalClientView()
+    MinimalClientView(executionCoordinator: ExecutionCoordinator())
 }
