@@ -2,7 +2,6 @@
 //  ConstraintPersistenceTests.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
 //  Purpose: Unit tests for constraint persistence layer
 //  License: MIT License
 //

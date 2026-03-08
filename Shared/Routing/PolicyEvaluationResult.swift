@@ -1,6 +1,5 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
-// This file defines the PolicyEvaluationResult struct (stub for EPIC1 Phase 2).
-// EPIC1: Client Authority Hardening (Phase 2)
+// This file defines the PolicyEvaluationResult struct.
 // Created: 2026-02-21
 // License: MIT License
 
@@ -15,7 +14,6 @@ enum PolicyAction: Equatable {
 }
 
 /// Result of policy evaluation
-/// NOTE: This is a stub for Phase 2. Full Policy Engine implementation in Phase 3.
 struct PolicyEvaluationResult: Equatable {
     /// The effective action determined by policy evaluation
     let effectiveAction: PolicyAction

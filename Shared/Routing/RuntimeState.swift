@@ -1,6 +1,5 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file defines the RuntimeState struct for routing decisions.
-// EPIC1: Client Authority Hardening (Phase 2)
 // Created: 2026-02-21
 // License: MIT License
 

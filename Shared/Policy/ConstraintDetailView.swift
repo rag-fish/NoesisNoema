@@ -2,7 +2,7 @@
 //  ConstraintDetailView.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
+//  ConstraintDetailView
 //  Purpose: Detail editor for individual constraints (modal sheet)
 //  License: MIT License
 //

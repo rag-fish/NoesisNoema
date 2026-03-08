@@ -1,6 +1,5 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file implements the deterministic Router as a pure function.
-// EPIC1: Client Authority Hardening (Phase 2) - Section 2.5
 // Created: 2026-02-21
 // License: MIT License
 

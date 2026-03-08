@@ -2,7 +2,7 @@
 //  ConstraintViolation.swift
 //  NoesisNoema
 //
-//  Created for EPIC2 Phase 1
+//  ConstraintViolation
 //  Purpose: Define constraint violation errors
 //  License: MIT License
 //

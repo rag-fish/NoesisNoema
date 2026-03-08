@@ -1,6 +1,5 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file defines the PolicyRule (Constraint) model for policy evaluation.
-// EPIC1: Client Authority Hardening (Phase 3)
 // Created: 2026-02-21
 // License: MIT License
 

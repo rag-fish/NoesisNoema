@@ -2,7 +2,6 @@
 //  ExecutionConstraint.swift
 //  NoesisNoema
 //
-//  Created for EPIC2 Phase 1
 //  Purpose: Define execution constraints for the ConstraintRuntime layer
 //  License: MIT License
 //

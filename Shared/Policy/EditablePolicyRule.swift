@@ -2,7 +2,6 @@
 //  EditablePolicyRule.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
 //  Purpose: Mutable UI-facing model for policy rule editing
 //  License: MIT License
 //

@@ -2,7 +2,7 @@
 //  ConstraintEditorViewModel.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
+//  ConstraintEditorViewModel
 //  Purpose: Business logic for constraint editor
 //  License: MIT License
 //
