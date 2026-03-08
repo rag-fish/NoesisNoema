@@ -16,7 +16,7 @@ class MinimalClientViewModel: ObservableObject {
     @Published var response: String = ""
     @Published var isProcessing: Bool = false
 
-    // EPIC1 Phase 4-A: ExecutionCoordinator injected via dependency
+    // Hybrid Runtime: ExecutionCoordinator injected via dependency
     private var executionCoordinator: ExecutionCoordinating
 
     init(executionCoordinator: ExecutionCoordinating) {
@@ -34,9 +34,8 @@ class MinimalClientViewModel: ObservableObject {
 
         let userPrompt = prompt
 
-        // Phase 4-A: Route through ExecutionCoordinator
-        // ExecutionCoordinator delegates to ModelManager (preserves current behavior)
-        // Router + PolicyEngine integration deferred to Phase 5
+        // Hybrid Runtime: Route through ExecutionCoordinator
+        // Full hybrid runtime: PolicyEngine → Router → Executor
         do {
             let request = NoemaRequest(query: userPrompt)
             let result = try await executionCoordinator.execute(request: request)
@@ -123,5 +122,6 @@ struct MinimalClientView: View {
 }
 
 #Preview {
-    MinimalClientView(executionCoordinator: ExecutionCoordinator())
+    // Hybrid Runtime is the default
+    MinimalClientView(executionCoordinator: HybridExecutionCoordinator())
 }
