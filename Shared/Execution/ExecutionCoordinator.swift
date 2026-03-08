@@ -86,6 +86,9 @@ final class ExecutionCoordinator: ExecutionCoordinating {
         // Execution flow with ConstraintRuntime validation
         // ExecutionCoordinator → ConstraintRuntime.validate → Agent execution
 
+        let traceId = UUID()
+        let startTime = Date()
+
         log("📥 Question received: sessionId=\(request.sessionId)")
 
         // STEP 0: Constraint validation
@@ -127,11 +130,16 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         // STEP 4: Policy evaluation
         let policyResult: PolicyEvaluationResult
+        var policyTrace: PolicyTrace?
         do {
             policyResult = try PolicyEngine.evaluate(
                 question: question,
                 runtimeState: runtimeState,
                 rules: rules
+            )
+            policyTrace = PolicyTrace(
+                evaluatedRules: rules.map { $0.id.uuidString },
+                constraintTriggered: !policyResult.appliedConstraints.isEmpty
             )
             log("✅ PolicyEngine: action=\(policyResult.effectiveAction), rules=\(policyResult.appliedConstraints.map { $0.uuidString })")
         } catch RoutingError.policyViolation(let reason) {
@@ -147,11 +155,16 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         // STEP 5: Routing decision
         let routingDecision: RoutingDecision
+        var routingTrace: RoutingTrace?
         do {
             routingDecision = try Router.route(
                 question: question,
                 runtimeState: runtimeState,
                 policyResult: policyResult
+            )
+            routingTrace = RoutingTrace(
+                ruleId: routingDecision.ruleId.rawValue,
+                decision: routingDecision
             )
             log("🚀 Router decision: route=\(routingDecision.routeTarget), model=\(routingDecision.model), reason=\(routingDecision.reason)")
         } catch RoutingError.networkUnavailable {
@@ -208,6 +221,19 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             text: responseText,
             sessionId: request.sessionId
         )
+
+        // Create execution trace
+        let duration = Date().timeIntervalSince(startTime)
+        let executionTrace = ExecutionTrace(
+            traceId: traceId,
+            query: request.query,
+            route: routingDecision,
+            executor: routingDecision.routeTarget.rawValue,
+            duration: duration,
+            timestamp: startTime
+        )
+
+        log("📊 Trace: id=\(executionTrace.traceId), duration=\(String(format: "%.3f", duration))s, route=\(executionTrace.executor)")
 
         // Log successful execution
         constraintRuntime.logExecution(
