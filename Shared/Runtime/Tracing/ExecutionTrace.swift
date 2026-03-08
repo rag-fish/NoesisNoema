@@ -13,6 +13,8 @@ struct ExecutionTrace {
     let traceId: UUID
     let query: String
     let route: RoutingDecision
+    let policy: PolicyTrace?
+    let routing: RoutingTrace?
     let executor: String
     let duration: TimeInterval
     let timestamp: Date

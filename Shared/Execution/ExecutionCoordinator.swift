@@ -228,12 +228,17 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             traceId: traceId,
             query: request.query,
             route: routingDecision,
+            policy: policyTrace,
+            routing: routingTrace,
             executor: routingDecision.routeTarget.rawValue,
             duration: duration,
             timestamp: startTime
         )
 
         log("📊 Trace: id=\(executionTrace.traceId), duration=\(String(format: "%.3f", duration))s, route=\(executionTrace.executor)")
+
+        // Record trace
+        await TraceCollector.shared.record(executionTrace)
 
         // Log successful execution
         constraintRuntime.logExecution(
