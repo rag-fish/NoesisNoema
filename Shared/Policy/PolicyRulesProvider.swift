@@ -2,7 +2,6 @@
 //  PolicyRulesProvider.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
 //  Purpose: Dependency injection for policy rules
 //  License: MIT License
 //
@@ -58,13 +57,13 @@ final class PolicyRulesStore: PolicyRulesProvider {
         }
     }
 
-    // MARK: - Future Hook (Phase 5)
+    // MARK: - Future Hook
 
     /// Called by ConstraintEditor after saving new rules
-    /// Phase 4: No-op (requires app restart to apply changes)
-    /// Phase 5: Will reload cachedRules and notify observers
+    /// Currently no-op (requires app restart to apply changes)
+    /// Future: Will reload cachedRules and notify observers
     func notifyRulesUpdated() {
-        // No-op in Phase 4
+        // No-op for now
         // Restart required to apply constraint changes
     }
 }

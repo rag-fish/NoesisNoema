@@ -8,7 +8,7 @@ import Foundation
 /// Agent Client protocol for remote agent communication
 ///
 /// This protocol defines the interface for communicating with noema-agent API.
-/// The actual HTTP implementation will be provided in Phase3.
+/// The actual HTTP implementation to be provided separately.
 ///
 /// Constitutional Constraints (ADR-0000):
 /// - AgentClient is a pure I/O component (no business logic)
@@ -16,8 +16,8 @@ import Foundation
 /// - No retry logic (errors propagate)
 /// - No fallback logic
 ///
-/// Phase2: Protocol definition only
-/// Phase3: Concrete implementation in Networking/AgentClient.swift
+/// Protocol definition only.
+/// Concrete implementation in Networking/AgentClient.swift
 protocol AgentClient {
     /// Query the remote agent
     ///

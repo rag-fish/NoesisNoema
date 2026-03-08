@@ -2,7 +2,7 @@
 //  ConstraintEditorView.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-B
+//  ConstraintEditorView
 //  Purpose: Main UI for constraint editor (simple list)
 //  License: MIT License
 //

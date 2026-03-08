@@ -2,7 +2,7 @@
 //  ConstraintRuntime.swift
 //  NoesisNoema
 //
-//  Created for EPIC2 Phase 1
+//  ConstraintRuntime
 //  Purpose: Runtime layer for validating execution constraints
 //  License: MIT License
 //

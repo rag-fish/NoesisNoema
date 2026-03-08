@@ -17,14 +17,14 @@ import Foundation
 /// - MUST NOT mutate global state
 /// - MUST NOT retry automatically
 ///
-/// Phase2 Note: This is a stub implementation.
-/// Phase3 will integrate actual llama.cpp runtime.
+/// Note: This is a stub implementation.
+/// Full llama.cpp integration to be implemented.
 final class LocalExecutor: Executor {
 
     /// Execute query using local LLM
     ///
-    /// Phase2: Returns stub response
-    /// Phase3: Will integrate llama.cpp
+    /// Returns stub response for now.
+    /// Will integrate llama.cpp runtime.
     ///
     /// - Parameters:
     ///   - query: The user's query text
@@ -38,8 +38,8 @@ final class LocalExecutor: Executor {
 
         let traceId = UUID()
 
-        // Phase2 stub response
-        // Phase3 TODO: Integrate llama.cpp runtime
+        // Stub response
+        // TODO: Integrate llama.cpp runtime
         let output = "[LOCAL LLM STUB] \(query)"
 
         return ExecutionResult(

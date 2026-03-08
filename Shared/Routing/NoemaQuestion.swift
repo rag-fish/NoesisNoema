@@ -1,6 +1,5 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file defines the NoemaQuestion struct for routing inputs.
-// EPIC1: Client Authority Hardening (Phase 2)
 // Created: 2026-02-21
 // License: MIT License
 

@@ -2,7 +2,6 @@
 //  ExecutionCoordinatorTests.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 5-B
 //  Purpose: Test policy-based routing wiring
 //  License: MIT License
 //
@@ -255,7 +254,7 @@ final class ExecutionCoordinatorTests: XCTestCase {
         XCTAssertEqual(mockModelManager.generateCallCount, 1)
     }
 
-    // MARK: - Cloud Execution Tests (Phase 5-B)
+    // MARK: - Cloud Execution Tests
 
     func testCloudExecutionReturnsNotImplementedError() async throws {
         // Given: Policy that forces cloud execution
@@ -277,7 +276,7 @@ final class ExecutionCoordinatorTests: XCTestCase {
         let request = NoemaRequest(query: "This is a complex task")
 
         // Then: Cloud execution fails with not implemented error
-        // (Phase 5-B: Cloud execution not implemented yet)
+        // (Cloud execution not implemented yet)
         do {
             let response = try await coordinator.execute(request: request)
             // Cloud execution throws, but ExecutionCoordinator might catch and return error response

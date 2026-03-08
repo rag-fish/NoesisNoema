@@ -2,7 +2,6 @@
 //  ExecutionCoordinator.swift
 //  NoesisNoema
 //
-//  Created for EPIC1 Phase 4-A
 //  Purpose: Centralize execution entrypoint with dependency injection
 //  License: MIT License
 //
@@ -48,8 +47,7 @@ protocol ExecutionCoordinating {
 // MARK: - Implementation
 
 /// Centralized execution coordinator
-/// Phase 5-B: Full policy-based routing wired
-/// EPIC2: Integrated with ConstraintRuntime layer
+/// Integrated with ConstraintRuntime layer
 /// Integrates PolicyEngine + Router without modifying their internals
 @MainActor
 final class ExecutionCoordinator: ExecutionCoordinating {
@@ -85,12 +83,12 @@ final class ExecutionCoordinator: ExecutionCoordinating {
     // MARK: - ExecutionCoordinating
 
     func execute(request: NoemaRequest) async throws -> NoemaResponse {
-        // EPIC2: Execution flow with ConstraintRuntime validation
+        // Execution flow with ConstraintRuntime validation
         // ExecutionCoordinator → ConstraintRuntime.validate → Agent execution
 
         log("📥 Question received: sessionId=\(request.sessionId)")
 
-        // STEP 0: Constraint validation (EPIC2)
+        // STEP 0: Constraint validation
         let constraintResult: ConstraintResult
         do {
             try constraintRuntime.validate(request: request)
@@ -175,10 +173,10 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         // STEP 6: Handle confirmation requirement
         if routingDecision.requiresConfirmation {
-            // TODO: Phase 5-C - Implement confirmation UI
-            // Current behavior: Auto-approve (explicit bypass for Phase 5-B)
+            // TODO: Implement confirmation UI
+            // Current behavior: Auto-approve for testing
             logger.warning("⚠️ Confirmation required but bypassed: rule=\(routingDecision.ruleId.rawValue) route=\(routingDecision.routeTarget.rawValue) model=\(routingDecision.model)")
-            logger.info("📋 Confirmation UI deferred to Phase 5-C (explicit auto-approval)")
+            logger.info("📋 Confirmation UI implementation pending (explicit auto-approval)")
         }
 
         // STEP 7: Execute based on routing decision
@@ -211,7 +209,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             sessionId: request.sessionId
         )
 
-        // EPIC2: Log successful execution
+        // Log successful execution
         constraintRuntime.logExecution(
             request: request,
             constraintResult: constraintResult,
@@ -228,47 +226,47 @@ final class ExecutionCoordinator: ExecutionCoordinating {
         return NoemaQuestion(
             id: UUID(),
             content: request.query,
-            privacyLevel: .auto,  // Phase 5-B: Default to auto (UI picker deferred)
-            intent: nil,           // Phase 5-B: No intent classifier yet
+            privacyLevel: .auto,  // Default to auto (UI picker pending)
+            intent: nil,           // No intent classifier yet
             sessionId: request.sessionId
         )
     }
 
     /// Build RuntimeState from current environment
     private func buildRuntimeState() -> RuntimeState {
-        // Phase 5-B: Stub implementation with safe defaults
-        // Network detection and local model introspection deferred to Phase 5-C
+        // Stub implementation with safe defaults
+        // Network detection and local model introspection to be implemented
 
         let localModelCapability = LocalModelCapability(
             modelName: modelManager.currentModelID ?? "unknown",
             maxTokens: 8192,  // Safe default
             supportedIntents: [.informational, .analytical, .retrieval],
-            available: true   // Assume available (Phase 5-B simplification)
+            available: true   // Assume available for now
         )
 
         return RuntimeState(
             localModelCapability: localModelCapability,
-            networkState: .online,  // Phase 5-B: Assume online
+            networkState: .online,  // Assume online
             tokenThreshold: 4096,
-            cloudModelName: "gpt-4"  // Phase 5-B: Hardcoded
+            cloudModelName: "gpt-4"  // Hardcoded for now
         )
     }
 
     /// Execute local route
     private func executeLocal(question: String, model: String) async throws -> String {
-        // Phase 5-B: Delegate to ModelManager (existing local execution)
+        // Delegate to ModelManager (existing local execution)
         return await modelManager.generateAsyncAnswer(question: question)
     }
 
     /// Execute cloud route
     private func executeCloud(question: String, model: String) async throws -> String {
-        // Phase 5-B: Cloud execution not implemented yet
+        // Cloud execution not implemented yet
         throw RoutingError.cloudExecutionNotImplemented
     }
 
     /// Execute fallback (local → cloud or vice versa)
     private func executeFallback(question: String, originalRoute: ExecutionRoute) async throws -> String {
-        // Phase 5-B: Fallback logic
+        // Fallback logic
         switch originalRoute {
         case .local:
             log("🔄 Fallback: local → cloud")
@@ -288,5 +286,5 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 // MARK: - Additional Routing Error
 
 extension RoutingError {
-    static let cloudExecutionNotImplemented = RoutingError.networkUnavailable  // Temporary
+    static let cloudExecutionNotImplemented = RoutingError.networkUnavailable  // Fallback implementation
 }
