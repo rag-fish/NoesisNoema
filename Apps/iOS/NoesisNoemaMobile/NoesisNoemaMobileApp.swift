@@ -11,15 +11,12 @@ import SwiftUI
 struct NoesisNoemaMobileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    // EPIC1 Phase 4-B: PolicyRulesStore and ExecutionCoordinator at App level
-    // Single long-lived instances, not created in View body
-    private let policyRulesStore = PolicyRulesStore()
-    private let executionCoordinator: ExecutionCoordinator
+    // Hybrid Runtime: Primary execution coordinator
+    private let executionCoordinator: ExecutionCoordinating
 
     init() {
-        // Inject PolicyRulesStore into ExecutionCoordinator
-        // Phase 4-B: Injected but not used yet (Phase 5 will use for policy evaluation)
-        self.executionCoordinator = ExecutionCoordinator(policyRulesProvider: policyRulesStore)
+        // Hybrid routing is the default execution pipeline
+        self.executionCoordinator = HybridExecutionCoordinator()
     }
 
     var body: some Scene {

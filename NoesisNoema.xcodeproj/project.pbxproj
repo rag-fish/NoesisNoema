@@ -7,15 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E6E1A1609CD846AA8BE11AAB /* ExecutionConstraint.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */; };
-		8C4444DA8B6F4549AD87BE88 /* ConstraintViolation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */; };
-		D77628C5549C4C93B989CCB4 /* ConstraintRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */; };
 		123456782E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */; };
 		3BE0D06DBE51EA61C49B20D7 /* Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A4079BF1E06152C05F1195 /* Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift */; };
+		8C4444DA8B6F4549AD87BE88 /* ConstraintViolation.swift in Resources */ = {isa = PBXBuildFile; fileRef = E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */; };
 		90DD96BF78F6C3E5E1528861 /* Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9246BDD144950A28830E1858 /* Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift */; };
 		A16D37888219FCA9C8D12447 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8698D14F44276007E4859BD1 /* Cocoa.framework */; };
 		A476F34DE8D7F73BBFADE852 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F1B2495A7E0820DC5556C8 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift */; };
+		D77628C5549C4C93B989CCB4 /* ConstraintRuntime.swift in Resources */ = {isa = PBXBuildFile; fileRef = 80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */; };
 		E6D4E479EBBDC08E8CE5CF38 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB65DB6A71A0CB34F9B0AB33 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift */; };
+		E6E1A1609CD846AA8BE11AAB /* ExecutionConstraint.swift in Resources */ = {isa = PBXBuildFile; fileRef = FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */; };
 		F4021E4F2E3DC3A2007A4236 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F4021E4E2E3DC3A2007A4236 /* ZIPFoundation */; };
 		F43103452ED9802900E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
 		F43103462ED9803300E0307A /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F43103432ED9802900E0307A /* llama.xcframework */; };
@@ -64,17 +64,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionConstraint.swift; sourceTree = "<group>"; };
-		E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstraintViolation.swift; sourceTree = "<group>"; };
-		80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstraintRuntime.swift; sourceTree = "<group>"; };
 		123456772E4F999900000001 /* Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apps/iOS/NoesisNoemaMobile/NoesisNoemaMobileApp.swift; sourceTree = "<group>"; };
 		14F1B2495A7E0820DC5556C8 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift; sourceTree = "<group>"; };
 		3D471EF851EED4EAF7691876 /* NoesisNoemaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NoesisNoemaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		80A4079BF1E06152C05F1195 /* Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift; sourceTree = "<group>"; };
+		80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstraintRuntime.swift; sourceTree = "<group>"; };
 		8698D14F44276007E4859BD1 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		9246BDD144950A28830E1858 /* Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Apps/macOS/NoesisNoema/Tests/ExecutionCoordinatorTests/ExecutionCoordinatorTests.swift; sourceTree = "<group>"; };
 		AACE160730FAA9CB4526C2D7 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; path = README.md; sourceTree = "<group>"; };
 		CB65DB6A71A0CB34F9B0AB33 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift; sourceTree = "<group>"; };
+		E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstraintViolation.swift; sourceTree = "<group>"; };
 		F41DFFC82E30FCD40023545E /* llama.swiftui.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = llama.swiftui.xcodeproj; sourceTree = "<group>"; };
 		F41FD01B2E2A466F00909132 /* NoesisNoema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoesisNoema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F43103432ED9802900E0307A /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = NoesisNoema/Frameworks/xcframeworks/llama.xcframework; sourceTree = "<group>"; };
@@ -85,6 +84,7 @@
 		F4C5811C2E4F036E00E64194 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		F4C5811D2E4F036E00E64194 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		F4C581202E4F037500E64194 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionConstraint.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -207,17 +207,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		2B2DBB335945451388BEFAA5 /* Constraints */ = {
-			isa = PBXGroup;
-			children = (
-				FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */,
-				E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */,
-				80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */,
-
-				2B2DBB335945451388BEFAA5 /* Constraints */,);
-			path = Constraints;
-			sourceTree = "<group>";
-		};
 		502A8FD41346F1DAF895F128 /* OS X */ = {
 			isa = PBXGroup;
 			children = (
@@ -278,6 +267,9 @@
 				14F1B2495A7E0820DC5556C8 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/PolicyEngineTests.swift */,
 				80A4079BF1E06152C05F1195 /* Apps/macOS/NoesisNoema/Tests/RouterTests/RouterDeterminismTests.swift */,
 				CB65DB6A71A0CB34F9B0AB33 /* Apps/macOS/NoesisNoema/Tests/PolicyEngineTests/ConstraintPersistenceTests.swift */,
+				FCA7EEDACA974F12949A02CA /* ExecutionConstraint.swift */,
+				E5B0F81BECCA421793CF731F /* ConstraintViolation.swift */,
+				80E506A71FE848B1A1F81F36 /* ConstraintRuntime.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -456,10 +448,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-
-				E6E1A1609CD846AA8BE11AAB /* ExecutionConstraint.swift in Sources */,
-				8C4444DA8B6F4549AD87BE88 /* ConstraintViolation.swift in Sources */,
-				D77628C5549C4C93B989CCB4 /* ConstraintRuntime.swift in Sources */,);
+				E6E1A1609CD846AA8BE11AAB /* ExecutionConstraint.swift in Resources */,
+				8C4444DA8B6F4549AD87BE88 /* ConstraintViolation.swift in Resources */,
+				D77628C5549C4C93B989CCB4 /* ConstraintRuntime.swift in Resources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F41FD0192E2A466F00909132 /* Resources */ = {
