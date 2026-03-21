@@ -13,4 +13,5 @@ struct PolicyTrace: Codable {
     let evaluatedRules: [String]
     let constraintTriggered: Bool
     let duration: TimeInterval
+    let triggeredRules: [String]
 }

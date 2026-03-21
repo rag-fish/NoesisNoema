@@ -142,7 +142,8 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             policyTrace = PolicyTrace(
                 evaluatedRules: rules.map { $0.id.uuidString },
                 constraintTriggered: !policyResult.appliedConstraints.isEmpty,
-                duration: policyDuration
+                duration: policyDuration,
+                triggeredRules: policyResult.appliedConstraints.map { $0.uuidString }
             )
             log("✅ PolicyEngine: action=\(policyResult.effectiveAction), rules=\(policyResult.appliedConstraints.map { $0.uuidString })")
         } catch RoutingError.policyViolation(let reason) {
@@ -170,7 +171,8 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             routingTrace = RoutingTrace(
                 ruleId: routingDecision.ruleId.rawValue,
                 decision: routingDecision,
-                duration: routingDuration
+                duration: routingDuration,
+                decisionReason: routingDecision.reason
             )
             log("🚀 Router decision: route=\(routingDecision.routeTarget), model=\(routingDecision.model), reason=\(routingDecision.reason)")
         } catch RoutingError.networkUnavailable {
@@ -200,6 +202,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         // STEP 7: Execute based on routing decision
         let responseText: String
+        var executionError: String? = nil
         do {
             switch routingDecision.routeTarget {
             case .local:
@@ -211,6 +214,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
                 responseText = try await executeCloud(question: request.query, model: routingDecision.model)
             }
         } catch {
+            executionError = error.localizedDescription
             // Handle fallback if allowed
             if routingDecision.fallbackAllowed {
                 log("⚠️ Execution failed, attempting fallback")
@@ -238,7 +242,9 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             routing: routingTrace,
             executor: routingDecision.routeTarget.rawValue,
             duration: duration,
-            timestamp: startTime
+            timestamp: startTime,
+            decisionReason: routingDecision.reason,
+            error: executionError
         )
 
         log("📊 Trace: id=\(executionTrace.traceId), duration=\(String(format: "%.3f", duration))s, route=\(executionTrace.executor)")

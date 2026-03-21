@@ -13,4 +13,5 @@ struct RoutingTrace: Codable {
     let ruleId: String
     let decision: RoutingDecision
     let duration: TimeInterval
+    let decisionReason: String
 }

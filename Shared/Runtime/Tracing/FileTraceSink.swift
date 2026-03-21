@@ -9,7 +9,8 @@
 import Foundation
 
 /// File-based trace sink using JSONL format (one JSON object per line)
-final class FileTraceSink: TraceSink {
+/// Actor ensures thread-safe, serialized access to the trace file
+actor FileTraceSink: TraceSink {
 
     private let fileURL: URL
     private let encoder = JSONEncoder()
@@ -61,5 +62,42 @@ final class FileTraceSink: TraceSink {
             // Silent failure - tracing should not crash the app
             // In production, this could log to system logger
         }
+    }
+
+    /// Read traces from the JSONL file
+    /// - Parameter limit: Maximum number of traces to return (most recent)
+    /// - Returns: Array of execution traces
+    /// - Throws: IO or decoding errors
+    func read(limit: Int) async throws -> [ExecutionTrace] {
+        // File not existing is not an error - just means no traces yet
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return []
+        }
+
+        // Read file contents - may throw
+        let contents = try String(contentsOf: fileURL, encoding: .utf8)
+        let lines = contents.components(separatedBy: .newlines)
+
+        // Decode line by line (last N lines)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        var traces: [ExecutionTrace] = []
+
+        // Process lines in reverse to get most recent first
+        let relevantLines = lines.reversed().prefix(limit)
+
+        for line in relevantLines {
+            guard !line.isEmpty else { continue }
+
+            if let data = line.data(using: .utf8) {
+                // May throw decoding error
+                let trace = try decoder.decode(ExecutionTrace.self, from: data)
+                traces.append(trace)
+            }
+        }
+
+        // Return in chronological order (oldest first)
+        return traces.reversed()
     }
 }
