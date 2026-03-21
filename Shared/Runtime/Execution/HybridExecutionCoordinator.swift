@@ -60,12 +60,41 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
     /// - Returns: NoemaResponse with output and session ID
     /// - Throws: Execution errors (network, model failure, etc.)
     func execute(request: NoemaRequest) async throws -> NoemaResponse {
+        let traceId = UUID()
+        let executionStart = Date()
 
         // Step 1: Evaluate policy signals
+        let policyStart = Date()
         let policy = policyEngine.evaluate(request)
+        let policyDuration = Date().timeIntervalSince(policyStart)
+
+        let policyTrace = PolicyTrace(
+            evaluatedRules: ["tool_detection", "privacy_detection", "latency_preference"],
+            constraintTriggered: policy.toolRequired || policy.privacySensitive,
+            duration: policyDuration
+        )
 
         // Step 2: Determine routing decision
+        let routingStart = Date()
         let route = router.route(policy)
+        let routingDuration = Date().timeIntervalSince(routingStart)
+
+        // Create routing decision for trace
+        let routingDecision = RoutingDecision(
+            routeTarget: route,
+            model: route == .local ? "local-llm" : "cloud-agent",
+            reason: determineRoutingReason(policy: policy, route: route),
+            ruleId: determineRuleId(policy: policy, route: route),
+            fallbackAllowed: false,
+            requiresConfirmation: false,
+            confidence: 1.0
+        )
+
+        let routingTrace = RoutingTrace(
+            ruleId: routingDecision.ruleId.rawValue,
+            decision: routingDecision,
+            duration: routingDuration
+        )
 
         // Step 3: Select executor based on route
         let executor: Executor = route == .local
@@ -78,10 +107,53 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             sessionId: request.sessionId
         )
 
+        // Calculate total duration
+        let totalDuration = Date().timeIntervalSince(executionStart)
+
+        // Create and record execution trace
+        let executionTrace = ExecutionTrace(
+            traceId: traceId,
+            query: request.query,
+            route: routingDecision,
+            policy: policyTrace,
+            routing: routingTrace,
+            executor: route == .local ? "LocalExecutor" : "AgentExecutor",
+            duration: totalDuration,
+            timestamp: executionStart
+        )
+
+        await TraceCollector.shared.record(executionTrace)
+
         // Step 5: Convert to NoemaResponse
         return NoemaResponse(
             text: result.output,
             sessionId: request.sessionId
         )
+    }
+
+    /// Determine routing reason based on policy signals
+    private func determineRoutingReason(policy: PolicyResult, route: ExecutionRoute) -> String {
+        if policy.toolRequired {
+            return "Tool/function calling required (cloud)"
+        } else if policy.privacySensitive {
+            return "Privacy-sensitive data detected (local)"
+        } else if policy.lowLatencyPreferred {
+            return "Low-latency preference (local)"
+        } else {
+            return "Complex query routed to cloud"
+        }
+    }
+
+    /// Determine rule ID based on policy signals
+    private func determineRuleId(policy: PolicyResult, route: ExecutionRoute) -> RoutingRuleId {
+        if policy.toolRequired {
+            return .POLICY_FORCE_CLOUD
+        } else if policy.privacySensitive {
+            return .POLICY_FORCE_LOCAL
+        } else if policy.lowLatencyPreferred {
+            return .AUTO_LOCAL
+        } else {
+            return .AUTO_CLOUD
+        }
     }
 }

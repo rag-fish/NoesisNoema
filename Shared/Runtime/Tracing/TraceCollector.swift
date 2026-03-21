@@ -13,12 +13,14 @@ actor TraceCollector {
     static let shared = TraceCollector()
 
     private var traces: [ExecutionTrace] = []
+    private let sink: TraceSink = FileTraceSink()
 
     private init() {}
 
     /// Record a new execution trace
-    func record(_ trace: ExecutionTrace) {
+    func record(_ trace: ExecutionTrace) async {
         traces.append(trace)
+        await sink.write(trace: trace)
     }
 
     /// Retrieve all traces

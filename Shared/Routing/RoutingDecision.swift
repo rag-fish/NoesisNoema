@@ -13,7 +13,7 @@ enum ExecutionRoute: String, Codable, Equatable {
 
 /// The routing decision produced by the Router
 /// This explicitly states how execution should proceed
-struct RoutingDecision: Equatable {
+struct RoutingDecision: Equatable, Codable {
     /// Where execution should happen (local, cloud, or blocked)
     let routeTarget: ExecutionRoute
 

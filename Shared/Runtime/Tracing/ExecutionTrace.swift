@@ -9,7 +9,7 @@
 import Foundation
 
 /// Captures runtime metadata for each execution
-struct ExecutionTrace {
+struct ExecutionTrace: Codable {
     let traceId: UUID
     let query: String
     let route: RoutingDecision

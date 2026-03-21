@@ -9,7 +9,8 @@
 import Foundation
 
 /// Captures policy evaluation metadata
-struct PolicyTrace {
+struct PolicyTrace: Codable {
     let evaluatedRules: [String]
     let constraintTriggered: Bool
+    let duration: TimeInterval
 }

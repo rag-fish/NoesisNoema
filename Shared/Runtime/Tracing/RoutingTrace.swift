@@ -9,7 +9,8 @@
 import Foundation
 
 /// Captures routing decision metadata
-struct RoutingTrace {
+struct RoutingTrace: Codable {
     let ruleId: String
     let decision: RoutingDecision
+    let duration: TimeInterval
 }

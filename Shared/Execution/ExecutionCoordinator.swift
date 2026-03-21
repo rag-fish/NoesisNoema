@@ -131,15 +131,18 @@ final class ExecutionCoordinator: ExecutionCoordinating {
         // STEP 4: Policy evaluation
         let policyResult: PolicyEvaluationResult
         var policyTrace: PolicyTrace?
+        let policyStart = Date()
         do {
             policyResult = try PolicyEngine.evaluate(
                 question: question,
                 runtimeState: runtimeState,
                 rules: rules
             )
+            let policyDuration = Date().timeIntervalSince(policyStart)
             policyTrace = PolicyTrace(
                 evaluatedRules: rules.map { $0.id.uuidString },
-                constraintTriggered: !policyResult.appliedConstraints.isEmpty
+                constraintTriggered: !policyResult.appliedConstraints.isEmpty,
+                duration: policyDuration
             )
             log("✅ PolicyEngine: action=\(policyResult.effectiveAction), rules=\(policyResult.appliedConstraints.map { $0.uuidString })")
         } catch RoutingError.policyViolation(let reason) {
@@ -156,15 +159,18 @@ final class ExecutionCoordinator: ExecutionCoordinating {
         // STEP 5: Routing decision
         let routingDecision: RoutingDecision
         var routingTrace: RoutingTrace?
+        let routingStart = Date()
         do {
             routingDecision = try Router.route(
                 question: question,
                 runtimeState: runtimeState,
                 policyResult: policyResult
             )
+            let routingDuration = Date().timeIntervalSince(routingStart)
             routingTrace = RoutingTrace(
                 ruleId: routingDecision.ruleId.rawValue,
-                decision: routingDecision
+                decision: routingDecision,
+                duration: routingDuration
             )
             log("🚀 Router decision: route=\(routingDecision.routeTarget), model=\(routingDecision.model), reason=\(routingDecision.reason)")
         } catch RoutingError.networkUnavailable {
