@@ -71,7 +71,8 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         let policyTrace = PolicyTrace(
             evaluatedRules: ["tool_detection", "privacy_detection", "latency_preference"],
             constraintTriggered: policy.toolRequired || policy.privacySensitive,
-            duration: policyDuration
+            duration: policyDuration,
+            triggeredRules: buildTriggeredRules(policy: policy)
         )
 
         // Step 2: Determine routing decision
@@ -79,11 +80,13 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         let route = router.route(policy)
         let routingDuration = Date().timeIntervalSince(routingStart)
 
+        let routingReason = determineRoutingReason(policy: policy, route: route)
+
         // Create routing decision for trace
         let routingDecision = RoutingDecision(
             routeTarget: route,
             model: route == .local ? "local-llm" : "cloud-agent",
-            reason: determineRoutingReason(policy: policy, route: route),
+            reason: routingReason,
             ruleId: determineRuleId(policy: policy, route: route),
             fallbackAllowed: false,
             requiresConfirmation: false,
@@ -93,7 +96,8 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         let routingTrace = RoutingTrace(
             ruleId: routingDecision.ruleId.rawValue,
             decision: routingDecision,
-            duration: routingDuration
+            duration: routingDuration,
+            decisionReason: routingReason
         )
 
         // Step 3: Select executor based on route
@@ -102,10 +106,17 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             : agentExecutor
 
         // Step 4: Execute query
-        let result = try await executor.execute(
-            query: request.query,
-            sessionId: request.sessionId
-        )
+        var executionError: String? = nil
+        let result: ExecutionResult
+        do {
+            result = try await executor.execute(
+                query: request.query,
+                sessionId: request.sessionId
+            )
+        } catch {
+            executionError = error.localizedDescription
+            throw error
+        }
 
         // Calculate total duration
         let totalDuration = Date().timeIntervalSince(executionStart)
@@ -119,7 +130,9 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             routing: routingTrace,
             executor: route == .local ? "LocalExecutor" : "AgentExecutor",
             duration: totalDuration,
-            timestamp: executionStart
+            timestamp: executionStart,
+            decisionReason: routingReason,
+            error: executionError
         )
 
         await TraceCollector.shared.record(executionTrace)
@@ -155,5 +168,20 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         } else {
             return .AUTO_CLOUD
         }
+    }
+
+    /// Build list of triggered policy rules
+    private func buildTriggeredRules(policy: PolicyResult) -> [String] {
+        var triggered: [String] = []
+        if policy.toolRequired {
+            triggered.append("tool_detection")
+        }
+        if policy.privacySensitive {
+            triggered.append("privacy_detection")
+        }
+        if policy.lowLatencyPreferred {
+            triggered.append("latency_preference")
+        }
+        return triggered
     }
 }

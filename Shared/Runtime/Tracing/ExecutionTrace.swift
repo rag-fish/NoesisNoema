@@ -18,4 +18,6 @@ struct ExecutionTrace: Codable {
     let executor: String
     let duration: TimeInterval
     let timestamp: Date
+    let decisionReason: String?
+    let error: String?
 }
