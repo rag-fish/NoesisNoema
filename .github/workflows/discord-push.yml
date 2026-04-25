@@ -12,43 +12,90 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y jq
 
-      - name: Prepare message
-        id: prep
+      - name: Build Discord payload
+        env:
+          # All untrusted values are passed via env, never interpolated into the
+          # shell script. Commit messages can contain any character (quotes,
+          # backticks, dollar signs, parens, newlines, semicolons), so they
+          # must never be expanded by the shell. jq reads $EVENT_JSON as an
+          # environment variable via --argjson, so the shell parser never
+          # sees the content.
+          EVENT_JSON: ${{ toJson(github.event) }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          COMPARE_URL: ${{ github.event.compare }}
         run: |
-          REPO="${{ github.repository }}"
-          BRANCH="${GITHUB_REF#refs/heads/}"
-          COMMITS=$(jq -r '.commits[] | "- " + .message + " ([" + .id[0:7] + "](" + .url + ")) by " + .author.username' <<< '${{ toJson(github.event) }}')
-          [ -z "$COMMITS" ] && COMMITS="(no commit messages)"
-          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "url=${{ github.event.compare }}" >> "$GITHUB_OUTPUT"
-          {
-            echo "commits<<EOF"
-            echo "$COMMITS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Derive branch name in the shell (REF is controlled by GitHub, safe).
+          BRANCH="${REF#refs/heads/}"
+
+          # Build the entire Discord embed payload in a single jq invocation.
+          # All user-controlled data (commit messages, author names, urls)
+          # flows through jq as JSON values and is never interpreted by the
+          # shell. jq's string handling guarantees correct escaping in the
+          # output JSON regardless of input content.
+          jq -n \
+            --argjson event "$EVENT_JSON" \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg compare_url "$COMPARE_URL" \
+            '
+              # Build a markdown bullet for each commit. If the message has
+              # multiple lines, only the first line is shown (Discord embeds
+              # truncate aggressively anyway).
+              ($event.commits // []) as $commits
+              | ($commits
+                  | map(
+                      "- " + (.message | split("\n")[0])
+                      + " ([" + (.id[0:7]) + "](" + .url + "))"
+                      + " by " + (.author.username // .author.name // "unknown")
+                    )
+                  | join("\n")
+                ) as $commit_lines
+              | (if ($commit_lines | length) > 0
+                   then $commit_lines
+                   else "(no commit messages)"
+                 end) as $description_raw
+              # Discord embed description has a hard limit of 4096 characters.
+              # Truncate defensively with a clear marker.
+              | (if ($description_raw | length) > 4000
+                   then ($description_raw[0:4000] + "\n…(truncated)")
+                   else $description_raw
+                 end) as $description
+              | {
+                  embeds: [{
+                    title: ("Push to " + $repo + " [" + $branch + "]"),
+                    description: $description,
+                    url: $compare_url,
+                    color: 3066993
+                  }]
+                }
+            ' > payload.json
+
+          # Sanity check: confirm payload.json is valid JSON before sending.
+          # If jq accepted the input above, this should always pass; the check
+          # exists to fail loudly rather than send malformed data to Discord.
+          jq empty payload.json
 
       - name: Send to Discord
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          REPO: ${{ steps.prep.outputs.repo }}
-          BRANCH: ${{ steps.prep.outputs.branch }}
-          COMMITS: ${{ steps.prep.outputs.commits }}
-          URL: ${{ steps.prep.outputs.url }}
         run: |
-          jq -n \
-            --arg title "Push to $REPO [$BRANCH]" \
-            --arg desc "$COMMITS" \
-            --arg url "$URL" \
-            '{
-              embeds: [{
-                title: $title,
-                description: $desc,
-                url: $url,
-                color: 3066993
-              }]
-            }' > payload.json
-
-          curl -sS -H "Content-Type: application/json" \
+          # -f makes curl exit non-zero on HTTP >= 400, so a webhook config
+          # error or rate-limit response surfaces as a job failure rather than
+          # silently succeeding. -sS keeps the output quiet on success but
+          # shows errors. --max-time guards against a hung Discord endpoint.
+          HTTP_CODE=$(curl -sS -o response.txt -w "%{http_code}" \
+            --max-time 15 \
+            -H "Content-Type: application/json" \
             -d @payload.json \
-            "$WEBHOOK"
+            "$WEBHOOK")
+
+          echo "Discord webhook responded with HTTP $HTTP_CODE"
+
+          # Discord returns 204 No Content on success for webhook posts.
+          # Any 2xx is acceptable; treat anything else as a failure.
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Webhook delivery failed:"
+            cat response.txt
+            exit 1
+          fi
