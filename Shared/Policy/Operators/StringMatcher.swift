@@ -5,6 +5,13 @@
 //  Phase 1 of EPIC4 #68. Operator strategy for string-typed conditions.
 //  See docs/EPIC4_Policy_Engine_Extensibility_Design.md (section 4.2).
 //
+//  Semantics are kept strictly identical to the current
+//  PolicyEngine.evaluateStringCondition implementation. In particular,
+//  empty pattern alternatives are NOT filtered out, because the current
+//  implementation does not filter them either, and Swift's
+//  `String.contains("")` is `true`. Phase 1 commits to no behavioural
+//  change.
+//
 //  License: MIT License
 //
 
@@ -18,9 +25,9 @@ import Foundation
 ///
 /// `pattern` may contain pipe-separated alternatives (for example,
 /// `"SSN|password|credit card"`); a `.contains` match returns `true`
-/// when the candidate contains any of the alternatives. This preserves
-/// the semantics of the current `PolicyEngine.evaluateStringCondition`
-/// implementation.
+/// when the candidate contains any alternative. This preserves the
+/// semantics of the current `PolicyEngine.evaluateStringCondition`
+/// implementation byte-for-byte.
 struct StringMatcher {
 
     enum Mode {
@@ -38,27 +45,28 @@ struct StringMatcher {
     ///   - pattern: The pattern from the rule, possibly pipe-separated.
     /// - Returns: `true` if the candidate matches under this mode.
     func matches(_ candidate: String, against pattern: String) -> Bool {
+        // Lowercase the whole pattern first, then split. This matches
+        // the current PolicyEngine implementation exactly. Do NOT
+        // filter empty alternatives; Swift's `String.contains("")` is
+        // `true` and the current behaviour relies on that.
+        let conditionValue = pattern.lowercased()
+        let testValue = candidate.lowercased()
+        let patterns = conditionValue
+            .split(separator: "|")
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+
         switch mode {
         case .contains:
-            // Pipe-separated OR semantics, lowercase compare,
-            // matching the current implementation in PolicyEngine.
-            let lowered = candidate.lowercased()
-            return pattern
-                .split(separator: "|")
-                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-                .filter { !$0.isEmpty }
-                .contains(where: { lowered.contains($0) })
+            return patterns.contains { testValue.contains($0) }
 
         case .notContains:
-            return !StringMatcher(mode: .contains)
-                .matches(candidate, against: pattern)
+            return !patterns.contains { testValue.contains($0) }
 
         case .equals:
-            return candidate.compare(pattern, options: .caseInsensitive) == .orderedSame
+            return testValue == conditionValue
 
         case .notEquals:
-            return !StringMatcher(mode: .equals)
-                .matches(candidate, against: pattern)
+            return testValue != conditionValue
         }
     }
 }
