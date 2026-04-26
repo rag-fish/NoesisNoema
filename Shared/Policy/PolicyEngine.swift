@@ -1,11 +1,18 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file implements the deterministic Policy Engine as a pure function.
 // Created: 2026-02-21
+// Phase 2 of EPIC4 #68: PolicyEngine reduced to a pure orchestrator.
+//   - STEP 3 now delegates per-rule evaluation to PolicyRule.evaluate(...).
+//   - The legacy switch-chain (evaluateConditions / evaluateCondition /
+//     evaluateStringCondition / evaluateNumericCondition / estimateTokenCount)
+//     has been removed. Its responsibilities now live in
+//     Shared/Policy/Conditions/* and Shared/Policy/Operators/*, behind the
+//     ConditionEvaluator protocol.
 // License: MIT License
 
 import Foundation
 
-/// Deterministic Policy Engine - Pure Function Implementation
+/// Deterministic Policy Engine - Pure Orchestrator
 ///
 /// Purity Contract:
 /// 1. Deterministic: Same inputs → same outputs (always)
@@ -16,11 +23,18 @@ import Foundation
 /// Evaluation Order (Section 3.7):
 /// Step 1: Filter enabled constraints
 /// Step 2: Sort by (priority, id) for deterministic ordering
-/// Step 3: Evaluate conditions and collect matching constraints
+/// Step 3: Evaluate each rule via PolicyRule.evaluate(...) and collect matches
 /// Step 4: Apply conflict resolution with precedence hierarchy
 ///
 /// Precedence Hierarchy (Section 3.7):
 /// BLOCK > FORCE_LOCAL > FORCE_CLOUD > REQUIRE_CONFIRMATION > WARN
+///
+/// Extensibility (EPIC4 #68):
+/// New condition kinds and new operators are added by introducing new
+/// `ConditionEvaluator`-conforming structs and new operator strategy
+/// structs respectively. PolicyEngine itself is not modified for those
+/// additions; it operates uniformly on whatever evaluators a PolicyRule
+/// resolves to.
 struct PolicyEngine {
 
     /// Evaluate policy constraints against a question
@@ -48,10 +62,13 @@ struct PolicyEngine {
             }
         }
 
-        // STEP 3: Evaluate conditions and collect matching constraints
+        // STEP 3: Evaluate conditions and collect matching constraints.
+        // Per-rule evaluation is owned by PolicyRule itself (Phase 1
+        // introduced `PolicyRule.evaluate(question:runtimeState:)`).
+        // PolicyEngine no longer inspects the shape of any condition.
         var matchedRules: [PolicyRule] = []
         for rule in sortedRules {
-            if evaluateConditions(rule.conditions, question: question, runtimeState: runtimeState) {
+            if rule.evaluate(question: question, runtimeState: runtimeState) {
                 matchedRules.append(rule)
             }
         }
@@ -61,119 +78,6 @@ struct PolicyEngine {
     }
 
     // MARK: - Private Pure Functions
-
-    /// Evaluate all conditions for a constraint (AND logic)
-    /// - Parameters:
-    ///   - conditions: List of conditions to evaluate
-    ///   - question: The question being evaluated
-    ///   - runtimeState: Current runtime state
-    /// - Returns: True if all conditions match, false otherwise
-    private static func evaluateConditions(
-        _ conditions: [ConditionRule],
-        question: NoemaQuestion,
-        runtimeState: RuntimeState
-    ) -> Bool {
-        // All conditions must be true (AND logic)
-        return conditions.allSatisfy { condition in
-            evaluateCondition(condition, question: question, runtimeState: runtimeState)
-        }
-    }
-
-    /// Evaluate a single condition
-    /// - Parameters:
-    ///   - condition: The condition to evaluate
-    ///   - question: The question being evaluated
-    ///   - runtimeState: Current runtime state
-    /// - Returns: True if condition matches, false otherwise
-    private static func evaluateCondition(
-        _ condition: ConditionRule,
-        question: NoemaQuestion,
-        runtimeState: RuntimeState
-    ) -> Bool {
-        switch condition.field {
-        case "content":
-            return evaluateStringCondition(condition, value: question.content)
-
-        case "token_count":
-            let tokenCount = estimateTokenCount(question.content)
-            return evaluateNumericCondition(condition, value: tokenCount)
-
-        case "intent":
-            guard let intent = question.intent else { return false }
-            return evaluateStringCondition(condition, value: intent.rawValue)
-
-        case "privacy_level":
-            return evaluateStringCondition(condition, value: question.privacyLevel.rawValue)
-
-        default:
-            // Unknown field - condition does not match
-            return false
-        }
-    }
-
-    /// Evaluate string-based condition
-    /// - Parameters:
-    ///   - condition: The condition with operator
-    ///   - value: The string value to test
-    /// - Returns: True if condition matches
-    private static func evaluateStringCondition(
-        _ condition: ConditionRule,
-        value: String
-    ) -> Bool {
-        let conditionValue = condition.value.lowercased()
-        let testValue = value.lowercased()
-
-        switch condition.operator {
-        case .contains:
-            // Support pipe-separated OR patterns (e.g., "SSN|credit card|password")
-            let patterns = conditionValue.split(separator: "|").map { String($0).trimmingCharacters(in: .whitespaces) }
-            return patterns.contains { testValue.contains($0) }
-
-        case .notContains:
-            let patterns = conditionValue.split(separator: "|").map { String($0).trimmingCharacters(in: .whitespaces) }
-            return !patterns.contains { testValue.contains($0) }
-
-        case .equals:
-            return testValue == conditionValue
-
-        case .notEquals:
-            return testValue != conditionValue
-
-        default:
-            return false
-        }
-    }
-
-    /// Evaluate numeric-based condition
-    /// - Parameters:
-    ///   - condition: The condition with operator
-    ///   - value: The numeric value to test
-    /// - Returns: True if condition matches
-    private static func evaluateNumericCondition(
-        _ condition: ConditionRule,
-        value: Int
-    ) -> Bool {
-        guard let conditionValue = Int(condition.value) else {
-            return false
-        }
-
-        switch condition.operator {
-        case .exceeds:
-            return value > conditionValue
-
-        case .lessThan:
-            return value < conditionValue
-
-        case .equals:
-            return value == conditionValue
-
-        case .notEquals:
-            return value != conditionValue
-
-        default:
-            return false
-        }
-    }
 
     /// Resolve conflicts between multiple matching constraints
     /// Applies precedence hierarchy: BLOCK > FORCE_LOCAL > FORCE_CLOUD > REQUIRE_CONFIRMATION > WARN
@@ -225,15 +129,5 @@ struct PolicyEngine {
             warnings: warnings,
             requiresConfirmation: requiresConfirmation
         )
-    }
-
-    /// Estimate token count from text content
-    /// This is a deterministic approximation (4 chars ≈ 1 token)
-    /// - Parameter content: The text content
-    /// - Returns: Estimated token count
-    private static func estimateTokenCount(_ content: String) -> Int {
-        // Simple deterministic estimation: ~4 characters per token
-        // This matches typical tokenization ratios for English text
-        return max(1, content.count / 4)
     }
 }
