@@ -1,31 +1,45 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
-// Phase 1 of EPIC4 #68 PolicyEngine extensibility.
+// EPIC4 #68 PolicyEngine extensibility.
 //
-// This test asserts that PolicyRule.evaluate(question:runtimeState:)
-// (the new protocol-based path landed in Phase 1) produces the same
-// per-rule match/no-match decision as the legacy PolicyEngine path
-// (the switch chain that still lives in PolicyEngine.swift) for every
-// fixture below.
+// History:
+//   - Phase 1 introduced this test as a parity gate. It compared the
+//     legacy PolicyEngine switch chain against the new
+//     PolicyRule.evaluate(...) path, asserting they produced identical
+//     match decisions across the fixtures below.
+//   - Phase 2 deleted the legacy path. The two paths were behaviourally
+//     equivalent at that point (this test was green at merge time),
+//     making the deletion safe.
+//   - Post-Phase 2, this test is no longer comparing two paths — there
+//     is only one path. Each fixture now exercises that single path
+//     and asserts the expected match/no-match decision encoded in the
+//     test name. The test continues to serve as a regression detector
+//     for the per-condition decisions that the legacy switch used to
+//     enforce, particularly the `default: return false` cases.
 //
-// Phase 1's success criterion is exactly this: the new path is
-// behaviourally indistinguishable from the legacy path on the existing
-// surface. Phase 2 deletes the legacy path; if any divergence existed
-// at that point, this test would already be red and the deletion would
-// be unsafe. Hence the test is the gate, not the convenience.
+// What each test name encodes:
+//   - "*_Match" — the rule SHOULD match this question.
+//   - "*_NoMatch" — the rule should NOT match this question.
+//   - "*_DoesNotMatch" — historically a `default: return false` case
+//     in the legacy engine; should not match (asserted explicitly).
 //
 // License: MIT License
 
 import XCTest
 @testable import NoesisNoema
 
-/// Parity test between the legacy PolicyEngine evaluation path and the
-/// new PolicyRule.evaluate(...) path introduced in Phase 1.
+/// Per-condition match-decision regression tests for the
+/// PolicyRule.evaluate(...) path.
 ///
 /// We do not call PolicyEngine.evaluate(...) here because that function
 /// also exercises sort + conflict resolution; we want a focused test on
 /// the per-rule match decision. Each fixture is a single rule plus a
-/// question; we assert the legacy and new evaluators agree on whether
-/// the rule matches.
+/// question; we assert via PolicyEngine that the rule produces the
+/// expected match outcome.
+///
+/// See file header for the historical context: this test started life
+/// as a parity gate between the legacy PolicyEngine switch chain and
+/// the new ConditionEvaluator-based path. Phase 2 removed the legacy
+/// path; this test is preserved as a regression detector.
 final class ConditionEvaluatorParityTests: XCTestCase {
 
     // MARK: - Fixture helpers (style-aligned with PolicyEngineTests.swift)
@@ -74,44 +88,56 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         )
     }
 
-    /// Run the rule through both the legacy PolicyEngine path and the
-    /// new PolicyRule.evaluate path, and assert they agree on whether
-    /// the rule matched.
+    /// Run the rule through the (now sole) PolicyEngine path, and assert
+    /// the per-rule match outcome. We use PolicyEngine.evaluate with a
+    /// `.warn` action: appliedConstraints is non-empty iff the rule
+    /// matched.
     ///
-    /// We use the legacy path indirectly: PolicyEngine.evaluate with a
-    /// `.warn` action returns a result whose appliedConstraints is
-    /// non-empty iff the rule matched. The new path is queried directly.
-    private func assertParity(
+    /// `expected` encodes the historical decision the legacy switch
+    /// chain produced for this fixture; preserving that decision is
+    /// the regression contract.
+    private func assertMatchDecision(
         rule: PolicyRule,
         question: NoemaQuestion,
         state: RuntimeState,
+        expected: Bool,
         file: StaticString = #file,
         line: UInt = #line
     ) {
-        let legacyMatched: Bool
         do {
             let result = try PolicyEngine.evaluate(
                 question: question,
                 runtimeState: state,
                 rules: [rule]
             )
-            legacyMatched = !result.appliedConstraints.isEmpty
+            let matched = !result.appliedConstraints.isEmpty
+            XCTAssertEqual(
+                matched,
+                expected,
+                "Match decision regression: matched=\(matched) expected=\(expected)",
+                file: file,
+                line: line
+            )
         } catch {
-            // A throw here would only happen for .block actions, which
-            // we do not use as the action for parity-test rules above.
-            XCTFail("Unexpected throw from legacy path: \(error)", file: file, line: line)
-            return
+            // A throw would only happen for .block actions, which we do
+            // not use as the action for these regression rules.
+            XCTFail("Unexpected throw from engine: \(error)", file: file, line: line)
         }
+    }
 
-        let newMatched = rule.evaluate(question: question, runtimeState: state)
-
-        XCTAssertEqual(
-            legacyMatched,
-            newMatched,
-            "Parity violation: legacy=\(legacyMatched) new=\(newMatched)",
-            file: file,
-            line: line
-        )
+    // Convenience wrappers that read better at call sites than passing
+    // a raw `expected:` everywhere. Each call site already states the
+    // expected outcome in its test name; these helpers make that
+    // contract explicit.
+    private func assertMatches(rule: PolicyRule, question: NoemaQuestion, state: RuntimeState,
+                               file: StaticString = #file, line: UInt = #line) {
+        assertMatchDecision(rule: rule, question: question, state: state,
+                            expected: true, file: file, line: line)
+    }
+    private func assertDoesNotMatch(rule: PolicyRule, question: NoemaQuestion, state: RuntimeState,
+                                    file: StaticString = #file, line: UInt = #line) {
+        assertMatchDecision(rule: rule, question: question, state: state,
+                            expected: false, file: file, line: line)
     }
 
     // MARK: - Content field
@@ -121,7 +147,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .contains, value: "sensitive")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_Contains_CaseInsensitive() {
@@ -129,7 +155,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .contains, value: "LOWERCASE")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_Contains_NoMatch() {
@@ -137,7 +163,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .contains, value: "goodbye")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_Contains_PipeSeparatedOR_Match() {
@@ -145,7 +171,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .contains, value: "SSN|password|credit card")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_Contains_PipeSeparatedOR_NoneMatch() {
@@ -153,7 +179,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .contains, value: "SSN|password|credit card")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_NotContains() {
@@ -161,7 +187,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .notContains, value: "goodbye")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_Equals_CaseInsensitive() {
@@ -169,7 +195,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .equals, value: "hello")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Content_NotEquals() {
@@ -177,7 +203,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "content", operator: .notEquals, value: "world")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - token_count field
@@ -188,7 +214,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "token_count", operator: .exceeds, value: "1000")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_TokenCount_Exceeds_NoMatch() {
@@ -196,7 +222,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "token_count", operator: .exceeds, value: "1000")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_TokenCount_LessThan() {
@@ -204,29 +230,29 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "token_count", operator: .lessThan, value: "1000")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_TokenCount_NonIntegerValue_DoesNotMatch() {
-        // PolicyEngine.evaluateNumericCondition: Int(condition.value) returns
-        // nil, falls through to `return false`. We want parity: new path also
-        // returns false (toEvaluator returns nil -> rule.evaluate returns false).
+        // Historical legacy semantic: Int(condition.value) returns nil
+        // and the rule does not match. Preserved by ConditionRule.toEvaluator
+        // returning nil for non-integer numeric values.
         let q = makeQuestion(content: "short")
         let r = makeRule(conditions: [
             ConditionRule(field: "token_count", operator: .exceeds, value: "not a number")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_TokenCount_StringOperator_DoesNotMatch() {
-        // .contains on token_count is a malformed rule. Legacy hits the
-        // `default: return false` in evaluateNumericCondition. New path
-        // returns false via toEvaluator -> nil.
+        // Historical legacy semantic: .contains on token_count is
+        // malformed and the rule does not match. Preserved by the
+        // numeric/string operator gating in toEvaluator.
         let q = makeQuestion(content: "anything")
         let r = makeRule(conditions: [
             ConditionRule(field: "token_count", operator: .contains, value: "100")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - intent field
@@ -236,27 +262,28 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "intent", operator: .equals, value: "analytical")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Intent_Nil_DoesNotMatch() {
-        // question.intent is nil. Legacy: `guard let intent = ... else { return false }`.
-        // New: IntentCondition.evaluate same guard.
+        // Historical legacy semantic: `guard let intent = ... else { return false }`.
+        // Preserved by IntentCondition.evaluate's same guard.
         let q = makeQuestion(intent: nil)
         let r = makeRule(conditions: [
             ConditionRule(field: "intent", operator: .equals, value: "analytical")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_Intent_NumericOperator_DoesNotMatch() {
-        // .exceeds on intent is malformed. Legacy hits default in
-        // evaluateStringCondition. New path returns false via toEvaluator.
+        // Historical legacy semantic: numeric operator on string field
+        // hit the inner switch's `default: return false`. Preserved by
+        // toEvaluator returning nil.
         let q = makeQuestion(intent: .analytical)
         let r = makeRule(conditions: [
             ConditionRule(field: "intent", operator: .exceeds, value: "1")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - privacy_level field
@@ -266,7 +293,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "privacy_level", operator: .equals, value: "auto")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_PrivacyLevel_Equals_NoMatch() {
@@ -274,19 +301,19 @@ final class ConditionEvaluatorParityTests: XCTestCase {
         let r = makeRule(conditions: [
             ConditionRule(field: "privacy_level", operator: .equals, value: "auto")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - Unknown field
 
     func testParity_UnknownField_DoesNotMatch() {
-        // Legacy: `default: return false`. New: toEvaluator returns nil ->
-        // rule.evaluate returns false.
+        // Historical legacy semantic: outer `default: return false` for
+        // unknown field name. Preserved by toEvaluator returning nil.
         let q = makeQuestion(content: "anything")
         let r = makeRule(conditions: [
             ConditionRule(field: "future_unimplemented_field", operator: .contains, value: "x")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - Multiple conditions (AND logic)
@@ -297,7 +324,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
             ConditionRule(field: "content",       operator: .contains, value: "test"),
             ConditionRule(field: "privacy_level", operator: .equals,   value: "auto")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_MultipleConditions_OneFails() {
@@ -306,7 +333,7 @@ final class ConditionEvaluatorParityTests: XCTestCase {
             ConditionRule(field: "content",       operator: .contains, value: "test"),
             ConditionRule(field: "privacy_level", operator: .equals,   value: "auto")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     func testParity_MultipleConditions_OneIsUnknownField() {
@@ -317,16 +344,16 @@ final class ConditionEvaluatorParityTests: XCTestCase {
             ConditionRule(field: "content", operator: .contains, value: "test"),
             ConditionRule(field: "future",  operator: .contains, value: "x")
         ])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertDoesNotMatch(rule: r, question: q, state: makeRuntimeState())
     }
 
     // MARK: - Empty conditions
 
     func testParity_EmptyConditions_Matches() {
-        // PolicyEngine.evaluateConditions: allSatisfy on empty list is true.
+        // Historical legacy semantic: allSatisfy on empty list is true.
         // PolicyRule.evaluate: same (loop body never executes; returns true).
         let q = makeQuestion(content: "anything")
         let r = makeRule(conditions: [])
-        assertParity(rule: r, question: q, state: makeRuntimeState())
+        assertMatches(rule: r, question: q, state: makeRuntimeState())
     }
 }
