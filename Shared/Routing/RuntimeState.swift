@@ -53,15 +53,23 @@ struct RuntimeState: Equatable {
     /// Cloud model name (e.g., "gpt-4")
     let cloudModelName: String
 
+    /// Observability flag: when true, ExecutionCoordinator will call
+    /// Router.routeWithTrace() and attach RoutingStepTrace to ExecutionTrace.
+    /// This flag MUST NOT affect the routing decision itself — it controls
+    /// trace collection only.
+    let debugMode: Bool
+
     init(
         localModelCapability: LocalModelCapability,
         networkState: NetworkState,
         tokenThreshold: Int = 4096,
-        cloudModelName: String = "gpt-4"
+        cloudModelName: String = "gpt-4",
+        debugMode: Bool = false
     ) {
         self.localModelCapability = localModelCapability
         self.networkState = networkState
         self.tokenThreshold = tokenThreshold
         self.cloudModelName = cloudModelName
+        self.debugMode = debugMode
     }
 }
