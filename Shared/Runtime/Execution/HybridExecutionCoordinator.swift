@@ -1,6 +1,9 @@
 // NoesisNoema - Hybrid Routing Runtime
 // ExecutionCoordinator - Orchestrates full runtime flow
 // Created: 2026-03-08
+// Updated: 2026-05-15 — unified onto Router.swift + PolicyEngine.swift (Issue #70)
+//   HybridPolicyEngine and HybridRouter are now deprecated.
+//   All routing decisions flow through the canonical Router and PolicyEngine.
 // License: MIT License
 
 import Foundation
@@ -8,10 +11,11 @@ import Foundation
 /// Hybrid Execution Coordinator
 ///
 /// Orchestrates the complete hybrid routing runtime flow:
-/// 1. Evaluate policy signals
-/// 2. Determine routing decision
+/// 1. Evaluate policy signals via PolicyEngine (canonical)
+/// 2. Determine routing decision via Router (canonical)
 /// 3. Select appropriate executor
 /// 4. Execute query
+/// 5. Record ExecutionTrace (with RoutingStepTrace when debugMode == true)
 ///
 /// Constitutional Constraints (ADR-0000):
 /// - Owns routing orchestration
@@ -19,15 +23,7 @@ import Foundation
 /// - No fallback logic
 /// - No retry logic
 /// - No silent error recovery
-///
-/// This is the integration point for all hybrid runtime components.
 final class HybridExecutionCoordinator: ExecutionCoordinating {
-
-    /// Policy evaluation engine
-    private let policyEngine = HybridPolicyEngine()
-
-    /// Routing decision function
-    private let router = HybridRouter()
 
     /// Local executor (on-device)
     private let localExecutor: Executor
@@ -35,77 +31,104 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
     /// Agent executor (cloud)
     private let agentExecutor: Executor
 
-    /// Initialize with executors
-    ///
-    /// - Parameters:
-    ///   - localExecutor: Executor for local execution (default: LocalExecutor)
-    ///   - agentExecutor: Executor for remote execution (default: AgentExecutor with HTTPAgentClient)
+    /// Policy rules provider
+    private let rulesProvider: PolicyRulesProvider
+
+    /// Initialize with executors and optional rules provider
     init(
         localExecutor: Executor = LocalExecutor(),
-        agentExecutor: Executor = AgentExecutor(client: HTTPAgentClient())
+        agentExecutor: Executor = AgentExecutor(client: HTTPAgentClient()),
+        rulesProvider: PolicyRulesProvider = PolicyRulesProvider()
     ) {
         self.localExecutor = localExecutor
         self.agentExecutor = agentExecutor
+        self.rulesProvider = rulesProvider
     }
 
     /// Execute a request through the hybrid runtime
     ///
     /// Flow:
-    /// 1. PolicyEngine evaluates request → PolicyResult
-    /// 2. Router determines route → ExecutionRoute
-    /// 3. Select executor based on route
-    /// 4. Execute query → ExecutionResult
+    /// 1. Build NoemaQuestion from NoemaRequest
+    /// 2. Build RuntimeState from current environment
+    /// 3. PolicyEngine evaluates question → PolicyEvaluationResult
+    /// 4. Router determines route → RoutingDecision (+ RoutingStepTrace if debugMode)
+    /// 5. Select executor based on routeTarget
+    /// 6. Execute query → ExecutionResult
+    /// 7. Record ExecutionTrace via TraceCollector
     ///
     /// - Parameter request: The NoemaRequest to execute
     /// - Returns: NoemaResponse with output and session ID
-    /// - Throws: Execution errors (network, model failure, etc.)
+    /// - Throws: Execution errors (network, model failure, policy violation, etc.)
     func execute(request: NoemaRequest) async throws -> NoemaResponse {
         let traceId = UUID()
         let executionStart = Date()
 
-        // Step 1: Evaluate policy signals
+        // Step 1: Build RuntimeState
+        // RuntimeState is the single source of truth for routing environment.
+        // debugMode is read from environment/config; false by default.
+        let runtimeState = buildRuntimeState()
+
+        // Step 2: Build NoemaQuestion from NoemaRequest.
+        // Routing signals (toolRequired, privacySensitive, lowLatencyPreferred)
+        // are derived here from the request content, then stored on the question.
+        // This replaces the role HybridPolicyEngine previously played.
+        let question = buildQuestion(from: request)
+
+        // Step 3: Evaluate policy rules via canonical PolicyEngine
         let policyStart = Date()
-        let policy = policyEngine.evaluate(request)
+        let rules = await rulesProvider.loadRules()
+        let policyResult = try PolicyEngine.evaluate(
+            question: question,
+            runtimeState: runtimeState,
+            rules: rules
+        )
         let policyDuration = Date().timeIntervalSince(policyStart)
 
         let policyTrace = PolicyTrace(
-            evaluatedRules: ["tool_detection", "privacy_detection", "latency_preference"],
-            constraintTriggered: policy.toolRequired || policy.privacySensitive,
+            evaluatedRules: rules.map { $0.id.uuidString },
+            constraintTriggered: !policyResult.appliedConstraints.isEmpty,
             duration: policyDuration,
-            triggeredRules: buildTriggeredRules(policy: policy)
+            triggeredRules: policyResult.appliedConstraints.map { $0.uuidString }
         )
 
-        // Step 2: Determine routing decision
+        // Step 4: Route via canonical Router
         let routingStart = Date()
-        let route = router.route(policy)
+        let routingDecision: RoutingDecision
+        var routingStepTrace: RoutingStepTrace? = nil
+
+        if runtimeState.debugMode {
+            // Debug path: capture step-level trace alongside the decision.
+            // routeWithTrace() is pure — no logs, no I/O, no state mutation.
+            let result = try Router.routeWithTrace(
+                question: question,
+                runtimeState: runtimeState,
+                policyResult: policyResult
+            )
+            routingDecision = result.decision
+            routingStepTrace = result.trace
+        } else {
+            // Production path: decision only.
+            routingDecision = try Router.route(
+                question: question,
+                runtimeState: runtimeState,
+                policyResult: policyResult
+            )
+        }
         let routingDuration = Date().timeIntervalSince(routingStart)
-
-        let routingReason = determineRoutingReason(policy: policy, route: route)
-
-        // Create routing decision for trace
-        let routingDecision = RoutingDecision(
-            routeTarget: route,
-            model: route == .local ? "local-llm" : "cloud-agent",
-            reason: routingReason,
-            ruleId: determineRuleId(policy: policy, route: route),
-            fallbackAllowed: false,
-            requiresConfirmation: false,
-            confidence: 1.0
-        )
 
         let routingTrace = RoutingTrace(
             ruleId: routingDecision.ruleId.rawValue,
             decision: routingDecision,
             duration: routingDuration,
-            decisionReason: routingReason
+            decisionReason: routingDecision.reason
         )
 
-        // Step 3: Select executor based on route
-        let executor: Executor = route == .local
+        // Step 5: Select executor
+        let executor: Executor = routingDecision.routeTarget == .local
             ? localExecutor
             : agentExecutor
 
-        // Step 4: Execute query
+        // Step 6: Execute
         var executionError: String? = nil
         let result: ExecutionResult
         do {
@@ -118,70 +141,76 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             throw error
         }
 
-        // Calculate total duration
         let totalDuration = Date().timeIntervalSince(executionStart)
 
-        // Create and record execution trace
+        // Step 7: Record trace
         let executionTrace = ExecutionTrace(
             traceId: traceId,
             query: request.query,
             route: routingDecision,
             policy: policyTrace,
             routing: routingTrace,
-            executor: route == .local ? "LocalExecutor" : "AgentExecutor",
+            routingSteps: routingStepTrace,
+            executor: routingDecision.routeTarget == .local ? "LocalExecutor" : "AgentExecutor",
             duration: totalDuration,
             timestamp: executionStart,
-            decisionReason: routingReason,
+            decisionReason: routingDecision.reason,
             error: executionError
         )
-
         await TraceCollector.shared.record(executionTrace)
 
-        // Step 5: Convert to NoemaResponse
         return NoemaResponse(
             text: result.output,
             sessionId: request.sessionId
         )
     }
 
-    /// Determine routing reason based on policy signals
-    private func determineRoutingReason(policy: PolicyResult, route: ExecutionRoute) -> String {
-        if policy.toolRequired {
-            return "Tool/function calling required (cloud)"
-        } else if policy.privacySensitive {
-            return "Privacy-sensitive data detected (local)"
-        } else if policy.lowLatencyPreferred {
-            return "Low-latency preference (local)"
-        } else {
-            return "Complex query routed to cloud"
-        }
+    // MARK: - Private Helpers
+
+    /// Build a NoemaQuestion from a NoemaRequest.
+    /// Derives routing signals from request content using keyword heuristics.
+    /// These signals are stored on the question as first-class fields.
+    private func buildQuestion(from request: NoemaRequest) -> NoemaQuestion {
+        let query = request.query.lowercased()
+
+        let toolKeywords = [
+            "calendar", "email", "contacts", "tool", "agent",
+            "schedule", "meeting", "appointment", "remind", "notification"
+        ]
+        let privacyKeywords = [
+            "address", "phone", "email", "passport", "personal",
+            "ssn", "social security", "credit card", "password",
+            "bank", "account", "salary", "medical", "health"
+        ]
+
+        let toolRequired = toolKeywords.contains { query.contains($0) }
+        let privacySensitive = privacyKeywords.contains { query.contains($0) }
+        let lowLatencyPreferred = query.count < 100
+
+        return NoemaQuestion(
+            content: request.query,
+            privacyLevel: .auto,
+            sessionId: request.sessionId,
+            toolRequired: toolRequired,
+            privacySensitive: privacySensitive,
+            lowLatencyPreferred: lowLatencyPreferred
+        )
     }
 
-    /// Determine rule ID based on policy signals
-    private func determineRuleId(policy: PolicyResult, route: ExecutionRoute) -> RoutingRuleId {
-        if policy.toolRequired {
-            return .POLICY_FORCE_CLOUD
-        } else if policy.privacySensitive {
-            return .POLICY_FORCE_LOCAL
-        } else if policy.lowLatencyPreferred {
-            return .AUTO_LOCAL
-        } else {
-            return .AUTO_CLOUD
-        }
-    }
-
-    /// Build list of triggered policy rules
-    private func buildTriggeredRules(policy: PolicyResult) -> [String] {
-        var triggered: [String] = []
-        if policy.toolRequired {
-            triggered.append("tool_detection")
-        }
-        if policy.privacySensitive {
-            triggered.append("privacy_detection")
-        }
-        if policy.lowLatencyPreferred {
-            triggered.append("latency_preference")
-        }
-        return triggered
+    /// Build a RuntimeState reflecting the current device environment.
+    /// In production this would read from a live state provider.
+    private func buildRuntimeState() -> RuntimeState {
+        RuntimeState(
+            localModelCapability: LocalModelCapability(
+                modelName: "llama-3.2-8b",
+                maxTokens: 4096,
+                supportedIntents: [.informational, .retrieval],
+                available: true
+            ),
+            networkState: .online,
+            tokenThreshold: 4096,
+            cloudModelName: "gpt-4",
+            debugMode: false
+        )
     }
 }

@@ -15,6 +15,9 @@ struct ExecutionTrace: Codable {
     let route: RoutingDecision
     let policy: PolicyTrace?
     let routing: RoutingTrace?
+    /// Step-level routing trace. Populated only when RuntimeState.debugMode == true.
+    /// nil in production (debugMode == false) — existing decoders are unaffected.
+    let routingSteps: RoutingStepTrace?
     let executor: String
     let duration: TimeInterval
     let timestamp: Date
