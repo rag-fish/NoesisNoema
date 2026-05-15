@@ -1,6 +1,7 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file defines the RuntimeState struct for routing decisions.
 // Created: 2026-02-21
+// Updated: 2026-05-15 — added debugMode (Issue #70), overrideMode (Issue #69)
 // License: MIT License
 
 import Foundation
@@ -59,17 +60,26 @@ struct RuntimeState: Equatable {
     /// trace collection only.
     let debugMode: Bool
 
+    /// Human-initiated routing override.
+    /// When set to anything other than .none, HybridExecutionCoordinator
+    /// applies applyOverride() after PolicyEngine evaluation, replacing the
+    /// effective PolicyAction before Router is called.
+    /// Default is .none: normal policy evaluation and routing apply.
+    let overrideMode: HumanOverrideMode
+
     init(
         localModelCapability: LocalModelCapability,
         networkState: NetworkState,
         tokenThreshold: Int = 4096,
         cloudModelName: String = "gpt-4",
-        debugMode: Bool = false
+        debugMode: Bool = false,
+        overrideMode: HumanOverrideMode = .none
     ) {
         self.localModelCapability = localModelCapability
         self.networkState = networkState
         self.tokenThreshold = tokenThreshold
         self.cloudModelName = cloudModelName
         self.debugMode = debugMode
+        self.overrideMode = overrideMode
     }
 }
