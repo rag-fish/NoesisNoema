@@ -1,7 +1,8 @@
 // NoesisNoema is a knowledge graph framework for building AI applications.
 // This file implements the deterministic Router as a pure function.
 // Created: 2026-02-21
-// Updated: 2026-05-15 — added routeWithTrace() for debug observability (Phase 2, Issue #70)
+// Updated: 2026-05-15 — routeWithTrace() for debug observability (Issue #70)
+// Updated: 2026-05-15 — RoutingInputSnapshot.overrideMode populated (Issue #69)
 // License: MIT License
 
 import Foundation
@@ -23,14 +24,6 @@ struct Router {
 
     // MARK: - Production Entry Point
 
-    /// Route a question to local or cloud execution.
-    /// This is the production path. It is unchanged by debug mode.
-    /// - Parameters:
-    ///   - question: The user's question with privacy constraints
-    ///   - runtimeState: Current runtime state (network, local model capability)
-    ///   - policyResult: Result from Policy Engine evaluation
-    /// - Returns: A deterministic routing decision
-    /// - Throws: RoutingError if routing cannot proceed
     static func route(
         question: NoemaQuestion,
         runtimeState: RuntimeState,
@@ -41,14 +34,6 @@ struct Router {
 
     // MARK: - Debug Entry Point
 
-    /// Route a question and return both the decision and a step-level trace.
-    /// Called only when RuntimeState.debugMode == true.
-    ///
-    /// Purity constraints (same as route()):
-    /// - No logging, no print, no I/O, no state mutation
-    /// - Same routing result as route() for identical inputs
-    /// - Returns: (RoutingDecision, RoutingStepTrace)
-    /// - Throws: RoutingError (same conditions as route())
     static func routeWithTrace(
         question: NoemaQuestion,
         runtimeState: RuntimeState,
@@ -59,21 +44,23 @@ struct Router {
 
     // MARK: - Shared Core Logic
 
-    /// Internal implementation shared by route() and routeWithTrace().
-    /// Returns both a decision and a full step trace; route() discards the trace.
     private static func _evaluate(
         question: NoemaQuestion,
         runtimeState: RuntimeState,
         policyResult: PolicyEvaluationResult
     ) throws -> (decision: RoutingDecision, trace: RoutingStepTrace) {
 
-        // Capture input snapshot before evaluation begins.
-        // No raw query text is stored here.
         let tokenCount = estimateTokenCount(question.content)
         let intentSupportedLocally: Bool = {
             guard let intent = question.intent else { return true }
             return runtimeState.localModelCapability.supportedIntents.contains(intent)
         }()
+
+        // Populate overrideMode in the snapshot from RuntimeState.
+        // .none is stored as nil (no override active).
+        let overrideModeValue: String? = runtimeState.overrideMode == .none
+            ? nil
+            : runtimeState.overrideMode.rawValue
 
         let inputSnapshot = RoutingInputSnapshot(
             privacyLevel: question.privacyLevel.rawValue,
@@ -87,12 +74,15 @@ struct Router {
             intentSupportedLocally: intentSupportedLocally,
             debugMode: runtimeState.debugMode,
             policyEffectiveAction: String(describing: policyResult.effectiveAction),
-            overrideMode: nil  // Reserved for Issue #69
+            overrideMode: overrideModeValue
         )
 
         var steps: [RoutingStepRecord] = []
 
         // STEP 1: Apply Policy Decision Engine Result
+        // When HumanOverrideMode != .none, applyOverride() in Coordinator has
+        // already replaced policyResult.effectiveAction before this point.
+        // Router sees only a PolicyEvaluationResult and processes it uniformly.
         switch policyResult.effectiveAction {
         case .block(let reason):
             steps.append(RoutingStepRecord(
@@ -248,7 +238,6 @@ struct Router {
 
     // MARK: - Private Pure Functions
 
-    /// Estimate token count from text content (deterministic approximation)
     private static func estimateTokenCount(_ content: String) -> Int {
         return max(1, content.count / 4)
     }

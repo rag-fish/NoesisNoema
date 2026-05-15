@@ -2,8 +2,7 @@
 // ExecutionCoordinator - Orchestrates full runtime flow
 // Created: 2026-03-08
 // Updated: 2026-05-15 — unified onto Router.swift + PolicyEngine.swift (Issue #70)
-//   HybridPolicyEngine and HybridRouter are now deprecated.
-//   All routing decisions flow through the canonical Router and PolicyEngine.
+// Updated: 2026-05-15 — human override mechanism (Issue #69)
 // License: MIT License
 
 import Foundation
@@ -11,11 +10,14 @@ import Foundation
 /// Hybrid Execution Coordinator
 ///
 /// Orchestrates the complete hybrid routing runtime flow:
-/// 1. Evaluate policy signals via PolicyEngine (canonical)
-/// 2. Determine routing decision via Router (canonical)
-/// 3. Select appropriate executor
-/// 4. Execute query
-/// 5. Record ExecutionTrace (with RoutingStepTrace when debugMode == true)
+/// 1. Build NoemaQuestion from NoemaRequest
+/// 2. Build RuntimeState (with overrideMode injected from call site)
+/// 3. PolicyEngine evaluates question → PolicyEvaluationResult
+/// 4. applyOverride() replaces effectiveAction when overrideMode != .none
+/// 5. Router determines route → RoutingDecision (+ RoutingStepTrace if debugMode)
+/// 6. Select appropriate executor
+/// 7. Execute query
+/// 8. Record ExecutionTrace via TraceCollector
 ///
 /// Constitutional Constraints (ADR-0000):
 /// - Owns routing orchestration
@@ -45,44 +47,47 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         self.rulesProvider = rulesProvider
     }
 
-    /// Execute a request through the hybrid runtime
+    /// Execute a request through the hybrid runtime.
     ///
-    /// Flow:
-    /// 1. Build NoemaQuestion from NoemaRequest
-    /// 2. Build RuntimeState from current environment
-    /// 3. PolicyEngine evaluates question → PolicyEvaluationResult
-    /// 4. Router determines route → RoutingDecision (+ RoutingStepTrace if debugMode)
-    /// 5. Select executor based on routeTarget
-    /// 6. Execute query → ExecutionResult
-    /// 7. Record ExecutionTrace via TraceCollector
-    ///
-    /// - Parameter request: The NoemaRequest to execute
+    /// - Parameters:
+    ///   - request: The NoemaRequest to execute.
+    ///   - overrideMode: Human-initiated routing override. Default .none preserves
+    ///     normal policy evaluation and routing. When set to .forceLocal or
+    ///     .forceRemote, applyOverride() replaces the PolicyEngine result before
+    ///     Router is called. This is runtime control metadata, not request content,
+    ///     which is why it lives here rather than on NoemaRequest.
     /// - Returns: NoemaResponse with output and session ID
     /// - Throws: Execution errors (network, model failure, policy violation, etc.)
-    func execute(request: NoemaRequest) async throws -> NoemaResponse {
+    func execute(
+        request: NoemaRequest,
+        overrideMode: HumanOverrideMode = .none
+    ) async throws -> NoemaResponse {
         let traceId = UUID()
         let executionStart = Date()
 
-        // Step 1: Build RuntimeState
-        // RuntimeState is the single source of truth for routing environment.
-        // debugMode is read from environment/config; false by default.
-        let runtimeState = buildRuntimeState()
+        // Step 1: Build RuntimeState.
+        // overrideMode is injected from the call site here — the Coordinator
+        // never decides the override autonomously.
+        let runtimeState = buildRuntimeState(overrideMode: overrideMode)
 
         // Step 2: Build NoemaQuestion from NoemaRequest.
-        // Routing signals (toolRequired, privacySensitive, lowLatencyPreferred)
-        // are derived here from the request content, then stored on the question.
-        // This replaces the role HybridPolicyEngine previously played.
         let question = buildQuestion(from: request)
 
-        // Step 3: Evaluate policy rules via canonical PolicyEngine
+        // Step 3: Evaluate policy rules via canonical PolicyEngine.
         let policyStart = Date()
         let rules = await rulesProvider.loadRules()
-        let policyResult = try PolicyEngine.evaluate(
+        let basePolicyResult = try PolicyEngine.evaluate(
             question: question,
             runtimeState: runtimeState,
             rules: rules
         )
         let policyDuration = Date().timeIntervalSince(policyStart)
+
+        // Step 4: Apply human override.
+        // When overrideMode != .none, the human's intent supersedes PolicyEngine.
+        // The override is expressed as a PolicyEvaluationResult so Router
+        // processes it through STEP 1 unchanged — no new routing logic needed.
+        let policyResult = applyOverride(basePolicyResult, override: overrideMode)
 
         let policyTrace = PolicyTrace(
             evaluatedRules: rules.map { $0.id.uuidString },
@@ -91,14 +96,12 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             triggeredRules: policyResult.appliedConstraints.map { $0.uuidString }
         )
 
-        // Step 4: Route via canonical Router
+        // Step 5: Route via canonical Router.
         let routingStart = Date()
         let routingDecision: RoutingDecision
         var routingStepTrace: RoutingStepTrace? = nil
 
         if runtimeState.debugMode {
-            // Debug path: capture step-level trace alongside the decision.
-            // routeWithTrace() is pure — no logs, no I/O, no state mutation.
             let result = try Router.routeWithTrace(
                 question: question,
                 runtimeState: runtimeState,
@@ -107,7 +110,6 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             routingDecision = result.decision
             routingStepTrace = result.trace
         } else {
-            // Production path: decision only.
             routingDecision = try Router.route(
                 question: question,
                 runtimeState: runtimeState,
@@ -123,12 +125,12 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             decisionReason: routingDecision.reason
         )
 
-        // Step 5: Select executor
+        // Step 6: Select executor.
         let executor: Executor = routingDecision.routeTarget == .local
             ? localExecutor
             : agentExecutor
 
-        // Step 6: Execute
+        // Step 7: Execute.
         var executionError: String? = nil
         let result: ExecutionResult
         do {
@@ -143,7 +145,7 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
 
         let totalDuration = Date().timeIntervalSince(executionStart)
 
-        // Step 7: Record trace
+        // Step 8: Record trace.
         let executionTrace = ExecutionTrace(
             traceId: traceId,
             query: request.query,
@@ -167,9 +169,41 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
 
     // MARK: - Private Helpers
 
+    /// Apply a human override on top of the PolicyEngine result.
+    ///
+    /// When overrideMode is .none, returns base unchanged.
+    /// When .forceLocal / .forceRemote, replaces effectiveAction with the
+    /// corresponding PolicyAction. Existing appliedConstraints and warnings
+    /// are preserved for traceability. requiresConfirmation is cleared
+    /// (the human has already expressed explicit intent).
+    ///
+    /// This is a pure function — no I/O, no state mutation.
+    private func applyOverride(
+        _ base: PolicyEvaluationResult,
+        override mode: HumanOverrideMode
+    ) -> PolicyEvaluationResult {
+        switch mode {
+        case .none:
+            return base
+        case .forceLocal:
+            return PolicyEvaluationResult(
+                effectiveAction: .forceLocal,
+                appliedConstraints: base.appliedConstraints,
+                warnings: base.warnings,
+                requiresConfirmation: false
+            )
+        case .forceRemote:
+            // .forceRemote (user-facing) maps to .forceCloud (internal PolicyAction)
+            return PolicyEvaluationResult(
+                effectiveAction: .forceCloud,
+                appliedConstraints: base.appliedConstraints,
+                warnings: base.warnings,
+                requiresConfirmation: false
+            )
+        }
+    }
+
     /// Build a NoemaQuestion from a NoemaRequest.
-    /// Derives routing signals from request content using keyword heuristics.
-    /// These signals are stored on the question as first-class fields.
     private func buildQuestion(from request: NoemaRequest) -> NoemaQuestion {
         let query = request.query.lowercased()
 
@@ -198,8 +232,8 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
     }
 
     /// Build a RuntimeState reflecting the current device environment.
-    /// In production this would read from a live state provider.
-    private func buildRuntimeState() -> RuntimeState {
+    /// overrideMode is passed in from the call site — never set autonomously.
+    private func buildRuntimeState(overrideMode: HumanOverrideMode) -> RuntimeState {
         RuntimeState(
             localModelCapability: LocalModelCapability(
                 modelName: "llama-3.2-8b",
@@ -210,7 +244,8 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             networkState: .online,
             tokenThreshold: 4096,
             cloudModelName: "gpt-4",
-            debugMode: false
+            debugMode: false,
+            overrideMode: overrideMode
         )
     }
 }
