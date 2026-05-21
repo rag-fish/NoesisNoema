@@ -2,6 +2,8 @@
 // Executor Tests
 // Created: 2026-03-07
 // Updated: 2026-03-08 - Refactored for ExecutionResult changes and AgentClient DI
+// Updated: 2026-05-21 - R1: LocalExecutor stub removed; LocalExecutor tests now
+//                       assert the ADR-0000 error contract (no stub text)
 // License: MIT License
 
 import XCTest
@@ -36,46 +38,53 @@ class MockAgentClient: AgentClient {
 /// - ExecutionResult does not contain routing information
 final class ExecutorTests: XCTestCase {
 
-    // MARK: - LocalExecutor Tests
+    // MARK: - LocalExecutor Tests (R1 — ADR-0008)
+    //
+    // R1 wired LocalExecutor to the real on-device RAG + llama.cpp pipeline and
+    // removed the "[LOCAL LLM STUB]" placeholder. There is no longer a stub
+    // success path: a genuine answer requires a loaded GGUF model and an
+    // imported RAGpack (covered by the on-device smoke test, UAT U1).
+    // In a model-less unit-test environment LocalExecutor instead throws an
+    // ExecutionError. Per ADR-0000 (no silent fallback) it MUST surface
+    // failures as thrown ExecutionErrors and MUST NOT return placeholder text.
 
-    func testLocalExecutor_ReturnsExecutionResult() async throws {
+    func testLocalExecutor_NeverReturnsStubPlaceholder() async throws {
         // Given: LocalExecutor
         let executor = LocalExecutor()
-        let query = "What is the capital of France?"
-        let sessionId = UUID()
 
         // When: Executing
-        let result = try await executor.execute(query: query, sessionId: sessionId)
+        do {
+            let result = try await executor.execute(query: "Hello world", sessionId: UUID())
 
-        // Then: Should return ExecutionResult
-        XCTAssertFalse(result.output.isEmpty, "Output should not be empty")
-        XCTAssertNotNil(result.traceId, "TraceId should be set")
-        XCTAssertNotNil(result.timestamp, "Timestamp should be set")
+            // Then (model + RAGpack available): a real answer, never the stub.
+            XCTAssertFalse(result.output.contains("[LOCAL LLM STUB]"),
+                           "R1 removed the stub; output must never contain the placeholder")
+            XCTAssertFalse(result.output.isEmpty,
+                           "A returned ExecutionResult must carry a real answer (ADR-0000)")
+        } catch let error as ExecutionError {
+            // Then (no model / no RAGpack): a structured throw, not a silent
+            // stub fallback — the correct ADR-0000 behavior.
+            XCTAssertNotNil(error.errorDescription)
+        }
+        // A non-ExecutionError throw propagates out of this `throws` test and
+        // fails it — see testLocalExecutor_FailuresThrowExecutionError.
     }
 
-    func testLocalExecutor_GeneratesUniqueTraceIds() async throws {
-        // Given: LocalExecutor
+    func testLocalExecutor_FailuresThrowExecutionError() async {
+        // Given: LocalExecutor (no model loaded in the unit-test environment)
         let executor = LocalExecutor()
-        let query = "Test query"
 
-        // When: Executing twice
-        let result1 = try await executor.execute(query: query, sessionId: UUID())
-        let result2 = try await executor.execute(query: query, sessionId: UUID())
-
-        // Then: TraceIds should be unique
-        XCTAssertNotEqual(result1.traceId, result2.traceId, "Each execution should have unique traceId")
-    }
-
-    func testLocalExecutor_IncludesQueryInStubOutput() async throws {
-        // Given: LocalExecutor
-        let executor = LocalExecutor()
-        let query = "Hello world"
-
-        // When: Executing
-        let result = try await executor.execute(query: query, sessionId: UUID())
-
-        // Then: Output should contain the query (stub behavior)
-        XCTAssertTrue(result.output.contains(query), "Stub output should contain the query")
+        // When/Then: every LocalExecutor failure path must surface as an
+        // ExecutionError — never an unstructured error and never stub text.
+        do {
+            _ = try await executor.execute(query: "What is the capital of France?",
+                                           sessionId: UUID())
+            // Reached only when a real model + RAGpack are present — acceptable.
+        } catch is ExecutionError {
+            // Expected in the model-less unit-test environment.
+        } catch {
+            XCTFail("LocalExecutor must throw ExecutionError, got \(type(of: error)): \(error)")
+        }
     }
 
     // MARK: - AgentExecutor Tests
@@ -135,35 +144,29 @@ final class ExecutorTests: XCTestCase {
 
     // MARK: - Constitutional Constraint Tests
 
-    func testExecutors_DoNotExposeRoutingInformation() async throws {
-        // Given: Both executors
-        let localExecutor = LocalExecutor()
+    func testExecutionResult_ExposesNoRoutingInformation() async throws {
+        // Routing authority belongs to Router / ExecutionCoordinator, not
+        // Executors — ExecutionResult carries no route field. Verified here via
+        // AgentExecutor (which produces a result with a mock client).
+        // LocalExecutor returns the same ExecutionResult type; its R1 error
+        // contract is covered by the testLocalExecutor_* tests above.
         let agentExecutor = AgentExecutor(client: MockAgentClient())
 
         // When: Executing
-        let localResult = try await localExecutor.execute(query: "Test", sessionId: UUID())
         let agentResult = try await agentExecutor.execute(query: "Test", sessionId: UUID())
 
-        // Then: ExecutionResult should not contain route information
-        // (This is verified by the ExecutionResult structure itself - no route field)
-        XCTAssertNotNil(localResult.output)
+        // Then: result exposes output/traceId/timestamp only — no route member.
         XCTAssertNotNil(agentResult.output)
     }
 
-    func testExecutors_ReturnStructuredResults() async throws {
-        // Given: Both executors
-        let localExecutor = LocalExecutor()
+    func testAgentExecutor_ReturnsStructuredResult() async throws {
+        // Given: AgentExecutor with a mock client
         let agentExecutor = AgentExecutor(client: MockAgentClient())
 
         // When: Executing
-        let localResult = try await localExecutor.execute(query: "Test", sessionId: UUID())
         let agentResult = try await agentExecutor.execute(query: "Test", sessionId: UUID())
 
-        // Then: Results should have all required fields
-        XCTAssertFalse(localResult.output.isEmpty, "Output should be populated")
-        XCTAssertNotNil(localResult.traceId, "TraceId should be set")
-        XCTAssertNotNil(localResult.timestamp, "Timestamp should be set")
-
+        // Then: Result has all required fields
         XCTAssertFalse(agentResult.output.isEmpty, "Output should be populated")
         XCTAssertNotNil(agentResult.traceId, "TraceId should be set")
         XCTAssertNotNil(agentResult.timestamp, "Timestamp should be set")
