@@ -240,6 +240,7 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             route: routingDecision,
             policy: policyTrace,
             routing: routingTrace,
+            routingSteps: nil,  // debug-mode step trace; this coordinator has no debug flow
             executor: routingDecision.routeTarget.rawValue,
             duration: duration,
             timestamp: startTime,

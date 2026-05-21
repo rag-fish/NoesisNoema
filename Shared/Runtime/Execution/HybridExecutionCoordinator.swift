@@ -40,11 +40,22 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
     init(
         localExecutor: Executor = LocalExecutor(),
         agentExecutor: Executor = AgentExecutor(client: HTTPAgentClient()),
-        rulesProvider: PolicyRulesProvider = PolicyRulesProvider()
+        rulesProvider: PolicyRulesProvider = DefaultPolicyRulesProvider()
     ) {
         self.localExecutor = localExecutor
         self.agentExecutor = agentExecutor
         self.rulesProvider = rulesProvider
+    }
+
+    /// Execute a request through the hybrid runtime (`ExecutionCoordinating`).
+    ///
+    /// This is the protocol entry point. It forwards to
+    /// `execute(request:overrideMode:)` with `.none`, preserving normal policy
+    /// evaluation and routing. Callers holding a concrete
+    /// `HybridExecutionCoordinator` can invoke the override-aware overload
+    /// directly to express a human-initiated routing override (Issue #69).
+    func execute(request: NoemaRequest) async throws -> NoemaResponse {
+        try await execute(request: request, overrideMode: .none)
     }
 
     /// Execute a request through the hybrid runtime.

@@ -11,9 +11,44 @@ import Foundation
 /// Protocol for providing policy rules to execution components
 /// Enables dependency injection and testability
 protocol PolicyRulesProvider {
-    /// Returns the current set of policy rules
-    /// - Returns: Array of policy rules (immutable copies)
+    /// Returns the current set of policy rules synchronously.
+    /// - Returns: Array of policy rules (immutable value copies)
     func getPolicyRules() -> [PolicyRule]
+
+    /// Returns the current set of policy rules, awaited.
+    ///
+    /// The hybrid runtime coordinator (`HybridExecutionCoordinator`) is not
+    /// MainActor-isolated and loads rules off the main thread. The default
+    /// implementation bridges to `getPolicyRules()`; conformers backed by
+    /// genuinely asynchronous storage may override it.
+    func loadRules() async -> [PolicyRule]
+}
+
+extension PolicyRulesProvider {
+    func loadRules() async -> [PolicyRule] {
+        getPolicyRules()
+    }
+}
+
+/// Default policy rules provider for the hybrid runtime.
+///
+/// A value type — implicitly `Sendable` and free of actor isolation — so it can
+/// be constructed and read off the MainActor by `HybridExecutionCoordinator`.
+/// Unlike `PolicyRulesStore` it performs no eager I/O at init: rules are read
+/// from the shared `ConstraintStore` on each call.
+struct DefaultPolicyRulesProvider: PolicyRulesProvider {
+    func getPolicyRules() -> [PolicyRule] {
+        do {
+            return try ConstraintStore.shared.load()
+        } catch {
+            // Graceful degradation — consistent with PolicyRulesStore.
+            // This is not an executor fallback: ADR-0000's no-silent-fallback
+            // rule governs routing/execution, not the optional policy rule set.
+            // An absent rule set means PolicyEngine evaluates with defaults.
+            print("⚠️ DefaultPolicyRulesProvider: failed to load rules: \(error)")
+            return []
+        }
+    }
 }
 
 /// Concrete implementation that loads rules from ConstraintStore
