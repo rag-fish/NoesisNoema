@@ -12,8 +12,14 @@ struct ChatScreen: View {
     @ObservedObject var documentManager: DocumentManager
     @ObservedObject private var modelManager = ModelManager.shared
 
+    /// Hybrid runtime entry point. R2 (ADR-0008 Decision 1) routes ChatView
+    /// inference through this coordinator instead of calling the ModelManager
+    /// monolith directly. Injected from `ChatView`.
+    let executionCoordinator: ExecutionCoordinating
+
     @State private var question: String = ""
     @State private var isLoading: Bool = false
+    @State private var errorMessage: String?
     @FocusState private var questionFocused: Bool
 
     var body: some View {
@@ -39,6 +45,18 @@ struct ChatScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.white)
         .overlay(loadingOverlay)
+        .alert(
+            "Couldn’t generate an answer",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { presented in if !presented { errorMessage = nil } }
+            ),
+            presenting: errorMessage
+        ) { _ in
+            Button("OK", role: .cancel) { }
+        } message: { message in
+            Text(message)
+        }
     }
 
     private var contentArea: some View {
@@ -100,20 +118,41 @@ struct ChatScreen: View {
         questionFocused = false
         isLoading = true
 
-        // PERFORMANCE: Run entire RAG pipeline off main thread
-        Task.detached(priority: .userInitiated) {
-            let result = await ModelManager.shared.generateAsyncAnswer(question: trimmed)
+        // R2 (ADR-0008 Decision 1): route inference through the execution
+        // coordinator instead of calling the ModelManager monolith directly.
+        // The heavy RAG + llama work runs off the main thread inside the
+        // executor (LocalExecutor hops off-main for retrieval and inference);
+        // this @MainActor Task only marshals UI state and the QA store.
+        Task { @MainActor in
+            do {
+                let response = try await executionCoordinator.execute(
+                    request: NoemaRequest(query: trimmed)
+                )
 
-            await MainActor.run {
-                let newPair = documentManager.addQAPair(question: trimmed, answer: result)
-                Task {
-                    let sources = await MainActor.run { ModelManager.shared.lastRetrievedChunks }
-                    let embedder = await MainActor.run { ModelManager.shared.currentEmbeddingModel }
-                    QAContextStore.shared.put(qaId: newPair.id, question: newPair.question, answer: newPair.answer, sources: sources, embedder: embedder)
-                }
+                let newPair = documentManager.addQAPair(
+                    question: trimmed,
+                    answer: response.text
+                )
+
+                // Citations now arrive on the response (ExecutionResult.sources
+                // → NoemaResponse.sources) instead of via ModelManager's mutable
+                // `lastRetrievedChunks` side effect. `embedder` is model/config,
+                // not inference — reading it from ModelManager stays (ADR-0008).
+                let embedder = modelManager.currentEmbeddingModel
+                QAContextStore.shared.put(
+                    qaId: newPair.id,
+                    question: newPair.question,
+                    answer: newPair.answer,
+                    sources: response.sources,
+                    embedder: embedder
+                )
                 question = ""
-                isLoading = false
+            } catch {
+                // ADR-0000: no silent fallback. Surface the failure to the user;
+                // do NOT fall back to a stub or to ModelManager as a backup.
+                errorMessage = error.localizedDescription
             }
+            isLoading = false
         }
     }
 }
@@ -122,8 +161,35 @@ struct ChatScreen: View {
 struct ChatView: View {
     @ObservedObject var documentManager: DocumentManager
 
+    /// Hybrid runtime entry point, injected into `ChatScreen`.
+    private let executionCoordinator: ExecutionCoordinating
+
+    /// - Parameters:
+    ///   - documentManager: Shared document/QA-history store.
+    ///   - executionCoordinator: Hybrid runtime entry point. R2 (ADR-0008
+    ///     Decision 1) routes ChatView inference through this coordinator.
+    ///     Defaults to a fresh `HybridExecutionCoordinator` so the existing
+    ///     `ChatView(documentManager:)` call site in `TabRootView` (and the
+    ///     `#Preview`) need no change and tests can inject a stub.
+    ///     NOTE: the default value news up a coordinator — mirrors `@main`
+    ///     (`NoesisNoemaMobileApp` news up `HybridExecutionCoordinator()`) and
+    ///     `MinimalClientView`'s `#Preview`. `HybridExecutionCoordinator` is
+    ///     stateless, so a per-`ChatView` instance is safe. Wiring `ChatView`
+    ///     to the app-level coordinator is deferred (would require touching
+    ///     `TabRootView`/`RootView`, out of R2 scope).
+    init(
+        documentManager: DocumentManager,
+        executionCoordinator: ExecutionCoordinating = HybridExecutionCoordinator()
+    ) {
+        self.documentManager = documentManager
+        self.executionCoordinator = executionCoordinator
+    }
+
     var body: some View {
-        ChatScreen(documentManager: documentManager)
+        ChatScreen(
+            documentManager: documentManager,
+            executionCoordinator: executionCoordinator
+        )
     }
 }
 
