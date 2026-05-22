@@ -97,6 +97,21 @@ final class FeedbackStore {
         }
     }
 
+    /// Delete all stored feedback by removing the encrypted store file.
+    /// Used by the "Clear History" action; `loadAll()` then returns `[]`.
+    func clearAll() {
+        queue.async {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: self.fileURL.path) {
+                do {
+                    try fm.removeItem(at: self.fileURL)
+                } catch {
+                    print("[FeedbackStore] clearAll error: \(error)")
+                }
+            }
+        }
+    }
+
     func loadAll() throws -> [FeedbackRecord] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: fileURL.path) else { return [] }

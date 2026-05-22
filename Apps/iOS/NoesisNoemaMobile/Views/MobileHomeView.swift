@@ -2,18 +2,18 @@
 //  MobileHomeView.swift
 //  NoesisNoemaMobile
 //
-//  Full-screen iOS redesign for Noesis Noema
-//  iOS 18+ optimized layout with proper safe area handling
+//  Chat screen: a model/preset header, an inline conversation transcript, and
+//  a bottom-pinned question input. The transcript renders documentManager's
+//  Q&A pairs as a conversation so an answer appears HERE immediately after
+//  asking — no History-tab round-trip (UAT #3). The browsable archive lives in
+//  the History tab; the Chat tab no longer embeds a history list (UAT #4).
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct MobileHomeView: View {
     /// Shared QA/document store, injected by `TabRootView` so the Chat tab,
     /// History tab, and Settings tab all observe the same instance.
-    /// (Phase 1: was a view-owned `@StateObject` — that isolated MobileHomeView's
-    /// history from the other tabs; now injected.)
     @ObservedObject var documentManager: DocumentManager
 
     @State private var question: String = ""
@@ -27,7 +27,6 @@ struct MobileHomeView: View {
     @State private var autotuneWarning: String? = nil
 
     @State private var runtimeMode: RuntimeMode = ModelManager.shared.getRuntimeMode()
-    @State private var showImporter = false
 
     @FocusState private var questionFocused: Bool
 
@@ -36,8 +35,8 @@ struct MobileHomeView: View {
     /// ModelManager monolith directly.
     private let executionCoordinator: ExecutionCoordinating
 
-    // Keep in sync with TabBarView height
-    private let tabBarHeight: CGFloat = 60
+    /// Anchor id for the in-flight "Generating…" indicator (auto-scroll target).
+    private static let loadingIndicatorID = "transcript.loading.indicator"
 
     /// - Parameters:
     ///   - documentManager: Shared QA/document store (injected by `TabRootView`).
@@ -52,34 +51,25 @@ struct MobileHomeView: View {
         self.executionCoordinator = executionCoordinator
     }
 
-    var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
     var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
 
     var body: some View {
-        GeometryReader { proxy in
-            let fullHeight = proxy.size.height
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    modePickerSection
-                    modelSelectorSection
-                    promptInputSection
-                    actionButtonsSection
-                    historySection
-                }
+        VStack(spacing: 0) {
+            modelSelectorSection
                 .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, tabBarHeight) // keep content above the tab bar
-                .frame(minHeight: fullHeight)   // ensure content at least fills the viewport
-            }
-            .frame(width: proxy.size.width, height: fullHeight)
-            .background(Color(.systemGroupedBackground))
-            .scrollDismissesKeyboard(.interactively)
-            .onAppear {
-                runtimeMode = ModelManager.shared.getRuntimeMode()
-            }
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            transcriptSection
+
+            inputBar
         }
-        .ignoresSafeArea(.all)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+        .onAppear {
+            runtimeMode = ModelManager.shared.getRuntimeMode()
+        }
         .alert(
             "Couldn’t generate an answer",
             isPresented: Binding(
@@ -94,44 +84,7 @@ struct MobileHomeView: View {
         }
     }
 
-    // MARK: - Mode Picker Section
-
-    @ViewBuilder
-    private var modePickerSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Runtime Parameters")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 12) {
-                Picker("", selection: $runtimeMode) {
-                    Text("Use recommended").tag(RuntimeMode.recommended)
-                    Text("Override").tag(RuntimeMode.override)
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: runtimeMode) { newValue in
-                    ModelManager.shared.setRuntimeMode(newValue)
-                    if newValue == .recommended {
-                        recommendedReady = true
-                    }
-                }
-                .accessibilityLabel("Runtime parameters mode")
-
-                Button("Reset") {
-                    resetAll()
-                }
-                .buttonStyle(.bordered)
-                .disabled(runtimeMode != .override)
-                .accessibilityLabel("Reset to recommended parameters")
-            }
-        }
-        .padding(16)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    // MARK: - Model Selector Section
+    // MARK: - Model Selector Section (acts as the chat header)
 
     @ViewBuilder
     private var modelSelectorSection: some View {
@@ -211,153 +164,110 @@ struct MobileHomeView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Prompt Input Section
+    // MARK: - Conversation Transcript
 
-    @ViewBuilder
-    private var promptInputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Your Question")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $question)
-                    .frame(minHeight: 100, idealHeight: 120, maxHeight: 200)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemBackground))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(questionFocused ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: questionFocused ? 2 : 1)
-                    )
-                    .focused($questionFocused)
-                    .disabled(isLoading)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") {
-                                questionFocused = false
-                            }
+    /// The live conversation. Renders `documentManager.qaHistory` as chat turns
+    /// (question bubble + answer) so the answer is visible on the Chat tab the
+    /// moment `startAsk()` completes. Auto-scrolls to the newest turn.
+    private var transcriptSection: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                if documentManager.qaHistory.isEmpty && !isLoading {
+                    emptyTranscript
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(documentManager.qaHistory) { qa in
+                            QATurnView(qa: qa)
+                                .id(qa.id)
+                        }
+                        if isLoading {
+                            generatingIndicator
+                                .id(Self.loadingIndicatorID)
                         }
                     }
-
-                if question.isEmpty {
-                    Text("Enter your question")
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 16)
-                        .allowsHitTesting(false)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
-            HStack {
-                Spacer()
-                Text("\(question.count) characters")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: documentManager.qaHistory.count) { _ in
+                scrollToLatest(proxy)
+            }
+            .onChange(of: isLoading) { _ in
+                scrollToLatest(proxy)
             }
         }
     }
 
-    // MARK: - Action Buttons Section
-
-    @ViewBuilder
-    private var actionButtonsSection: some View {
-        VStack(spacing: 12) {
-            Button(action: { startAsk() }) {
-                HStack {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    }
-                    Text(isLoading ? "Asking..." : "Ask")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity, minHeight: 50)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-            .accessibilityLabel("Submit question")
-
-            Button(action: { showImporter = true }) {
-                Label("Choose RAG Document", systemImage: "doc.zipper")
-                    .frame(maxWidth: .infinity, minHeight: 50)
-            }
-            .buttonStyle(.bordered)
-            .disabled(isLoading)
-            .fileImporter(
-                isPresented: $showImporter,
-                allowedContentTypes: [UTType.zip]
-            ) { result in
-                if case let .success(url) = result {
-                    documentManager.importDocument(file: url)
-                }
-            }
-            .accessibilityLabel("Import RAG document")
-        }
-    }
-
-    // MARK: - History Section
-
-    @ViewBuilder
-    private var historySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("History")
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.top, 8)
-
-            if documentManager.qaHistory.isEmpty {
-                emptyHistoryView
-            } else {
-                historyList
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.25)) {
+            if isLoading {
+                proxy.scrollTo(Self.loadingIndicatorID, anchor: .bottom)
+            } else if let last = documentManager.qaHistory.last {
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
     }
 
-    @ViewBuilder
-    private var emptyHistoryView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 48))
+    private var emptyTranscript: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 44))
                 .foregroundStyle(.secondary)
-            Text("No questions yet")
-                .font(.headline)
+            Text("Ask me anything.")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("Ask a question to get started")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.top, 72)
     }
 
-    @ViewBuilder
-    private var historyList: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(documentManager.qaHistory) { qa in
-                HistoryCard(qa: qa, isLoading: isLoading) {
-                    if !isLoading {
-                        questionFocused = false
-                        documentManager.selectedQAPair = qa
+    private var generatingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+            Text("Generating…")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Input Bar (pinned to the bottom)
+
+    private var inputBar: some View {
+        HStack(spacing: 10) {
+            TextField("Type your question…", text: $question)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .focused($questionFocused)
+                .disabled(isLoading)
+                .onSubmit(startAsk)
+
+            Button(action: startAsk) {
+                ZStack {
+                    if isLoading {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 30))
                     }
                 }
+                .frame(width: 32, height: 32)
             }
+            .disabled(isLoading || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityLabel("Submit question")
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: - Helper Methods
-
-    private func resetAll() {
-        ModelManager.shared.resetToRecommended()
-        runtimeMode = .recommended
-        recommendedReady = true
-        question = ""
-    }
 
     private func handleLLMModelChange(_ newValue: String) {
         selectedLLMModel = newValue
@@ -448,50 +358,39 @@ struct Badge: View {
     }
 }
 
-struct HistoryCard: View {
+/// One conversation turn — the question as a trailing bubble, the answer below
+/// it. Uses semantic colors so it adapts to light/dark mode.
+private struct QATurnView: View {
     let qa: QAPair
-    let isLoading: Bool
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "questionmark.circle.fill")
-                        .foregroundStyle(.tint)
-
-                    Text(qa.question)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack {
-                    Image(systemName: "text.bubble")
-                        .foregroundStyle(.secondary)
-
-                    Text(qa.answer)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Spacer(minLength: 48)
+                Text(qa.question)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            HStack {
+                Text(qa.answer)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                Spacer(minLength: 48)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(isLoading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
