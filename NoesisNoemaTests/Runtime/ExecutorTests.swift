@@ -243,4 +243,92 @@ final class ExecutorTests: XCTestCase {
         XCTAssertNotNil(result.timestamp)
         // No route field exists - architectural compliance verified
     }
+
+    // MARK: - ExecutionResult.sources Tests (R2 — ADR-0008)
+    //
+    // R2 added `sources: [Chunk]` to ExecutionResult so retrieval citations
+    // travel out via the return value instead of ModelManager's mutable
+    // `lastRetrievedChunks` side effect. The field defaults to [] for
+    // back-compat and ExecutionResult stays a pure Equatable data struct.
+
+    func testExecutionResult_SourcesDefaultsToEmpty() {
+        // A result built without `sources` must expose an empty citation list,
+        // never nil — the default keeps pre-R2 call sites source-compatible.
+        let result = ExecutionResult(
+            output: "Test",
+            traceId: UUID(),
+            timestamp: Date()
+        )
+
+        XCTAssertEqual(result.sources, [], "sources must default to [] when omitted")
+    }
+
+    func testExecutionResult_CarriesProvidedSources() {
+        // ExecutionResult must round-trip retrieval chunks as citations, and
+        // its synthesized Equatable must take `sources` into account.
+        let chunk = Chunk(
+            content: "Paris is the capital of France.",
+            embedding: [0.1, 0.2, 0.3],
+            sourceTitle: "Geography",
+            sourcePath: "/docs/geo.pdf",
+            page: 12
+        )
+        let traceId = UUID()
+        let timestamp = Date()
+
+        let result = ExecutionResult(
+            output: "Paris.",
+            sources: [chunk],
+            traceId: traceId,
+            timestamp: timestamp
+        )
+
+        XCTAssertEqual(result.sources, [chunk], "sources must round-trip the provided chunks")
+
+        // Equatable now covers sources: same fields but different sources ⇒ not equal.
+        let withoutSources = ExecutionResult(
+            output: "Paris.",
+            traceId: traceId,
+            timestamp: timestamp
+        )
+        XCTAssertNotEqual(result, withoutSources,
+                          "ExecutionResult equality must reflect `sources`")
+    }
+
+    func testAgentExecutor_ProducesEmptySources() async throws {
+        // R2: the remote/agent path performs no local retrieval, so its
+        // ExecutionResult carries an empty citation list (remote citations
+        // are a later task).
+        let executor = AgentExecutor(client: MockAgentClient())
+
+        let result = try await executor.execute(query: "Test", sessionId: UUID())
+
+        XCTAssertEqual(result.sources, [], "AgentExecutor must produce empty sources")
+    }
+
+    func testLocalExecutor_ResultCarriesRetrievalSources() async {
+        // R2 contract (ADR-0008): LocalExecutor surfaces the chunks it
+        // retrieved as ExecutionResult.sources — severing the inference +
+        // citations dependency on ModelManager.lastRetrievedChunks. In the
+        // model-less / RAGpack-less unit-test environment execute() throws an
+        // ExecutionError before returning (R1 / ADR-0000); full population is
+        // verified by the on-device smoke test (UAT U1). This is the
+        // source-level guard for the success path.
+        let executor = LocalExecutor()
+        do {
+            let result = try await executor.execute(query: "Hello world",
+                                                    sessionId: UUID())
+            // Reached only with a real model + RAGpack present.
+            XCTAssertFalse(result.output.isEmpty,
+                           "A returned ExecutionResult must carry a real answer")
+            for chunk in result.sources {
+                XCTAssertFalse(chunk.content.isEmpty,
+                               "Every cited chunk must carry content")
+            }
+        } catch is ExecutionError {
+            // Expected in the model-less unit-test environment.
+        } catch {
+            XCTFail("LocalExecutor must throw ExecutionError, got \(type(of: error)): \(error)")
+        }
+    }
 }

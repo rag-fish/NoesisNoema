@@ -2,6 +2,7 @@
 // LocalExecutor - Local LLM execution (on-device RAG + llama.cpp)
 // Created: 2026-03-07
 // Updated: 2026-05-21 (R1: wired to real RAG pipeline; stub removed per ADR-0008)
+// Updated: 2026-05-22 (R2: return retrieved chunks as ExecutionResult.sources)
 // License: MIT License
 
 import Foundation
@@ -79,8 +80,11 @@ final class LocalExecutor: Executor {
             throw ExecutionError.emptyOutput
         }
 
+        // R2 (ADR-0008): carry the retrieved chunks out as citations. The same
+        // `chunks` already used to build the context above — no extra retrieval.
         return ExecutionResult(
             output: answer,
+            sources: chunks,
             traceId: traceId,
             timestamp: Date()
         )

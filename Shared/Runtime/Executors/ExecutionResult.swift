@@ -2,6 +2,7 @@
 // ExecutionResult data structure
 // Created: 2026-03-07
 // Updated: 2026-03-08 - Removed route field (routing authority belongs to Router)
+// Updated: 2026-05-22 - R2 (ADR-0008): added sources (retrieved chunks / citations)
 // License: MIT License
 
 import Foundation
@@ -20,6 +21,15 @@ struct ExecutionResult: Equatable {
     /// The generated output text
     let output: String
 
+    /// Retrieved knowledge chunks that grounded this result (citations).
+    ///
+    /// Populated by `LocalExecutor` from RAG retrieval so callers receive
+    /// citations through the return value instead of reading `ModelManager`'s
+    /// mutable state as a side effect (ADR-0008 R2). Empty for the remote/agent
+    /// path — remote citations are a later task. Defaults to `[]` so existing
+    /// call sites remain source-compatible.
+    let sources: [Chunk]
+
     /// Unique trace identifier for observability
     let traceId: UUID
 
@@ -28,10 +38,12 @@ struct ExecutionResult: Equatable {
 
     init(
         output: String,
+        sources: [Chunk] = [],
         traceId: UUID,
         timestamp: Date
     ) {
         self.output = output
+        self.sources = sources
         self.traceId = traceId
         self.timestamp = timestamp
     }

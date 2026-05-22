@@ -55,6 +55,7 @@ final class AgentExecutor: Executor {
 
         return ExecutionResult(
             output: response,
+            sources: [],  // R2: remote path has no local retrieval; remote citations are a later task
             traceId: traceId,
             timestamp: Date()
         )

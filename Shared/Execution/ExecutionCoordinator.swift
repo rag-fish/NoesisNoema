@@ -25,10 +25,20 @@ struct NoemaRequest {
 /// Response object from execution
 struct NoemaResponse {
     let text: String
+
+    /// Retrieved knowledge chunks that grounded the answer (citations).
+    ///
+    /// Threaded through from `ExecutionResult.sources` by the canonical
+    /// `HybridExecutionCoordinator` (ADR-0008 R2) so the UI receives citations
+    /// from the response instead of reading `ModelManager`'s mutable state.
+    /// Defaults to `[]` so existing call sites remain source-compatible.
+    let sources: [Chunk]
+
     let sessionId: UUID
 
-    init(text: String, sessionId: UUID) {
+    init(text: String, sources: [Chunk] = [], sessionId: UUID) {
         self.text = text
+        self.sources = sources
         self.sessionId = sessionId
     }
 }
@@ -227,8 +237,14 @@ final class ExecutionCoordinator: ExecutionCoordinating {
 
         log("✅ Execution complete: sessionId=\(request.sessionId)")
 
+        // TODO R4: this Preview-only coordinator delegates local execution to
+        // ModelManager.generateAsyncAnswer (a String, not an ExecutionResult),
+        // so it has no ExecutionResult.sources to thread through — citations are
+        // empty here. The canonical HybridExecutionCoordinator propagates real
+        // sources. This coordinator is slated for removal in R4 (ADR-0008).
         let response = NoemaResponse(
             text: responseText,
+            sources: [],
             sessionId: request.sessionId
         )
 
