@@ -46,7 +46,7 @@ struct HistoryView: View {
             }
         }
         .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
-        .background(Color.white)
+        .background(Color(.systemBackground))
         .sheet(isPresented: $showDetailSheet) {
             if let qa = selectedQA {
                 HistoryDetailSheet(qa: qa)
