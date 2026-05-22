@@ -23,7 +23,7 @@ class ModelManager: ObservableObject {
 
     // MARK: - UI-facing additions
     @Published private(set) var currentEmbeddingModel: EmbeddingModel = EmbeddingModel(name: "nomic-embed-text")
-    @Published private(set) var currentLLMModel: LLMModel = LLMModel(name: "Jan-V1-4B", modelFile: "Jan-v1-4B-Q4_K_M.gguf", version: "v1", isEmbedded: true)
+    @Published private(set) var currentLLMModel: LLMModel = LLMModel(name: "Llama 3.2 3B", modelFile: "Llama-3.2-3B-Instruct-Q4_K_M.gguf", version: "3.2", isEmbedded: true)
     @Published private(set) var currentLLMPreset: String = "auto"
 
     // Hardware-level runtime mode (macOS UI)
@@ -67,12 +67,19 @@ class ModelManager: ObservableObject {
             }
             SystemLog().logEvent(event: "[ModelManager] Restored last model: \(lastModelIDString)")
         } else {
-            // Pick first available model as default
-            if let firstModel = availableModels.first {
-                selectedModelID = ModelID(firstModel.id)
-                currentModelID = firstModel.id
-                currentLLMModel = LLMModel(name: firstModel.name, modelFile: firstModel.modelFile, version: firstModel.version, isEmbedded: true)
-                SystemLog().logEvent(event: "[ModelManager] Set default model: \(firstModel.name)")
+            // Prefer the configured default model — the one currentLLMModel is
+            // declared with — when its file is among the available models;
+            // otherwise fall back to the first available model. Matching on
+            // modelFile (not name) keeps the declared default authoritative
+            // even when several models are bundled.
+            let configuredFile = currentLLMModel.modelFile
+            let defaultModel = availableModels.first(where: { $0.modelFile == configuredFile })
+                ?? availableModels.first
+            if let defaultModel {
+                selectedModelID = ModelID(defaultModel.id)
+                currentModelID = defaultModel.id
+                currentLLMModel = LLMModel(name: defaultModel.name, modelFile: defaultModel.modelFile, version: defaultModel.version, isEmbedded: true)
+                SystemLog().logEvent(event: "[ModelManager] Set default model: \(defaultModel.name)")
             }
         }
     }

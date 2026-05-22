@@ -49,8 +49,8 @@ class LlamaState: ObservableObject {
         let primaryFile = "llama3-8b.gguf"
         let secondaryFile = "Jan-v1-4B-Q4_K_M.gguf"
         #else
-        let primaryFile = "Jan-v1-4B-Q4_K_M.gguf"
-        let secondaryFile = "llama3-8b.gguf"
+        let primaryFile = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        let secondaryFile = "Jan-v1-4B-Q4_K_M.gguf"
         #endif
         func findInBundle(_ file: String) -> URL? {
             let nameNoExt = (file as NSString).deletingPathExtension
