@@ -19,7 +19,7 @@ struct MobileHomeView: View {
     @State private var question: String = ""
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
-    @State private var selectedLLMModel: String = "Jan-V1-4B"
+    @State private var selectedLLMModel: String = "Llama 3.2 3B"
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
 
     @State private var isAutotuningModel: Bool = false

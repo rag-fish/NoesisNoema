@@ -21,6 +21,25 @@ actor ModelRegistry {
     /// Predefined model specifications (fallbacks)
     private let predefinedSpecs: [ModelSpec] = [
         ModelSpec(
+            id: "llama-3.2-3b",
+            name: "Llama 3.2 3B",
+            modelFile: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            version: "3B",
+            metadata: GGUFMetadata(
+                architecture: "llama",
+                parameterCount: 3.2,
+                contextLength: 131072,
+                quantization: "Q4_K_M",
+                layerCount: 28,
+                embeddingDimension: 3072,
+                feedForwardDimension: 8192,
+                attentionHeads: 24,
+                supportsFlashAttention: true
+            ),
+            tags: ["llama", "small", "q4_k_m", "long-context", "instruct"],
+            description: "Llama 3.2 3B Instruct, Q4_K_M quantization — default on-device model"
+        ),
+        ModelSpec(
             id: "jan-v1-4b",
             name: "Jan-V1-4B",
             modelFile: "Jan-v1-4B-Q4_K_M.gguf",

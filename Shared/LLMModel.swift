@@ -56,7 +56,7 @@ class LLMModel: @unchecked Sendable {
 
         // Step 1: Resolve model path
         print("🔍 [LLMModel] STEP 1: Resolving model path...")
-        let fileName = modelFile.isEmpty ? "Jan-v1-4B-Q4_K_M.gguf" : modelFile
+        let fileName = modelFile.isEmpty ? "Llama-3.2-3B-Instruct-Q4_K_M.gguf" : modelFile
         print("   File name: \(fileName)")
         let modelPath = try resolveModelPath(fileName: fileName)
         print("✅ [LLMModel] Model path resolved: \(modelPath)")
