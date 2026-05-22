@@ -261,7 +261,8 @@ final class ExecutionCoordinator: ExecutionCoordinating {
             duration: duration,
             timestamp: startTime,
             decisionReason: routingDecision.reason,
-            error: executionError
+            error: executionError,
+            privacyEnforced: nil  // Preview-only coordinator; no Step 4.5 enforcement (TODO R4)
         )
 
         log("📊 Trace: id=\(executionTrace.traceId), duration=\(String(format: "%.3f", duration))s, route=\(executionTrace.executor)")
