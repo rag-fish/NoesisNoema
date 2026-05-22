@@ -10,7 +10,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MobileHomeView: View {
-    @StateObject private var documentManager = DocumentManager()
+    /// Shared QA/document store, injected by `TabRootView` so the Chat tab,
+    /// History tab, and Settings tab all observe the same instance.
+    /// (Phase 1: was a view-owned `@StateObject` — that isolated MobileHomeView's
+    /// history from the other tabs; now injected.)
+    @ObservedObject var documentManager: DocumentManager
 
     @State private var question: String = ""
     @State private var isLoading: Bool = false
@@ -35,15 +39,16 @@ struct MobileHomeView: View {
     // Keep in sync with TabBarView height
     private let tabBarHeight: CGFloat = 60
 
-    /// - Parameter executionCoordinator: Hybrid runtime entry point. R2
-    ///   (ADR-0008 Decision 1) routes MobileHomeView inference through this
-    ///   coordinator. Defaults to a fresh `HybridExecutionCoordinator` so the
-    ///   existing `MobileHomeView()` call site (`#Preview`) needs no change and
-    ///   tests can inject a stub. NOTE: the default value news up a coordinator
-    ///   — mirrors `ChatView` (R2 PR #83), `@main` (`NoesisNoemaMobileApp`), and
-    ///   `MinimalClientView`'s `#Preview`. `HybridExecutionCoordinator` is
-    ///   stateless, so a per-view instance is safe.
-    init(executionCoordinator: ExecutionCoordinating = HybridExecutionCoordinator()) {
+    /// - Parameters:
+    ///   - documentManager: Shared QA/document store (injected by `TabRootView`).
+    ///   - executionCoordinator: Hybrid runtime entry point. In the app this is
+    ///     the single coordinator threaded from `@main`; the default
+    ///     (`HybridExecutionCoordinator()`) exists only for `#Preview`/tests.
+    init(
+        documentManager: DocumentManager,
+        executionCoordinator: ExecutionCoordinating = HybridExecutionCoordinator()
+    ) {
+        self.documentManager = documentManager
         self.executionCoordinator = executionCoordinator
     }
 
@@ -491,5 +496,5 @@ struct HistoryCard: View {
 }
 
 #Preview {
-    MobileHomeView()
+    MobileHomeView(documentManager: DocumentManager())
 }
