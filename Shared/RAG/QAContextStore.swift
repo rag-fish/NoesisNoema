@@ -34,4 +34,10 @@ final class QAContextStore {
     func remove(_ qaId: UUID) {
         queue.async(flags: .barrier) { self.ctx.removeValue(forKey: qaId) }
     }
+
+    /// Drop every stored per-QA context. Used by the "Clear History" action so
+    /// the citation/feedback context is wiped alongside the QA history.
+    func removeAll() {
+        queue.async(flags: .barrier) { self.ctx.removeAll() }
+    }
 }

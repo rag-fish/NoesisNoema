@@ -181,6 +181,14 @@ final class SemanticAnswerCache {
         let denom = (sqrtf(max(na, 1e-9)) * sqrtf(max(nb, 1e-9)))
         return denom == 0 ? 0 : dot/denom
     }
+    /// Clears the entire semantic answer cache (cached answers + the
+    /// QA→cache-id map). Used by the "Clear History" action so cached answers
+    /// do not survive a user-initiated data wipe.
+    func clearCache() {
+        index.clear()
+        sync.async { self.qaToCacheId.removeAll() }
+    }
+
     // Test helper
     func resetForTests() {
         index.clear()

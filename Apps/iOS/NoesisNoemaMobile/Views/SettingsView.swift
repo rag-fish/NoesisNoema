@@ -37,6 +37,9 @@ struct SettingsView: View {
     // Debug: present the MinimalClientView (EPIC1 vertical-slice) screen.
     @State private var showMinimalClient: Bool = false
 
+    // Data: confirmation gate for the destructive "Clear History" action.
+    @State private var showClearConfirm: Bool = false
+
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
     var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
@@ -49,13 +52,14 @@ struct SettingsView: View {
                 runtimeSection
                 ragDocumentSection
                 retrievalSection
+                dataSection
                 advancedSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
         }
         .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
-        .background(Color.white)
+        .background(Color(.systemBackground))
         .onAppear {
             runtimeMode = ModelManager.shared.getRuntimeMode()
             useRecommended = (runtimeMode == .recommended)
@@ -293,9 +297,51 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Data Section
+    @ViewBuilder
+    private var dataSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Data")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            Button(role: .destructive) {
+                showClearConfirm = true
+            } label: {
+                Label("Clear History", systemImage: "trash")
+                    .font(.system(size: 15))
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+
+            Text("Deletes all saved Q&A history, cached answers, and feedback from this device. This cannot be undone.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .confirmationDialog(
+            "Delete all Q&A history?",
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete All", role: .destructive) { clearAllHistory() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This permanently removes your Q&A history, cached answers, and feedback from this device. It cannot be undone.")
+        }
+    }
+
     // MARK: - Helper Methods
     private func showModelPicker() {
         // Placeholder for a real model picker
+    }
+
+    /// Clears every store that backs user Q&A data. Invoked only after the
+    /// explicit confirmation dialog in `dataSection` — there is no auto-wipe.
+    private func clearAllHistory() {
+        documentManager.clearQAHistroy()    // qaHistory + selection + persisted file
+        QAContextStore.shared.removeAll()   // in-memory per-QA citation context
+        FeedbackStore.shared.clearAll()         // encrypted feedback file
+        SemanticAnswerCache.shared.clearCache() // cached semantic answers
     }
 }
 
