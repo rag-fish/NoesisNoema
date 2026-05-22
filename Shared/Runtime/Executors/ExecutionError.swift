@@ -1,6 +1,7 @@
 // NoesisNoema - Hybrid Routing Runtime
 // ExecutionError - Structured execution errors
 // Created: 2026-05-21 (R1: monolith decomposition)
+// Updated: 2026-05-22 (R3: privacyViolation — Privacy Step 4.5 enforcement)
 // License: MIT License
 
 import Foundation
@@ -24,6 +25,16 @@ enum ExecutionError: Error, LocalizedError, Equatable {
     /// Inference returned an empty result.
     case emptyOutput
 
+    /// A privacy-local request was about to be routed off-device.
+    ///
+    /// Raised by the coordinator's mandatory privacy-enforcement step
+    /// (ADR-0008 Decision 4 / execution-flow.md Step 4.5): a request whose
+    /// Question carries `privacyLevel == .local` MUST execute on-device with
+    /// no cloud fallback. If the routing decision would send it to the
+    /// network/agent executor, execution is refused here — never silently
+    /// degraded, never routed off-device.
+    case privacyViolation(String)
+
     var errorDescription: String? {
         switch self {
         case .modelUnavailable(let detail):
@@ -34,6 +45,8 @@ enum ExecutionError: Error, LocalizedError, Equatable {
             return "Local inference failed: \(detail)"
         case .emptyOutput:
             return "Local inference produced an empty result."
+        case .privacyViolation(let detail):
+            return "Privacy enforcement blocked execution: \(detail)"
         }
     }
 }

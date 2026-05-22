@@ -141,6 +141,46 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             ? localExecutor
             : agentExecutor
 
+        // Step 6.5: Privacy enforcement — MANDATORY and non-bypassable.
+        // ADR-0008 Decision 4 / execution-flow.md Step 4.5.
+        //
+        // This ENFORCES the routing decision; it does not re-decide. For a
+        // privacy-local request the Router already returns routeTarget=.local,
+        // fallbackAllowed=false (Router STEP 2). But Router STEP 1 (policy)
+        // runs *before* STEP 2 — a policy .forceCloud or a human .forceRemote
+        // override can yield routeTarget=.cloud even for a Question whose
+        // privacyLevel is .local. The spec makes privacy non-bypassable, so a
+        // privacy-local request that did not route on-device is refused here:
+        // it can never reach agentExecutor (the only network-capable executor).
+        let privacyVerdict = Self.evaluatePrivacyStep45(
+            privacyLevel: question.privacyLevel,
+            routingDecision: routingDecision
+        )
+        let privacyEnforced = (privacyVerdict == .satisfied)
+        if case .violated(let violation) = privacyVerdict {
+            // Log the enforcement with traceId via the standard trace path,
+            // then throw — the agent/network executor is never invoked.
+            let violationTrace = ExecutionTrace(
+                traceId: traceId,
+                query: request.query,
+                route: routingDecision,
+                policy: policyTrace,
+                routing: routingTrace,
+                routingSteps: routingStepTrace,
+                executor: "PrivacyGuard",
+                duration: Date().timeIntervalSince(executionStart),
+                timestamp: executionStart,
+                decisionReason: routingDecision.reason,
+                error: violation,
+                privacyEnforced: true
+            )
+            await TraceCollector.shared.record(violationTrace)
+
+            // ADR-0000: structured throw — never silently degrade, never fall
+            // through to the agent executor.
+            throw ExecutionError.privacyViolation(violation)
+        }
+
         // Step 7: Execute.
         var executionError: String? = nil
         let result: ExecutionResult
@@ -168,7 +208,8 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             duration: totalDuration,
             timestamp: executionStart,
             decisionReason: routingDecision.reason,
-            error: executionError
+            error: executionError,
+            privacyEnforced: privacyEnforced
         )
         await TraceCollector.shared.record(executionTrace)
 
@@ -263,5 +304,55 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             debugMode: false,
             overrideMode: overrideMode
         )
+    }
+
+    // MARK: - Privacy Enforcement (ADR-0008 Decision 4 / execution-flow.md Step 4.5)
+
+    /// Verdict of the mandatory privacy-enforcement check.
+    enum PrivacyEnforcementVerdict: Equatable {
+        /// The request is not privacy-local; Step 4.5 imposes no constraint.
+        case notApplicable
+        /// The request is privacy-local and routed on-device with no cloud
+        /// fallback — the local-only invariant holds.
+        case satisfied
+        /// The request is privacy-local but would route off-device (or would
+        /// permit cloud fallback). Execution must be refused. The associated
+        /// value is a human-readable description for the error and the trace.
+        case violated(String)
+    }
+
+    /// Evaluate Privacy Step 4.5 for a routed request.
+    ///
+    /// Pure function — no I/O, no state — so the enforcement rule is
+    /// deterministic and unit-testable in isolation. It ENFORCES the routing
+    /// decision; it does not re-decide.
+    ///
+    /// The authoritative trigger is the Question object's `privacyLevel` (the
+    /// spec keys off it). `.PRIVACY_LOCAL` — the Router's corresponding ruleId
+    /// — is OR-ed in as defense-in-depth.
+    ///
+    /// A privacy-local request is `satisfied` only when it routes on-device
+    /// (`routeTarget == .local`) with no cloud fallback (`fallbackAllowed ==
+    /// false`); any other outcome is `violated`.
+    static func evaluatePrivacyStep45(
+        privacyLevel: PrivacyLevel,
+        routingDecision: RoutingDecision
+    ) -> PrivacyEnforcementVerdict {
+        let privacyLocal = privacyLevel == .local
+            || routingDecision.ruleId == .PRIVACY_LOCAL
+        guard privacyLocal else { return .notApplicable }
+
+        guard routingDecision.routeTarget == .local
+            && routingDecision.fallbackAllowed == false
+        else {
+            return .violated(
+                "privacy_level=local but routeTarget="
+                + "\(routingDecision.routeTarget.rawValue), fallbackAllowed="
+                + "\(routingDecision.fallbackAllowed) (ruleId="
+                + "\(routingDecision.ruleId.rawValue)). A local-only request must "
+                + "execute on-device with no cloud fallback; refusing to proceed."
+            )
+        }
+        return .satisfied
     }
 }
