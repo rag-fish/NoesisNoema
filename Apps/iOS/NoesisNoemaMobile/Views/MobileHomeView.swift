@@ -14,6 +14,7 @@ struct MobileHomeView: View {
 
     @State private var question: String = ""
     @State private var isLoading: Bool = false
+    @State private var errorMessage: String?
     @State private var selectedLLMModel: String = "Jan-V1-4B"
     @State private var selectedLLMPreset: String = ModelManager.shared.currentLLMPreset
 
@@ -26,8 +27,25 @@ struct MobileHomeView: View {
 
     @FocusState private var questionFocused: Bool
 
+    /// Hybrid runtime entry point. R2 (ADR-0008 Decision 1) routes
+    /// MobileHomeView inference through this coordinator instead of calling the
+    /// ModelManager monolith directly.
+    private let executionCoordinator: ExecutionCoordinating
+
     // Keep in sync with TabBarView height
     private let tabBarHeight: CGFloat = 60
+
+    /// - Parameter executionCoordinator: Hybrid runtime entry point. R2
+    ///   (ADR-0008 Decision 1) routes MobileHomeView inference through this
+    ///   coordinator. Defaults to a fresh `HybridExecutionCoordinator` so the
+    ///   existing `MobileHomeView()` call site (`#Preview`) needs no change and
+    ///   tests can inject a stub. NOTE: the default value news up a coordinator
+    ///   — mirrors `ChatView` (R2 PR #83), `@main` (`NoesisNoemaMobileApp`), and
+    ///   `MinimalClientView`'s `#Preview`. `HybridExecutionCoordinator` is
+    ///   stateless, so a per-view instance is safe.
+    init(executionCoordinator: ExecutionCoordinating = HybridExecutionCoordinator()) {
+        self.executionCoordinator = executionCoordinator
+    }
 
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
@@ -57,6 +75,18 @@ struct MobileHomeView: View {
             }
         }
         .ignoresSafeArea(.all)
+        .alert(
+            "Couldn’t generate an answer",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { presented in if !presented { errorMessage = nil } }
+            ),
+            presenting: errorMessage
+        ) { _ in
+            Button("OK", role: .cancel) { }
+        } message: { message in
+            Text(message)
+        }
     }
 
     // MARK: - Mode Picker Section
@@ -357,18 +387,39 @@ struct MobileHomeView: View {
         questionFocused = false
         isLoading = true
 
+        // R2 (ADR-0008 Decision 1): route inference through the execution
+        // coordinator instead of calling the ModelManager monolith directly.
+        // The heavy RAG + llama work runs off the main thread inside the
+        // executor (LocalExecutor hops off-main for retrieval and inference);
+        // this @MainActor Task only marshals UI state and the QA store.
         Task { @MainActor in
-            let result = await ModelManager.shared.generateAsyncAnswer(question: question)
-            let newPair = documentManager.addQAPair(question: question, answer: result)
-            let sources = ModelManager.shared.lastRetrievedChunks
-            QAContextStore.shared.put(
-                qaId: newPair.id,
-                question: newPair.question,
-                answer: newPair.answer,
-                sources: sources,
-                embedder: ModelManager.shared.currentEmbeddingModel
-            )
-            question = ""
+            do {
+                let response = try await executionCoordinator.execute(
+                    request: NoemaRequest(query: trimmed)
+                )
+
+                let newPair = documentManager.addQAPair(
+                    question: trimmed,
+                    answer: response.text
+                )
+
+                // Citations now arrive on the response (ExecutionResult.sources
+                // → NoemaResponse.sources) instead of via ModelManager's mutable
+                // `lastRetrievedChunks` side effect. `embedder` is model/config,
+                // not inference — reading it from ModelManager stays (ADR-0008).
+                QAContextStore.shared.put(
+                    qaId: newPair.id,
+                    question: newPair.question,
+                    answer: newPair.answer,
+                    sources: response.sources,
+                    embedder: ModelManager.shared.currentEmbeddingModel
+                )
+                question = ""
+            } catch {
+                // ADR-0000: no silent fallback. Surface the failure to the user;
+                // do NOT fall back to a stub or to ModelManager as a backup.
+                errorMessage = error.localizedDescription
+            }
             isLoading = false
         }
     }
