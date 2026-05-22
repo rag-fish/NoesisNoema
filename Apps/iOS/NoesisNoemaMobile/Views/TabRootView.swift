@@ -8,6 +8,11 @@
 import SwiftUI
 
 struct TabRootView: View {
+    /// App-level hybrid runtime entry point, threaded from @main via RootView.
+    let executionCoordinator: ExecutionCoordinating
+
+    /// One shared store for all tabs — questions asked on the Chat tab
+    /// (MobileHomeView) appear in History, and Settings imports the same store.
     @StateObject private var documentManager = DocumentManager()
     @State private var selectedTab = 0
 
@@ -18,18 +23,18 @@ struct TabRootView: View {
         ZStack(alignment: .bottom) {
             Group {
                 switch selectedTab {
-                case 0:
-                    let view: ChatView = ChatView(documentManager: documentManager)
-                    view
                 case 1:
-                    let view: HistoryView = HistoryView(documentManager: documentManager)
-                    view
+                    HistoryView(documentManager: documentManager)
                 case 2:
-                    let view: SettingsView = SettingsView(documentManager: documentManager)
-                    view
+                    SettingsView(documentManager: documentManager)
                 default:
-                    let view: ChatView = ChatView(documentManager: documentManager)
-                    view
+                    // Tab 0 (and fallback): the full chat screen with the
+                    // Model/Preset header. Routes inference through the shared
+                    // app-level coordinator (no per-view news-up).
+                    MobileHomeView(
+                        documentManager: documentManager,
+                        executionCoordinator: executionCoordinator
+                    )
                 }
             }
             .padding(.bottom, tabBarHeight)
@@ -43,5 +48,5 @@ struct TabRootView: View {
 }
 
 #Preview {
-    TabRootView()
+    TabRootView(executionCoordinator: HybridExecutionCoordinator())
 }
