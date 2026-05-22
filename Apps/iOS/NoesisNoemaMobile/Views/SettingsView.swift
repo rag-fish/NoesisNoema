@@ -29,6 +29,14 @@ struct SettingsView: View {
     @State private var debugTiming: Bool = false
     @State private var debugMemory: Bool = false
 
+    // Retrieval: Deep Search opt-in. Persisted in UserDefaults and read by
+    // LocalExecutor (off by default — DeepSearch runs heavier multi-round
+    // retrieval). Fully on-device, so R3's privacy guarantee is unaffected.
+    @AppStorage(LocalExecutor.deepSearchDefaultsKey) private var deepSearchEnabled: Bool = false
+
+    // Debug: present the MinimalClientView (EPIC1 vertical-slice) screen.
+    @State private var showMinimalClient: Bool = false
+
     var availableEmbeddingModels: [String] { ModelManager.shared.availableEmbeddingModels }
     var availableLLMModels: [String] { ModelManager.shared.availableLLMModels }
     var availableLLMPresets: [String] { ModelManager.shared.availableLLMPresets }
@@ -40,6 +48,7 @@ struct SettingsView: View {
                 presetSection
                 runtimeSection
                 ragDocumentSection
+                retrievalSection
                 advancedSection
             }
             .padding(.horizontal, 16)
@@ -50,6 +59,29 @@ struct SettingsView: View {
         .onAppear {
             runtimeMode = ModelManager.shared.getRuntimeMode()
             useRecommended = (runtimeMode == .recommended)
+        }
+        .sheet(isPresented: $showMinimalClient) {
+            // Debug screen reached from Advanced ▸ Open Minimal Client.
+            // It is a self-contained diagnostic; a fresh coordinator is fine
+            // (HybridExecutionCoordinator is stateless).
+            MinimalClientView(executionCoordinator: HybridExecutionCoordinator())
+        }
+    }
+
+    // MARK: - Retrieval Section
+    @ViewBuilder
+    private var retrievalSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Retrieval")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            Toggle("Deep Search", isOn: $deepSearchEnabled)
+                .font(.system(size: 15))
+
+            Text("Multi-round local query expansion for broader retrieval. Runs fully on-device. Slower than standard retrieval — off by default.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -241,6 +273,23 @@ struct SettingsView: View {
             Text("Debug options for development. These are placeholder toggles and do not affect functionality yet.")
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+            #if DEBUG
+            Divider()
+                .padding(.vertical, 4)
+
+            Button {
+                showMinimalClient = true
+            } label: {
+                Label("Open Minimal Client", systemImage: "ladybug")
+                    .font(.system(size: 15))
+            }
+            .buttonStyle(.bordered)
+
+            Text("EPIC1 vertical-slice debug screen (prompt → coordinator → response). Debug builds only; not shipped in Release.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            #endif
         }
     }
 

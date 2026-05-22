@@ -3,6 +3,7 @@
 // Created: 2026-03-07
 // Updated: 2026-05-21 (R1: wired to real RAG pipeline; stub removed per ADR-0008)
 // Updated: 2026-05-22 (R2: return retrieved chunks as ExecutionResult.sources)
+// Updated: 2026-05-22 (Phase 1: optional DeepSearch retrieval behind a UserDefaults flag)
 // License: MIT License
 
 import Foundation
@@ -25,6 +26,16 @@ import Foundation
 ///   inference is local (llama.cpp). Enforcement of the network cutoff is
 ///   tracked in R3 and verified by UAT U2.
 final class LocalExecutor: Executor {
+
+    /// UserDefaults key for the "Deep Search" retrieval setting.
+    ///
+    /// When `true`, Stage 1 retrieval uses `DeepSearch` (multi-round local
+    /// query expansion + MMR) instead of a single-pass `LocalRetriever`.
+    /// Off by default — DeepSearch runs several retrieval rounds and is
+    /// noticeably heavier; the user opts in via SettingsView ▸ Advanced.
+    /// Both retrievers are fully local (no network), so R3's Privacy Step 4.5
+    /// guarantee is unaffected by either choice.
+    static let deepSearchDefaultsKey = "deepSearchEnabled"
 
     /// Number of chunks to retrieve, platform-tuned (matches prior v0.3 behavior).
     private var defaultTopK: Int {
@@ -50,10 +61,19 @@ final class LocalExecutor: Executor {
         let traceId = UUID()
 
         // Stage 1: Retrieve relevant chunks (local, off main thread).
+        // Both retrieval paths are local-only; DeepSearch is opt-in (heavier).
         let topK = defaultTopK
+        let useDeepSearch = UserDefaults.standard.bool(forKey: Self.deepSearchDefaultsKey)
         let chunks = await Task.detached(priority: .userInitiated) {
-            let retriever = LocalRetriever(store: VectorStore.shared)
-            return retriever.retrieve(query: query, k: topK, trace: false)
+            if useDeepSearch {
+                var config = DeepSearch.Config()
+                config.topK = topK
+                return DeepSearch(store: VectorStore.shared, config: config)
+                    .retrieve(query: query)
+            } else {
+                let retriever = LocalRetriever(store: VectorStore.shared)
+                return retriever.retrieve(query: query, k: topK, trace: false)
+            }
         }.value
 
         // Stage 2: Build context from retrieved chunks.
