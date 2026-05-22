@@ -172,8 +172,13 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         )
         await TraceCollector.shared.record(executionTrace)
 
+        // R2 (ADR-0008): propagate retrieval citations from the executor's
+        // ExecutionResult into the response so the UI no longer reads them from
+        // ModelManager's mutable state. Local path carries real chunks; the
+        // remote/agent path carries [] (remote citations are a later task).
         return NoemaResponse(
             text: result.output,
+            sources: result.sources,
             sessionId: request.sessionId
         )
     }

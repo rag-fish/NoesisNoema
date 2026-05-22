@@ -7,7 +7,11 @@
 
 import Foundation
 
-struct Chunk: Codable {
+// Equatable: synthesized. All stored properties are Equatable, so Swift
+// generates ==. Required so ExecutionResult (which now carries [Chunk] as
+// citations, ADR-0008 R2) keeps its synthesized Equatable conformance.
+// Adding the conformance is purely additive — no existing behavior changes.
+struct Chunk: Codable, Equatable {
     var content: String
     var embedding: [Float]
     // metadata for citation popover
