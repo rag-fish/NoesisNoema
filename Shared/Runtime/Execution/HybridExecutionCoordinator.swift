@@ -182,12 +182,18 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         }
 
         // Step 7: Execute.
+        // ADR-0009 §5: history is carried explicitly via the request and passed
+        // to the executor. Routing/policy/privacy above this point have ALREADY
+        // run on the current query alone (ADR-0009 §4 — history is generation-
+        // only). The remote/AgentExecutor path ignores history via the default
+        // protocol overload; only LocalExecutor consumes it.
         var executionError: String? = nil
         let result: ExecutionResult
         do {
             result = try await executor.execute(
                 query: request.query,
-                sessionId: request.sessionId
+                sessionId: request.sessionId,
+                history: request.history
             )
         } catch {
             executionError = error.localizedDescription
