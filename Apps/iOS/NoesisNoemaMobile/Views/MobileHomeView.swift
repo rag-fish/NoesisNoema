@@ -307,10 +307,17 @@ struct MobileHomeView: View {
         // The heavy RAG + llama work runs off the main thread inside the
         // executor (LocalExecutor hops off-main for retrieval and inference);
         // this @MainActor Task only marshals UI state and the QA store.
+        //
+        // ADR-0009: session memory is the visible transcript only — the UI
+        // owns "what's visible" so the request carries exactly that. We
+        // pre-apply BOTH caps (3 turns AND 45-minute window) here via the
+        // shared helper so the executor doesn't need to know them.
+        let history = SessionMemory.history(from: documentManager.qaHistory)
+
         Task { @MainActor in
             do {
                 let response = try await executionCoordinator.execute(
-                    request: NoemaRequest(query: trimmed)
+                    request: NoemaRequest(query: trimmed, history: history)
                 )
 
                 let newPair = documentManager.addQAPair(

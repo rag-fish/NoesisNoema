@@ -45,7 +45,14 @@ class LLMModel: @unchecked Sendable {
     }
 
     /// ✅ ASYNC GENERATION - Uses unified NoesisCompletion pipeline
-    func generateAsync(prompt: String, context: String?) async throws -> String {
+    ///
+    /// ADR-0009: `history` is an additive, defaulted parameter so existing
+    /// stateless callers keep working unchanged. Empty ⇒ identical to today.
+    func generateAsync(
+        prompt: String,
+        context: String?,
+        history: [ConversationTurn] = []
+    ) async throws -> String {
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print("🎬 [LLMModel] generateAsync ENTRY POINT")
         print("   Model: \(name)")
@@ -82,7 +89,8 @@ class LLMModel: @unchecked Sendable {
             question: prompt,
             context: context,
             modelPath: modelPath,
-            params: params
+            params: params,
+            history: history
         )
 
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

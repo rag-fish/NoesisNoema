@@ -39,7 +39,8 @@ public func runNoesisCompletion(
     question: String,
     context: String?,
     modelPath: String,
-    params: LlamaRuntimeParams = .balanced
+    params: LlamaRuntimeParams = .balanced,
+    history: [ConversationTurn] = []
 ) async throws -> String {
 
     let perfStart = Date()
@@ -58,7 +59,7 @@ public func runNoesisCompletion(
 
     // Step 1: Build prompt (matches CLI logic)
     let promptStart = Date()
-    let prompt = buildPrompt(question: question, context: context)
+    let prompt = buildPrompt(question: question, context: context, history: history)
     let promptTime = Date().timeIntervalSince(promptStart)
     print("📝 [NoesisCompletion] Prompt built: \(prompt.count) chars in \(String(format: "%.2f", promptTime*1000))ms")
     SystemLog().logEvent(event: String(format: "[PERF] Prompt build: %.2f ms", promptTime*1000))
@@ -196,7 +197,23 @@ public func runNoesisCompletion(
 
 // MARK: - Helper Functions (from CLI)
 
-private func buildPrompt(question: String, context: String?) -> String {
+/// Build the ChatML prompt for `runNoesisCompletion`.
+///
+/// ADR-0009: prior turns (already filtered/capped by the UI to ≤3 turns
+/// within a 45-minute window) are emitted as additional ChatML turns
+/// BEFORE the current question. The system prompt appears once at the top.
+/// Retrieved `Context` is attached to the CURRENT user turn only — history
+/// turns are reproduced verbatim with no retrieval baggage. Empty history
+/// ⇒ output identical to the prior single-turn build. The chat template
+/// itself (ChatML) is unchanged — that question is parked separately.
+///
+/// Made `internal` (was `private`) so source-level tests can verify the
+/// rendered prompt without invoking the model.
+func buildPrompt(
+    question: String,
+    context: String?,
+    history: [ConversationTurn] = []
+) -> String {
     let sys = """
     You are Noesis/Noema on-device RAG assistant.
     Answer questions using the provided context.
@@ -208,11 +225,25 @@ private func buildPrompt(question: String, context: String?) -> String {
     } else {
         print("⚠️ [buildPrompt] WARNING: No context provided - answering without RAG")
     }
+
+    var historyTurns = ""
+    for turn in history {
+        historyTurns += """
+        <|im_start|>user
+        \(turn.question)
+        <|im_end|>
+        <|im_start|>assistant
+        \(turn.answer)
+        <|im_end|>
+
+        """
+    }
+
     return """
     <|im_start|>system
     \(sys)
     <|im_end|>
-    <|im_start|>user
+    \(historyTurns)<|im_start|>user
     \(user)
     <|im_end|>
     <|im_start|>assistant

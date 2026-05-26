@@ -46,22 +46,36 @@ final class LocalExecutor: Executor {
         #endif
     }
 
+    /// Stateless overload — delegates to the history-aware path with `[]`.
+    /// Empty history ⇒ identical behaviour to pre-ADR-0009.
+    func execute(
+        query: String,
+        sessionId: UUID
+    ) async throws -> ExecutionResult {
+        try await execute(query: query, sessionId: sessionId, history: [])
+    }
+
     /// Execute query using the local LLM + RAG pipeline.
     ///
     /// - Parameters:
     ///   - query: The user's query text
     ///   - sessionId: Session identifier
+    ///   - history: Visible prior turns (ADR-0009). Generation-only — does
+    ///     NOT influence retrieval (Stage 1) or routing. Empty ⇒ single-turn.
     /// - Returns: ExecutionResult with the generated output
     /// - Throws: ExecutionError on missing model, empty knowledge, or inference failure
     func execute(
         query: String,
-        sessionId: UUID
+        sessionId: UUID,
+        history: [ConversationTurn]
     ) async throws -> ExecutionResult {
 
         let traceId = UUID()
 
         // Stage 1: Retrieve relevant chunks (local, off main thread).
         // Both retrieval paths are local-only; DeepSearch is opt-in (heavier).
+        // ADR-0009 §4: history is NOT a retrieval input — retrieve on the
+        // current query only.
         let topK = defaultTopK
         let useDeepSearch = UserDefaults.standard.bool(forKey: Self.deepSearchDefaultsKey)
         let chunks = await Task.detached(priority: .userInitiated) {
@@ -76,7 +90,7 @@ final class LocalExecutor: Executor {
             }
         }.value
 
-        // Stage 2: Build context from retrieved chunks.
+        // Stage 2: Build context from retrieved chunks (current query only).
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
 
         // Stage 3: Generate with the local model.
@@ -88,7 +102,8 @@ final class LocalExecutor: Executor {
         do {
             answer = try await model.generateAsync(
                 prompt: query,
-                context: context.isEmpty ? nil : context
+                context: context.isEmpty ? nil : context,
+                history: history
             )
         } catch {
             // ADR-0000: no silent fallback. Surface a structured error.

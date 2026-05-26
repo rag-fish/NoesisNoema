@@ -11,14 +11,47 @@ import OSLog
 
 // MARK: - Request/Response Models
 
+/// A prior Q&A turn carried into prompt construction as session memory.
+///
+/// Value type, deliberately leaner than `QAPair`: history at the request layer
+/// is generation input only — citations live with the answer in the visible
+/// transcript, not in the prompt. The UI builds this from the user-visible
+/// `DocumentManager.qaHistory` (ADR-0009 §1, §3).
+public struct ConversationTurn: Equatable, Hashable {
+    public let question: String
+    public let answer: String
+    public let date: Date
+
+    public init(question: String, answer: String, date: Date) {
+        self.question = question
+        self.answer = answer
+        self.date = date
+    }
+}
+
 /// Request object for execution
 struct NoemaRequest {
     let query: String
     let sessionId: UUID
 
-    init(query: String, sessionId: UUID = UUID()) {
+    /// Visible-transcript turns (ADR-0009) included in the GENERATION prompt.
+    ///
+    /// Additive, defaulted (ADR-0006 contract lock — existing call sites stay
+    /// source-compatible). The UI is the source of truth (must pre-apply the
+    /// 3-turn AND 45-minute caps before constructing the request) so the
+    /// executor sees exactly what the user sees. The order is chronological
+    /// (oldest → newest); the prompt renders them in that order.
+    /// Empty ⇒ behaves identically to single-turn (ADR-0009 Decision 2).
+    let history: [ConversationTurn]
+
+    init(
+        query: String,
+        sessionId: UUID = UUID(),
+        history: [ConversationTurn] = []
+    ) {
         self.query = query
         self.sessionId = sessionId
+        self.history = history
     }
 }
 
