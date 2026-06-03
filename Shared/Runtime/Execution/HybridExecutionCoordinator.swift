@@ -73,7 +73,9 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         request: NoemaRequest,
         overrideMode: HumanOverrideMode = .none
     ) async throws -> NoemaResponse {
+        #if DEBUG
         print("🧠 [SESSION-MEM/COORD] request.history.count=\(request.history.count)")
+        #endif
         let traceId = UUID()
         let executionStart = Date()
 
@@ -191,7 +193,9 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
         var executionError: String? = nil
         let result: ExecutionResult
         do {
+            #if DEBUG
             print("🧠 [SESSION-MEM/COORD] dispatching to executor; passing history.count=\(request.history.count)")
+            #endif
             result = try await executor.execute(
                 query: request.query,
                 sessionId: request.sessionId,
