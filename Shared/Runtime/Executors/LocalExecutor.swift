@@ -52,7 +52,9 @@ final class LocalExecutor: Executor {
         query: String,
         sessionId: UUID
     ) async throws -> ExecutionResult {
+        #if DEBUG
         print("🧠 [SESSION-MEM/EXEC] LocalExecutor.execute(stateless) entered — delegating with []")
+        #endif
         return try await execute(query: query, sessionId: sessionId, history: [])
     }
 
@@ -70,7 +72,9 @@ final class LocalExecutor: Executor {
         sessionId: UUID,
         history: [ConversationTurn]
     ) async throws -> ExecutionResult {
+        #if DEBUG
         print("🧠 [SESSION-MEM/EXEC] LocalExecutor.execute(history-aware) entered; history.count=\(history.count)")
+        #endif
 
         let traceId = UUID()
 
@@ -102,7 +106,9 @@ final class LocalExecutor: Executor {
 
         let answer: String
         do {
+            #if DEBUG
             print("🧠 [SESSION-MEM/EXEC] calling generateAsync with history.count=\(history.count)")
+            #endif
             answer = try await model.generateAsync(
                 prompt: query,
                 context: context.isEmpty ? nil : context,

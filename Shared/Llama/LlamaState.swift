@@ -401,8 +401,8 @@ class LlamaState: ObservableObject {
         let GENERATION_TIMEOUT_S: Double = 20.0
         let genStartNS = DispatchTime.now().uptimeNanoseconds
 
-        #if DEBUG
         var tokenCount = 0
+        #if DEBUG
         var loopCount = 0
         var firstTokenReceivedAt: UInt64? = nil
         #endif
@@ -467,8 +467,8 @@ class LlamaState: ObservableObject {
 
             if chunk.isEmpty { continue }
 
-            #if DEBUG
             tokenCount += 1
+            #if DEBUG
             if tokenCount == 1 {
                 firstTokenReceivedAt = DispatchTime.now().uptimeNanoseconds
                 let firstTokenTime = Double(firstTokenReceivedAt! - genStartNS) / 1_000_000_000.0
