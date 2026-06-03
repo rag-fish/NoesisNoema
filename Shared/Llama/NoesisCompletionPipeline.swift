@@ -214,6 +214,7 @@ func buildPrompt(
     context: String?,
     history: [ConversationTurn] = []
 ) -> String {
+    print("🧠 [SESSION-MEM/PROMPT] buildPrompt entered; history.count=\(history.count)")
     let sys = """
     You are Noesis/Noema on-device RAG assistant.
     Answer questions using the provided context.
@@ -239,7 +240,7 @@ func buildPrompt(
         """
     }
 
-    return """
+    let prompt = """
     <|im_start|>system
     \(sys)
     <|im_end|>
@@ -248,6 +249,9 @@ func buildPrompt(
     <|im_end|>
     <|im_start|>assistant
     """
+    print("🧠 [SESSION-MEM/PROMPT] final prompt length=\(prompt.count) chars")
+    print("🧠 [SESSION-MEM/PROMPT] prompt full (first 1500 chars):\n\(String(prompt.prefix(1500)))")
+    return prompt
 }
 
 private func cleanOutput(_ s: String) -> String {

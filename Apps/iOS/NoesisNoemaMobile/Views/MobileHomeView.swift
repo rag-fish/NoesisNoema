@@ -312,7 +312,13 @@ struct MobileHomeView: View {
         // owns "what's visible" so the request carries exactly that. We
         // pre-apply BOTH caps (3 turns AND 45-minute window) here via the
         // shared helper so the executor doesn't need to know them.
+        print("🧠 [SESSION-MEM/UI] qaHistory.count=\(documentManager.qaHistory.count); identity=\(ObjectIdentifier(documentManager))")
         let history = SessionMemory.history(from: documentManager.qaHistory)
+        print("🧠 [SESSION-MEM/UI] derived history.count=\(history.count)")
+        for (i, t) in history.enumerated() {
+            let qPreview = String(t.question.prefix(30))
+            print("🧠 [SESSION-MEM/UI]   turn[\(i)] date=\(t.date) q='\(qPreview)'")
+        }
 
         Task { @MainActor in
             do {
@@ -324,6 +330,7 @@ struct MobileHomeView: View {
                     question: trimmed,
                     answer: response.text
                 )
+                print("🧠 [SESSION-MEM/UI] addQAPair on documentManager identity=\(ObjectIdentifier(documentManager)); qaHistory.count(post)=\(documentManager.qaHistory.count)")
 
                 // Citations now arrive on the response (ExecutionResult.sources
                 // → NoemaResponse.sources) instead of via ModelManager's mutable
