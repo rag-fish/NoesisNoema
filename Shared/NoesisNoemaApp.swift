@@ -20,7 +20,13 @@ struct NoesisNoemaApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MinimalClientView(executionCoordinator: executionCoordinator)
+            // ADR-0010: the macOS render path is the full NavigationSplitView UI
+            // (Chat / History / Settings). The app-level coordinator created
+            // above is threaded down; DesktopRootView owns the single shared
+            // DocumentManager. MinimalClientView remains reachable from
+            // Settings ▸ Advanced under #if DEBUG, and the retired
+            // Shared/ContentView.swift is no longer referenced.
+            DesktopRootView(executionCoordinator: executionCoordinator)
         }
     }
 }
