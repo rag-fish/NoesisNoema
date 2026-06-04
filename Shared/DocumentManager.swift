@@ -127,9 +127,12 @@ class DocumentManager: ObservableObject {
     }
 
     private func processRAGpackImport(fileURL: URL) async {
-        // iOSのFiles/iCloud経由で選択されたURLに対しては、セキュリティスコープを開始する
+        // Sandboxed iOS AND macOS both require explicit security-scoped access for
+        // user-picked URLs returned by .fileImporter / NSOpenPanel. The previous macOS
+        // branch (claiming the entitlement alone was sufficient) was incorrect and caused
+        // EPERM ("Operation not permitted") on RAGpack ZIP imports.
         var didStartAccessing = false
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         didStartAccessing = fileURL.startAccessingSecurityScopedResource()
         if !didStartAccessing {
             print("Warning: Could not start accessing security-scoped resource for \(fileURL)")
@@ -137,8 +140,6 @@ class DocumentManager: ObservableObject {
         defer {
             if didStartAccessing { fileURL.stopAccessingSecurityScopedResource() }
         }
-        #elseif os(macOS)
-        // NSOpenPanel + user-selected-file entitlement is sufficient; no scoped access required
         #endif
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
