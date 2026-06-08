@@ -125,7 +125,7 @@ actor LlamaContext {
         #if os(iOS)
         ctx_params.n_ctx = 1024 // Lightweight for iOS
         #else
-        ctx_params.n_ctx = 2048
+        ctx_params.n_ctx = 4096 // macOS: room for Deep Search + history + retrieved chunks
         #endif
         ctx_params.n_threads       = Int32(n_threads)
         ctx_params.n_threads_batch = Int32(n_threads)
