@@ -366,6 +366,19 @@ private struct DesktopRAGpackManagerView: View {
                 documentManager.importDocument(file: url)
             }
         }
+        // ADR-0011 §4: surface RAGpack import failures instead of failing silently.
+        .alert(
+            "RAGpack Import Failed",
+            isPresented: Binding(
+                get: { documentManager.lastImportError != nil },
+                set: { if !$0 { documentManager.lastImportError = nil } }
+            ),
+            presenting: documentManager.lastImportError
+        ) { _ in
+            Button("OK", role: .cancel) { documentManager.lastImportError = nil }
+        } message: { error in
+            Text(error.errorDescription ?? "The RAGpack could not be imported.")
+        }
     }
 }
 
