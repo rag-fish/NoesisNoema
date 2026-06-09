@@ -44,6 +44,16 @@ class DocumentManager: ObservableObject {
     /// POTENTIAL LARGE PAYLOAD: RAGpack chunks with embeddings (can be MBs per pack)
     @Published var ragpackChunks: [String: [Chunk]] = [:]
 
+    /// ADR-0011 §4 (no silent fallback): the last RAGpack import failure, surfaced
+    /// to the user via a SwiftUI alert in the Settings views. Set on a failed
+    /// import; cleared on a successful one (and when the user dismisses the alert).
+    @Published var lastImportError: RAGpackImportError? = nil
+
+    /// The app's current query/pack embedder — reused from the shared VectorStore
+    /// so we don't reload the GGUF. Drives the v1.2 manifest fingerprint/dimension
+    /// validation (ADR-0011 §3).
+    private var embedder: EmbeddingModel { VectorStore.shared.embeddingModel }
+
     // DEPRECATED: Old UserDefaults keys (migrated to file storage)
     // let historyKey = "RAGpackUploadHistory" // SMALL - but moved for consistency
     // let ragpackChunksKey = "RAGpackChunks"  // LARGE PAYLOAD - MOVED to file
@@ -120,24 +130,31 @@ class DocumentManager: ObservableObject {
             return
         }
 
-        // Run heavy processing on background thread
+        // Clear any prior failure before starting a fresh import.
+        self.lastImportError = nil
+
+        // Run heavy processing off the main thread; route any failure to
+        // `lastImportError` so the Settings views can present it (ADR-0011 §4).
         Task.detached {
-            await self.processRAGpackImport(fileURL: fileURL)
+            do {
+                try await self.processRAGpackImport(fileURL: fileURL)
+                await MainActor.run { self.lastImportError = nil }
+            } catch {
+                let importError = (error as? RAGpackImportError)
+                    ?? .manifestMalformed(underlying: String(describing: error))
+                print("[RAGpack import] failed: \(importError.errorDescription ?? "\(importError)")")
+                await MainActor.run { self.lastImportError = importError }
+            }
         }
     }
 
-    private func processRAGpackImport(fileURL: URL) async {
-        // NOTE (ADR-0011, PR-A foundation merged; PR-B reader pending):
-        // This function still expects the legacy v0.x pack shape and will NOT work with
-        // pipeline-produced v1.1 packs (no embeddings.csv → silent return). PR-B replaces
-        // this entire function with a v1.2 RAGpackReader (chunks.json + embeddings.npy +
-        // manifest.json + citations.jsonl) and surfaces failures via UI alert. Do not ship
-        // without PR-B.
-        //
+    /// Imports a RAGpack v1.2 archive (ADR-0011 §3-§7). Unzips, reads via
+    /// `RAGpackReader` (which validates the manifest against the current embedder),
+    /// and adds the chunks to the VectorStore. Throws `RAGpackImportError` on every
+    /// malformation — no silent return, no v0.x CSV fallback.
+    private func processRAGpackImport(fileURL: URL) async throws {
         // Sandboxed iOS AND macOS both require explicit security-scoped access for
-        // user-picked URLs returned by .fileImporter / NSOpenPanel. The previous macOS
-        // branch (claiming the entitlement alone was sufficient) was incorrect and caused
-        // EPERM ("Operation not permitted") on RAGpack ZIP imports.
+        // user-picked URLs returned by .fileImporter / NSOpenPanel (PR #94 EPERM fix).
         var didStartAccessing = false
         #if os(iOS) || os(macOS)
         didStartAccessing = fileURL.startAccessingSecurityScopedResource()
@@ -148,106 +165,61 @@ class DocumentManager: ObservableObject {
             if didStartAccessing { fileURL.stopAccessingSecurityScopedResource() }
         }
         #endif
+
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? fileManager.removeItem(at: tempDir) }
+
+        // 1. Unzip into a temp dir. A zip that cannot be opened/extracted is not a
+        //    readable v1.2 pack → surface as a missing-manifest failure.
         do {
             try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: nil)
-            let archive: Archive
-            do {
-                archive = try Archive(url: fileURL, accessMode: .read)
-            } catch {
-                print("Error: Could not open ZIP archive. \(error)")
-                try? fileManager.removeItem(at: tempDir)
-                return
-            }
+            let archive = try Archive(url: fileURL, accessMode: .read)
             for entry in archive {
                 let destinationURL = tempDir.appendingPathComponent(entry.path)
-                do {
-                    switch entry.type {
-                    case .directory:
-                        try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true, attributes: nil)
-                        continue
-                    default:
-                        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
-                        _ = try archive.extract(entry, to: destinationURL)
-                    }
-                } catch {
-                    print("Error extracting entry \(entry.path): \(error)")
+                switch entry.type {
+                case .directory:
+                    try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true, attributes: nil)
+                default:
+                    try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
+                    _ = try archive.extract(entry, to: destinationURL)
                 }
             }
         } catch {
-            print("Error: Failed to create temporary directory or extract ZIP. \(error)")
-            return
+            throw RAGpackImportError.manifestMissing
         }
-        // Locate required files in the extracted directory
-        let chunksURL = tempDir.appendingPathComponent("chunks.json")
-        let embeddingsURL = tempDir.appendingPathComponent("embeddings.csv")
-        let metadataURL = tempDir.appendingPathComponent("metadata.json")
-        guard fileManager.fileExists(atPath: chunksURL.path),
-              fileManager.fileExists(atPath: embeddingsURL.path) else {
-            print("Error: Missing required file(s) in RAGpack (.zip): chunks.json and/or embeddings.csv.")
-            try? fileManager.removeItem(at: tempDir)
-            return
-        }
-        do {
-            let chunksData = try Data(contentsOf: chunksURL)
-            let chunkStrings = try JSONDecoder().decode([String].self, from: chunksData)
-            // Inline legacy v0.x CSV parse (formerly EmbeddingModel's CSV loader,
-            // removed in PR-A — the embedder no longer ships a CSV loader). Behavior is
-            // byte-for-byte identical to the old helper; this whole branch is superseded
-            // by the v1.2 RAGpackReader in PR-B (see the NOTE at the top of this function).
-            let embeddings: [[Float]] = {
-                guard let csvString = try? String(contentsOf: embeddingsURL, encoding: .utf8) else { return [] }
-                return csvString.split(separator: "\n").map { row in
-                    row.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
-                }
-            }()
-            if chunkStrings.count != embeddings.count {
-                print("Error: chunks.jsonとembeddings.csvの数が一致しません")
-                try? fileManager.removeItem(at: tempDir)
-                return
-            }
-            let chunks = zip(chunkStrings, embeddings).map { Chunk(content: $0.0, embedding: $0.1, sourceTitle: nil, sourcePath: nil, page: nil) }
-            // After building chunks, attach a default title so UI can show citations
-            let baseName = fileURL.deletingPathExtension().lastPathComponent
-            let timestamp = Date()
-            let docName = "\(baseName)_\(Int(timestamp.timeIntervalSince1970))"
-            let titledChunks = chunks.map { ch -> Chunk in
-                var c = ch
-                c.sourceTitle = docName
-                return c
-            }
-            var metadata: [String: Any] = [:]
-            if fileManager.fileExists(atPath: metadataURL.path) {
-                let metadataData = try Data(contentsOf: metadataURL)
-                if let meta = try JSONSerialization.jsonObject(with: metadataData, options: []) as? [String: Any] {
-                    metadata = meta
-                }
-            }
-            let ragFile = LLMRagFile(filename: docName, metadata: metadata, chunks: titledChunks)
 
-            // Filter unique chunks
-            let uniqueChunks = titledChunks.filter { chunk in
-                !VectorStore.shared.chunks.contains(where: { $0.content == chunk.content && $0.embedding == chunk.embedding })
-            }
+        // 2. Read + validate the v1.2 pack. Throws RAGpackImportError; let it propagate.
+        let (chunks, _) = try RAGpackReader.readPack(at: tempDir, embedder: self.embedder)
 
-            // Update UI on main thread
-            await MainActor.run {
-                self.llmragFiles.append(ragFile)
-                print("Imported RAGpack document: \(docName)")
-                VectorStore.shared.chunks.append(contentsOf: uniqueChunks)
-                print("RAGpack unique chunks added to VectorStore.shared (RAG検索対象拡張)")
-                self.ragpackChunks[docName] = uniqueChunks
-                self.uploadHistory.append(UploadHistory(filename: docName, timestamp: timestamp, chunkCount: uniqueChunks.count))
-                self.saveHistory()
-                self.saveRAGpackChunks()
-            }
-        } catch {
-            print("Error: Failed to load chunks or embeddings. \(error)")
-            try? fileManager.removeItem(at: tempDir)
-            return
+        // 3. Title the chunks and add the unique ones to the VectorStore.
+        let baseName = fileURL.deletingPathExtension().lastPathComponent
+        let timestamp = Date()
+        let docName = "\(baseName)_\(Int(timestamp.timeIntervalSince1970))"
+        let titledChunks = chunks.map { ch -> Chunk in
+            var c = ch
+            if c.sourceTitle == nil { c.sourceTitle = docName }
+            return c
         }
-        try? fileManager.removeItem(at: tempDir)
+        let metadata: [String: Any] = [
+            "pack_version": "1.2",
+            "doc_name": docName
+        ]
+        let ragFile = LLMRagFile(filename: docName, metadata: metadata, chunks: titledChunks)
+
+        let uniqueChunks = titledChunks.filter { chunk in
+            !VectorStore.shared.chunks.contains(where: { $0.content == chunk.content && $0.embedding == chunk.embedding })
+        }
+
+        await MainActor.run {
+            self.llmragFiles.append(ragFile)
+            VectorStore.shared.chunks.append(contentsOf: uniqueChunks)
+            self.ragpackChunks[docName] = uniqueChunks
+            self.uploadHistory.append(UploadHistory(filename: docName, timestamp: timestamp, chunkCount: uniqueChunks.count))
+            self.saveHistory()
+            self.saveRAGpackChunks()
+            print("Imported RAGpack v1.2 document: \(docName) (\(uniqueChunks.count) unique chunks)")
+        }
     }
 
     /**
@@ -278,58 +250,6 @@ class DocumentManager: ObservableObject {
      */
     func importModelResource(file: Any) {
         // TODO: implement model resource import for RAGpack-based architecture.
-    }
-
-    /// モデルファイル探索＋LlamaStateでロード＋推論
-    func inferWithLlama(prompt: String, fileName: String = "llama3-8b.gguf", completion: @escaping (String) -> Void) {
-        // プレ・プロンプト（独白/CoT抑止）
-        func buildPlainPrompt(question: String, context: String? = nil) -> String {
-            let sys = """
-            You are a helpful, concise assistant.
-            Answer with the final answer only. Do not include analysis, chain-of-thought, self-talk, internal monologue, or meta commentary.
-            Never output tags like <think>...</think>. If tempted, stop and give only the final answer.
-            """
-            var txt = sys + "\n\n"
-            if let ctx = context, !ctx.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                txt += "Context:\n\(ctx)\n\n"
-            }
-            txt += "Question: \(question)\n\nAnswer:"
-            return txt
-        }
-        let fm = FileManager.default
-        let cwd = fm.currentDirectoryPath
-        var checkedPaths: [String] = []
-        let pathCWD = "\(cwd)/\(fileName)"
-        checkedPaths.append(pathCWD)
-        let exePath = CommandLine.arguments[0]
-        let exeDir = URL(fileURLWithPath: exePath).deletingLastPathComponent().path
-        let pathExeDir = "\(exeDir)/\(fileName)"
-        if pathExeDir != pathCWD { checkedPaths.append(pathExeDir) }
-        if let bundleResourceURL = Bundle.main.resourceURL {
-            let pathBundle = bundleResourceURL.appendingPathComponent(fileName).path
-            if pathBundle != pathCWD && pathBundle != pathExeDir { checkedPaths.append(pathBundle) }
-        }
-        for path in checkedPaths {
-            if fm.fileExists(atPath: path) {
-                print("[Llama] FOUND: \(path)")
-                Task {
-                    let llama = await LlamaState()
-                    do {
-                        try await llama.loadModel(modelUrl: URL(fileURLWithPath: path))
-                        // プレ・プロンプト適用
-                        let wrapped = buildPlainPrompt(question: prompt)
-                        let response: String = await llama.complete(text: wrapped)
-                        completion(response)
-                    } catch {
-                        print("[Llama] Error running inference: \(error)")
-                        completion("[Llama Error] \(error)")
-                    }
-                }
-                return
-            }
-        }
-        print("[Llama] NOT FOUND in any attempted path!")
-        completion("[Llama] Model file not found.")
     }
 
     // MARK: - QA History Management
