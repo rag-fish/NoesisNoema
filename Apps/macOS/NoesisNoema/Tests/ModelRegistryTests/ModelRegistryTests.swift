@@ -93,13 +93,13 @@ class ModelRegistryTests {
         assert(!initialSpecs.isEmpty, "Registry should have predefined models")
 
         // Test finding by ID
-        let janModel = await registry.getModelSpec(id: "jan-v1-4b")
-        assert(janModel != nil, "Should find Jan model by ID")
-        assert(janModel?.name == "Jan-V1-4B", "Jan model name should match")
+        let llamaModel = await registry.getModelSpec(id: "llama-3.2-3b")
+        assert(llamaModel != nil, "Should find Llama 3.2 3B model by ID")
+        assert(llamaModel?.name == "Llama 3.2 3B", "Llama model name should match")
 
         // Test finding by tag
-        let qwenModels = await registry.findModelSpecs(withTag: "qwen")
-        assert(!qwenModels.isEmpty, "Should find models with qwen tag")
+        let instructModels = await registry.findModelSpecs(withTag: "instruct")
+        assert(!instructModels.isEmpty, "Should find models with instruct tag")
 
         // Test finding by architecture
         let llamaModels = await registry.findModelSpecs(withArchitecture: "llama")
@@ -107,7 +107,7 @@ class ModelRegistryTests {
 
         print("✅ ModelRegistry functionality working")
         print("   - Total models: \(initialSpecs.count)")
-        print("   - Qwen models: \(qwenModels.count)")
+        print("   - Instruct models: \(instructModels.count)")
         print("   - LLaMA models: \(llamaModels.count)")
     }
 

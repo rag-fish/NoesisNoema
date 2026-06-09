@@ -19,11 +19,15 @@ actor ModelRegistry {
     private var scanningPaths: Set<String> = []
 
     /// Predefined model specifications (fallbacks)
+    ///
+    /// Only Llama 3.2 3B is declared — the single GGUF that actually ships on device.
+    /// Earlier ghost/retired LLM entries were removed in the registry cleanup ahead
+    /// of ADR-0011 (replaceable GGUF embedder).
     private let predefinedSpecs: [ModelSpec] = [
         ModelSpec(
             id: "llama-3.2-3b",
             name: "Llama 3.2 3B",
-            modelFile: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            modelFile: "llama-3.2-3b-instruct-q4_k_m.gguf",
             version: "3B",
             metadata: GGUFMetadata(
                 architecture: "llama",
@@ -38,101 +42,6 @@ actor ModelRegistry {
             ),
             tags: ["llama", "small", "q4_k_m", "long-context", "instruct"],
             description: "Llama 3.2 3B Instruct, Q4_K_M quantization — default on-device model"
-        ),
-        ModelSpec(
-            id: "jan-v1-4b",
-            name: "Jan-V1-4B",
-            modelFile: "Jan-v1-4B-Q4_K_M.gguf",
-            version: "4B",
-            metadata: GGUFMetadata(
-                architecture: "qwen",
-                parameterCount: 4.0,
-                contextLength: 32768,
-                quantization: "Q4_K_M",
-                layerCount: 32,
-                embeddingDimension: 2048,
-                feedForwardDimension: 5504,
-                attentionHeads: 32,
-                supportsFlashAttention: true
-            ),
-            tags: ["qwen", "small", "q4_k_m", "long-context"],
-            description: "Jan V1 4B parameter model with Qwen architecture, Q4_K_M quantization"
-        ),
-        ModelSpec(
-            id: "llama-3-8b",
-            name: "Llama-3",
-            modelFile: "llama3-8b.gguf",
-            version: "8B",
-            metadata: GGUFMetadata(
-                architecture: "llama",
-                parameterCount: 8.0,
-                contextLength: 8192,
-                quantization: "Q4_K_M",
-                layerCount: 32,
-                embeddingDimension: 4096,
-                feedForwardDimension: 14336,
-                attentionHeads: 32,
-                supportsFlashAttention: true
-            ),
-            tags: ["llama", "medium", "q4_k_m", "medium-context"],
-            description: "LLaMA 3 8B parameter model with standard quantization"
-        ),
-        ModelSpec(
-            id: "phi-3-mini",
-            name: "Phi-3-mini",
-            modelFile: "phi-3-mini.gguf",
-            version: "mini",
-            metadata: GGUFMetadata(
-                architecture: "phi3",
-                parameterCount: 3.8,
-                contextLength: 4096,
-                quantization: "Q4_K_M",
-                layerCount: 32,
-                embeddingDimension: 3072,
-                feedForwardDimension: 8192,
-                attentionHeads: 32,
-                supportsFlashAttention: true
-            ),
-            tags: ["phi", "small", "q4_k_m", "medium-context"],
-            description: "Phi-3 Mini 3.8B parameter model optimized for efficiency"
-        ),
-        ModelSpec(
-            id: "gemma-2b",
-            name: "Gemma-2B",
-            modelFile: "gemma-2b.gguf",
-            version: "2B",
-            metadata: GGUFMetadata(
-                architecture: "gemma",
-                parameterCount: 2.0,
-                contextLength: 2048,
-                quantization: "Q4_K_M",
-                layerCount: 18,
-                embeddingDimension: 2048,
-                feedForwardDimension: 5632,
-                attentionHeads: 8,
-                supportsFlashAttention: false
-            ),
-            tags: ["gemma", "small", "q4_k_m", "short-context"],
-            description: "Gemma 2B parameter lightweight model"
-        ),
-        ModelSpec(
-            id: "gpt-oss-20b",
-            name: "GPT-OSS-20B",
-            modelFile: "gpt-oss-20b-Q4_K_S.gguf",
-            version: "20B",
-            metadata: GGUFMetadata(
-                architecture: "gpt",
-                parameterCount: 20.0,
-                contextLength: 4096,
-                quantization: "Q4_K_S",
-                layerCount: 44,
-                embeddingDimension: 6144,
-                feedForwardDimension: 24576,
-                attentionHeads: 48,
-                supportsFlashAttention: false
-            ),
-            tags: ["gpt", "large", "q4_k_s", "medium-context"],
-            description: "GPT-OSS 20B parameter large language model"
         )
     ]
 

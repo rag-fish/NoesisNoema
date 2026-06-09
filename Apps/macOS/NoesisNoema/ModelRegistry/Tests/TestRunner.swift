@@ -238,21 +238,14 @@ class TestRunner {
         }
 
         // Test finding specific model
-        let janModel = await registry.getModelSpec(id: "jan-v1-4b")
-        guard let jan = janModel else {
-            print("❌ Should find Jan model")
+        let llamaModel = await registry.getModelSpec(id: "llama-3.2-3b")
+        guard let llama = llamaModel else {
+            print("❌ Should find Llama 3.2 3B model")
             return false
         }
 
-        guard jan.name == "Jan-V1-4B" else {
-            print("❌ Jan model name mismatch: \(jan.name)")
-            return false
-        }
-
-        // Test finding by tag
-        let qwenModels = await registry.findModelSpecs(withTag: "qwen")
-        guard !qwenModels.isEmpty else {
-            print("❌ Should find models with qwen tag")
+        guard llama.name == "Llama 3.2 3B" else {
+            print("❌ Llama model name mismatch: \(llama.name)")
             return false
         }
 
@@ -265,7 +258,6 @@ class TestRunner {
 
         print("✅ Model registry functionality working")
         print("   Total models: \(allSpecs.count)")
-        print("   Qwen models: \(qwenModels.count)")
         print("   LLaMA models: \(llamaModels.count)")
         return true
     }
@@ -274,8 +266,8 @@ class TestRunner {
     private static func testCLIModelInfo() async -> Bool {
         let registry = ModelRegistry.shared
 
-        guard let modelInfo = await registry.getModelInfo(id: "jan-v1-4b") else {
-            print("❌ Should get model info for Jan model")
+        guard let modelInfo = await registry.getModelInfo(id: "llama-3.2-3b") else {
+            print("❌ Should get model info for Llama 3.2 3B model")
             return false
         }
 
@@ -363,16 +355,16 @@ class TestRunner {
         // Minimal valid
         let ok = "{" +
         "\"models\":[{" +
-        "\"id\":\"llama3-8b\"," +
-        "\"name\":\"Llama 3 8B\"," +
-        "\"model_file\":\"llama3-8b.Q4_K_M.gguf\"," +
-        "\"version\":\"8B\"," +
+        "\"id\":\"llama-3.2-3b\"," +
+        "\"name\":\"Llama 3.2 3B\"," +
+        "\"model_file\":\"llama-3.2-3b-instruct-q4_k_m.gguf\"," +
+        "\"version\":\"3B\"," +
         "\"quantization\":\"Q4_K_M\"" +
         "}]" +
         "}"
         do {
             let specs = try RegistryJSONLoader.load(from: ok)
-            guard specs.count == 1, specs[0].id == "llama3-8b" else {
+            guard specs.count == 1, specs[0].id == "llama-3.2-3b" else {
                 print("❌ Minimal valid registry did not parse as expected")
                 return false
             }
@@ -582,7 +574,7 @@ class TestRunner {
         await RegistryPersistence.shared.clearCache()
 
         // Prepare a model id and two distinct params
-        let modelId = "jan-v1-4b"
+        let modelId = "llama-3.2-3b"
         var recommended = RuntimeParams.oomSafeDefaults()
         recommended.nCtx = 4096
         var overrideP = recommended
@@ -619,7 +611,7 @@ class TestRunner {
         await RegistryPersistence.shared.wipe()
         await RegistryPersistence.shared.clearCache()
 
-        let modelId = "llama-3-8b"
+        let modelId = "llama-3.2-3b"
         var recommended = RuntimeParams.oomSafeDefaults()
         recommended.nCtx = 2048
         var overrideP = recommended

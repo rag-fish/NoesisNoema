@@ -44,14 +44,7 @@ class LlamaState: ObservableObject {
 
     private var llamaContext: LlamaContext?
     private var defaultModelUrl: URL? {
-        // プラットフォーム優先: iOSはJan、macOSはLlama3-8B
-        #if os(macOS)
-        let primaryFile = "llama3-8b.gguf"
-        let secondaryFile = "Jan-v1-4B-Q4_K_M.gguf"
-        #else
-        let primaryFile = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-        let secondaryFile = "Jan-v1-4B-Q4_K_M.gguf"
-        #endif
+        let primaryFile = "llama-3.2-3b-instruct-q4_k_m.gguf"
         func findInBundle(_ file: String) -> URL? {
             let nameNoExt = (file as NSString).deletingPathExtension
             let ext = (file as NSString).pathExtension
@@ -63,10 +56,7 @@ class LlamaState: ObservableObject {
             }
             return nil
         }
-        if let url = findInBundle(primaryFile) { return url }
-        if let url = findInBundle(secondaryFile) { return url }
-        // 旧フォールバック
-        return Bundle.main.url(forResource: "ggml-model", withExtension: "gguf", subdirectory: "models")
+        return findInBundle(primaryFile)
     }
 
     struct SamplingConfig {
@@ -385,7 +375,7 @@ class LlamaState: ObservableObject {
             self.messageLog += "USER: \(text)\n"
         }
 
-        // First-token watchdog: strict deadline for Jan-v1-4B (8s), relaxed for larger models (15s)
+        // First-token watchdog: strict deadline for the on-device model (8s)
         let FIRST_TOKEN_DEADLINE_S: Double = 8.0
         let firstTokenDeadlineNS = DispatchTime.now().uptimeNanoseconds + UInt64(FIRST_TOKEN_DEADLINE_S * 1_000_000_000)
 
