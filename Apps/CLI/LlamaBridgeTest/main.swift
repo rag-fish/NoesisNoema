@@ -7,7 +7,7 @@
 //  minimal runtime defaults (threads/ngl placeholders), and output cleanup for <think> tags.
 //
 //  Usage examples:
-//    LlamaBridgeTest -m /path/to/Jan-v1-4B-Q4_K_M.gguf -p "Say hello."
+//    LlamaBridgeTest -m /path/to/llama-3.2-3b-instruct-q4_k_m.gguf -p "Say hello."
 //    LlamaBridgeTest -p "What is RAG?"   // model auto-lookup
 //
 //  Note:
@@ -183,7 +183,7 @@ func autoPresetAdjust(_ cli: inout CLI, modelPath: String, prompt: String) {
 }
 
 // MARK: - Paths
-let defaultModelFileName = "Jan-v1-4B-Q4_K_M.gguf" // development default
+let defaultModelFileName = "llama-3.2-3b-instruct-q4_k_m.gguf" // development default
 
 /// Search for a model file, supporting both flat and nested directory structures
 /// (llama.cpp v0.2.0+ expects Models/<modelName>/*.gguf)

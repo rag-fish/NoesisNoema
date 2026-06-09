@@ -252,7 +252,7 @@ struct ModelCLI {
 
         print("\n🔧 CLI Usage Examples:")
         print("   nn model list                    # List available models")
-        print("   nn model info jan-v1-4b         # Show detailed model info")
+        print("   nn model info llama-3.2-3b       # Show detailed model info")
         print("   nn model scan /path/to/models    # Scan for GGUF files")
         print("   nn model test                    # Run functionality tests")
 
@@ -281,7 +281,7 @@ struct ModelCLI {
           --trace            Print decision rationale and timing during autotune
 
         Examples:
-          nn model info jan-v1-4b --dry-run
+          nn model info llama-3.2-3b --dry-run
           nn model list
           nn model list --all
           nn model scan
@@ -292,7 +292,7 @@ struct ModelCLI {
 
         Model ID Format:
           Model IDs are lowercase, with hyphens replaced by underscores.
-          Examples: jan_v1_4b, llama_3_8b, phi_3_mini
+          Examples: llama_3_2_3b
         """)
     }
 }

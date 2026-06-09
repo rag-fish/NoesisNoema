@@ -25,11 +25,9 @@ class ModelCompatibilityTests: XCTestCase {
         let availableModels = await registry.getAvailableModelSpecs()
         XCTAssertGreaterThan(availableModels.count, 0, "No models discovered in Resources/Models")
 
-        // Verify new models are found
+        // Verify the shipping model is found
         let expectedModels = [
-            "Llama-3.3-70B-Instruct",
-            "gpt-oss-20b",
-            "Jan-v1-4B"
+            "llama-3.2-3b"
         ]
 
         for expected in expectedModels {
