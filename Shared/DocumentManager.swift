@@ -127,6 +127,13 @@ class DocumentManager: ObservableObject {
     }
 
     private func processRAGpackImport(fileURL: URL) async {
+        // NOTE (ADR-0011, PR-A foundation merged; PR-B reader pending):
+        // This function still expects the legacy v0.x pack shape and will NOT work with
+        // pipeline-produced v1.1 packs (no embeddings.csv → silent return). PR-B replaces
+        // this entire function with a v1.2 RAGpackReader (chunks.json + embeddings.npy +
+        // manifest.json + citations.jsonl) and surfaces failures via UI alert. Do not ship
+        // without PR-B.
+        //
         // Sandboxed iOS AND macOS both require explicit security-scoped access for
         // user-picked URLs returned by .fileImporter / NSOpenPanel. The previous macOS
         // branch (claiming the entitlement alone was sufficient) was incorrect and caused
@@ -185,8 +192,16 @@ class DocumentManager: ObservableObject {
         do {
             let chunksData = try Data(contentsOf: chunksURL)
             let chunkStrings = try JSONDecoder().decode([String].self, from: chunksData)
-            let embeddingModel = EmbeddingModel(name: "import")
-            let embeddings = embeddingModel.loadEmbeddingsCSV(from: embeddingsURL)
+            // Inline legacy v0.x CSV parse (formerly EmbeddingModel's CSV loader,
+            // removed in PR-A — the embedder no longer ships a CSV loader). Behavior is
+            // byte-for-byte identical to the old helper; this whole branch is superseded
+            // by the v1.2 RAGpackReader in PR-B (see the NOTE at the top of this function).
+            let embeddings: [[Float]] = {
+                guard let csvString = try? String(contentsOf: embeddingsURL, encoding: .utf8) else { return [] }
+                return csvString.split(separator: "\n").map { row in
+                    row.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
+                }
+            }()
             if chunkStrings.count != embeddings.count {
                 print("Error: chunks.jsonとembeddings.csvの数が一致しません")
                 try? fileManager.removeItem(at: tempDir)
