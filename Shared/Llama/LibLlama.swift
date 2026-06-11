@@ -132,6 +132,13 @@ actor LlamaContext {
         #else
         ctx_params.n_ctx = 4096 // macOS: room for Deep Search + history + retrieved chunks
         #endif
+        // A single llama_decode batch may contain up to n_ctx tokens once RAG
+        // context + history are injected. The llama.cpp default n_batch (2048) is
+        // smaller than n_ctx, so a large prompt trips
+        // GGML_ASSERT(n_tokens_all <= cparams.n_batch). Size the logical batch to
+        // n_ctx so the whole prompt fits in one decode; n_ubatch stays at its
+        // default (512).
+        ctx_params.n_batch = ctx_params.n_ctx
         ctx_params.n_threads       = Int32(n_threads)
         ctx_params.n_threads_batch = Int32(n_threads)
 
