@@ -16,7 +16,7 @@ struct RAGpackManifest: Codable {
     let createdAt: String
     let chunker: ChunkerInfo
     let embedder: EmbedderInfo
-    let indexer: IndexerInfo
+    let indexer: IndexerInfo?      // informational — tolerate absence (ADR-0011 strict-only-on-identity)
     let files: FilesInfo
     let stats: StatsInfo?
 
@@ -31,10 +31,12 @@ struct RAGpackManifest: Codable {
         case stats
     }
 
+    /// Informational chunker metadata. ALL fields optional: a chunker block must
+    /// never be the reason a pack is rejected (ADR-0011 — strict only on identity).
     struct ChunkerInfo: Codable {
-        let method: String
-        let chunkSize: Int
-        let overlap: Int
+        let method: String?
+        let chunkSize: Int?
+        let overlap: Int?
         let tokenizerName: String?
         let preserveSentences: Bool?
         let configHash: String?
@@ -69,9 +71,24 @@ struct RAGpackManifest: Codable {
         }
     }
 
+    /// Informational indexer metadata. ALL fields optional, covering BOTH known
+    /// shapes: the original PR-B prompt's `{method, dimension}` (forward-compat) and
+    /// the de-facto pipeline shape `{document_count, chunk_count, timestamp}`. An
+    /// informational block must never fail decode (ADR-0011 — strict only on identity).
     struct IndexerInfo: Codable {
-        let method: String
-        let dimension: Int
+        let method: String?
+        let dimension: Int?
+        let documentCount: Int?
+        let chunkCount: Int?
+        let timestamp: String?
+
+        enum CodingKeys: String, CodingKey {
+            case method
+            case dimension
+            case documentCount = "document_count"
+            case chunkCount = "chunk_count"
+            case timestamp
+        }
     }
 
     struct FilesInfo: Codable {
@@ -120,3 +137,45 @@ extension RAGpackManifest {
         }
     }
 }
+
+#if DEBUG
+extension RAGpackManifest {
+    /// The REAL manifest.json from the first failing v1.2 pack (Spinoza Ethica,
+    /// 406 chunks) — its `indexer` block uses the de-facto pipeline shape
+    /// (`document_count`/`chunk_count`/`timestamp`), NOT the original PR-B
+    /// `{method, dimension}` shape. Kept verbatim as a regression fixture.
+    static let spinozaFixtureJSON = """
+    {
+      "pack_version": "1.2",
+      "pack_id": "pack-9edb42ffa01d5da2c388d03f42562c70",
+      "created_at": "2026-06-11T06:18:52Z",
+      "chunker": { "method": "token_based", "chunk_size": 512, "overlap": 50, "tokenizer_name": "gpt2", "preserve_sentences": false, "config_hash": "a02e1eef8320ac74aae10efdfaaa0d703e2af4fccea685f355ea85f7918542ba" },
+      "embedder": { "embedding_model": "nomic-embed-text-v1.5.Q5_K_M.gguf", "embedding_version": "0.3.28", "embedding_dimension": 768, "model_hash": "0c7930f6c4f6f29b7da5046e3a2c0832aa3f602db3de5760a95f0582dbd3d6e6", "dtype": "float32", "pooling": "mean", "l2_normalized": true, "name": "nomic-embed-text-v1.5.Q5_K_M.gguf", "version": "0.3.28", "dimensions": 768, "runtime": "llama.cpp" },
+      "indexer": { "document_count": 1, "chunk_count": 406, "timestamp": "2026-06-11T06:18:52Z" },
+      "files": { "chunks": "chunks.json", "embeddings": "embeddings.npy", "citations": "citations.jsonl", "metadata": { "embeddings_csv": "embeddings.csv", "manifest": "manifest.json" } },
+      "source_documents": [ { "doc_id": "2015.263056.Ethics_text.txt", "title": "2015.263056.Ethics_text", "path": "/content/input/2015.263056.Ethics_text.txt", "source_hash": "c66d146a7faaa5bdf203aa5a6a2f38494bd4ca58063071cfc5e38847b34a9ed2", "char_count": 566764 } ]
+    }
+    """
+
+    /// Manual decode smoke for the Spinoza fixture: asserts the manifest decodes
+    /// (no throw) and that the strictly-required identity fields survived. Callable
+    /// from a debugger or a scratch call site while the XCTest target is unwired.
+    /// Returns the decoded manifest so a caller holding the live embedder can also
+    /// run `validate(againstCurrentEmbedder:)` to exercise the §3 fingerprint check.
+    @discardableResult
+    static func runDecodeSmoke() -> RAGpackManifest {
+        let m = try! JSONDecoder().decode(RAGpackManifest.self,
+                                          from: Data(spinozaFixtureJSON.utf8))
+        assert(m.packVersion == "1.2", "pack_version must decode strictly")
+        assert(m.embedder.modelHash == "0c7930f6c4f6f29b7da5046e3a2c0832aa3f602db3de5760a95f0582dbd3d6e6")
+        assert(m.embedder.embeddingDimension == 768 && m.embedder.dtype == "float32")
+        assert(m.files.chunks == "chunks.json" && m.files.embeddings == "embeddings.npy")
+        // Informational pipeline-shape indexer block decodes tolerantly.
+        assert(m.indexer?.chunkCount == 406 && m.indexer?.documentCount == 1)
+        assert(m.indexer?.method == nil && m.indexer?.dimension == nil)
+        print("[RAGpackManifest] decode smoke PASSED — Spinoza v1.2 manifest decoded; "
+              + "indexer.chunk_count=\(m.indexer?.chunkCount ?? -1)")
+        return m
+    }
+}
+#endif
