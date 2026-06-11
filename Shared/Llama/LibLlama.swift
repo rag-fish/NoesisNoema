@@ -233,7 +233,11 @@ actor LlamaContext {
         dprint("attempting to complete \"\(text)\"")
 
         last_error = nil
-        tokens_list = tokenize(text: text, add_bos: true)
+        // add_bos=false: the prompt already begins with the literal
+        // <|begin_of_text|>, which parse_special=true tokenizes to the BOS id
+        // (128000). Adding another BOS here yields two BOS tokens, which makes the
+        // instruct model emit EOG after a single token.
+        tokens_list = tokenize(text: text, add_bos: false)
         temporary_invalid_cchars = []
 
         // Ensure batch capacity >= prompt token length
