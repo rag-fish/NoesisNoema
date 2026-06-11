@@ -84,6 +84,11 @@ class DocumentManager: ObservableObject {
         // Load from file storage
         loadHistory()
         loadRAGpackChunks()
+        // Re-hydrate the in-memory retrieval corpus from persisted chunks. Without
+        // this hop, packs imported in a prior session sit in `ragpackChunks` (disk)
+        // but never reach `VectorStore.shared`, so the retriever sees an empty store
+        // on every cold launch (P0: RAG only worked in the same session as import).
+        populateVectorStoreFromPersistedChunks()
         loadQAHistory()
     }
 
@@ -105,6 +110,19 @@ class DocumentManager: ObservableObject {
 
     func loadRAGpackChunks() {
         ragpackChunks = PersistenceStore.shared.loadRAGpackChunks()
+    }
+
+    /// Copies all persisted RAGpack chunks into `VectorStore.shared` so the retriever
+    /// sees prior-session packs on a cold launch. Call once, after `loadRAGpackChunks()`.
+    ///
+    /// - Uses `addChunks(_:deduplicate:)` — NOT `addTexts` — because persisted chunks
+    ///   already carry their embeddings; `addTexts` would re-embed and waste a model pass.
+    /// - Guarded on an empty store (and `deduplicate: true`) so repeated `DocumentManager()`
+    ///   construction (e.g. `#Preview` sites, tests) cannot stack duplicate corpus data.
+    private func populateVectorStoreFromPersistedChunks() {
+        let allChunks = ragpackChunks.values.flatMap { $0 }
+        guard !allChunks.isEmpty, VectorStore.shared.chunks.isEmpty else { return }
+        VectorStore.shared.addChunks(allChunks, deduplicate: true)
     }
     func deleteRAGpack(named name: String) {
         let chunksToDelete = ragpackChunks[name] ?? []
