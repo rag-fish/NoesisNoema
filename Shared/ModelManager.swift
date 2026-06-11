@@ -59,6 +59,15 @@ class ModelManager: ObservableObject {
         // Try to restore last selection from UserDefaults
         // SAFE: Small string ID (< 100 bytes)
         if let lastModelIDString = UserDefaults.standard.string(forKey: "lastSelectedModelID"),
+           !availableModels.contains(where: { $0.id == lastModelIDString }) {
+            // Saved ID is stale — e.g. the embedder GGUF that Layer 1 now excludes
+            // from availableModels. Clear it so the warning does not re-fire on every
+            // launch, then fall through to the configured-default path below.
+            UserDefaults.standard.removeObject(forKey: "lastSelectedModelID")
+            SystemLog().logEvent(event: "[ModelManager] Cleared stale lastSelectedModelID: \(lastModelIDString)")
+        }
+
+        if let lastModelIDString = UserDefaults.standard.string(forKey: "lastSelectedModelID"),
            availableModels.contains(where: { $0.id == lastModelIDString }) {
             selectedModelID = ModelID(lastModelIDString)
             currentModelID = lastModelIDString
@@ -366,6 +375,14 @@ class ModelManager: ObservableObject {
         print("🧠 [ModelManager] Prompt: \(question.prefix(80))...")
         print("🧠 [ModelManager] Context: \(context.isEmpty ? "none" : "\(context.count) chars")")
         #endif
+
+        // Belt-and-braces (Layer 3): even after the registry-scan exclusion (Layer 1)
+        // and the stale-UserDefaults cleanup (Layer 2), warn if the model we are about
+        // to drive looks like an embedder — catches future surprise paths (e.g. a direct
+        // switchLLMModel("nomic-embed-text-…") call) without altering control flow.
+        if currentModel.modelFile.lowercased().contains("embed") {
+            _log.logEvent(event: "[ModelManager] WARN: currentLLMModel.modelFile looks like an embedder: \(currentModel.modelFile)")
+        }
 
         let answer: String
         do {

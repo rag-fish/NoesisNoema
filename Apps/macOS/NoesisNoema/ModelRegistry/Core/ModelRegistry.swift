@@ -57,6 +57,31 @@ actor ModelRegistry {
         modelSpecs[spec.id] = spec
     }
 
+    /// Decide whether a GGUF file is an embedding-only model that must never be
+    /// offered as a chat LLM. Embedders (nomic-bert, BGE, E5, Jina, …) have no
+    /// generation head; asked to generate they emit reserved-vocab `[unusedN]`
+    /// tokens. Pure + deterministic so it is trivially unit-testable.
+    ///
+    /// Detection (any single signal is sufficient):
+    ///   1. File-name marker — base name contains `embed`, `-bert`, or `jina-`.
+    ///   2. GGUF `architecture` metadata contains `bert` (nomic-bert, jina-bert,
+    ///      mpnet-bert, plain bert, …).
+    ///
+    /// NOTE: `GGUFMetadata` does not currently surface a pooling-type field; a
+    /// non-nil pooling marker would be an orthogonal third signal, but adding it
+    /// to `GGUFReader` is out of scope here — the two signals above cover every
+    /// embedder Nomic / Jina / BGE / E5 ships today.
+    static func looksLikeEmbedder(fileName: String, metadata: GGUFMetadata) -> Bool {
+        let lower = fileName.lowercased()
+        if lower.contains("embed") || lower.contains("-bert") || lower.contains("jina-") {
+            return true
+        }
+        if metadata.architecture.lowercased().contains("bert") {
+            return true
+        }
+        return false
+    }
+
     /// Update runtime params for a given model id (if exists)
     func updateRuntimeParams(for id: String, params: RuntimeParams) {
         guard var spec = modelSpecs[id] else { return }
@@ -103,7 +128,34 @@ actor ModelRegistry {
                 scanningPaths.remove(path)
             }
         }
+
+        #if DEBUG
+        assertNoEmbeddersRegistered()
+        #endif
     }
+
+    #if DEBUG
+    /// Startup smoke (matches the PR #99 / #100 manual-smoke pattern): after a full
+    /// scan, no registered spec's `modelFile` may look like an embedder. If one
+    /// slips through (a future embedder that dodges the file-name / architecture
+    /// heuristics), this logs loudly in DEBUG so it is caught before UAT — the LLM
+    /// picker driving an embedder is exactly the [unusedN]-garbage bug this guards.
+    private func assertNoEmbeddersRegistered() {
+        let offenders = getAvailableModelSpecs().filter {
+            $0.modelFile.lowercased().contains("embed")
+                || $0.modelFile.lowercased().contains("-bert")
+                || $0.metadata.architecture.lowercased().contains("bert")
+        }
+        if offenders.isEmpty {
+            print("[ModelRegistry] embedder-exclusion smoke PASSED — "
+                  + "\(getAvailableModelSpecs().count) available model(s), none look like embedders.")
+        } else {
+            let names = offenders.map { $0.modelFile }.joined(separator: ", ")
+            print("[ModelRegistry] embedder-exclusion smoke FAILED — embedder(s) registered as LLM: \(names)")
+            assertionFailure("Embedder GGUF leaked into availableModels: \(names)")
+        }
+    }
+    #endif
 
     /// Scan for GGUF files in a specific directory
     func scanDirectory(_ directoryPath: String) async {
@@ -135,6 +187,15 @@ actor ModelRegistry {
             let metadata = try await GGUFReader.readMetadata(from: filePath)
             let fileName = URL(fileURLWithPath: filePath).lastPathComponent
             let baseName = URL(fileURLWithPath: filePath).deletingPathExtension().lastPathComponent
+
+            // Embedding-only GGUFs (e.g. nomic-embed-text) live in the same
+            // Resources/Models dir as the generator since ADR-0011 PR-A. They must
+            // never be registered as selectable LLMs — drop them before they reach
+            // `modelSpecs` / `availableModels` / the model picker.
+            if Self.looksLikeEmbedder(fileName: fileName, metadata: metadata) {
+                print("[ModelRegistry] Skipping embedder GGUF (not a generator): \(fileName)")
+                return
+            }
 
             // Generate ID from filename
             let id = generateModelId(from: baseName)
