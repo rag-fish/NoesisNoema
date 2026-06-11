@@ -88,7 +88,15 @@ public func runNoesisCompletion(
     print("   Prompt length: \(prompt.count)")
     print("   Prompt preview: \(prompt.prefix(200))...")
     let tokenizeStart = Date()
-    await ctx.completion_init(text: prompt)
+    let initOK = await ctx.completion_init(text: prompt)
+    if !initOK {
+        let err = await ctx.get_last_error() ?? "unknown init error"
+        print("⚠️ [NoesisCompletion] completion_init bailed: \(err)")
+        // Over-budget prompt (or decode failure) — skip the generation loop
+        // entirely and return a user-visible message instead of hanging.
+        return "The question exceeded the model's context window. " +
+               "Try a shorter question or clear chat history."
+    }
     let tokenizeTime = Date().timeIntervalSince(tokenizeStart)
     print("✅ [NoesisCompletion] AFTER completion_init() - Prompt tokenized in \(String(format: "%.2f", tokenizeTime*1000))ms")
     SystemLog().logEvent(event: String(format: "[PERF] Tokenization: %.2f ms", tokenizeTime*1000))

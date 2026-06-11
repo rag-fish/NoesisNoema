@@ -49,6 +49,11 @@ actor LlamaContext {
     private var tokens_list: [llama_token]
     var is_done: Bool = false
 
+    /// Last fatal reason completion_init/completion_loop bailed out, if any.
+    /// Surfaced to the pipeline via `get_last_error()` so the UI can show a
+    /// human-readable message instead of hanging on an out-of-sync KV cache.
+    var last_error: String? = nil
+
     // verbose logging switch
     private var verbose: Bool = false
     private func dprint(_ items: Any...) {
@@ -196,9 +201,31 @@ actor LlamaContext {
         return batch.n_tokens;
     }
 
-    func completion_init(text: String) {
+    /// Reason the last completion_init/completion_loop bailed out, or nil.
+    func get_last_error() -> String? {
+        return last_error
+    }
+
+    /// Pure KV-budget check, extracted as a static seam so the bail-out branch
+    /// (Fix B1) is unit-testable without loading a model. Returns true when the
+    /// prompt tokens plus the tokens we intend to generate would not fit in the
+    /// context's KV cache (n_ctx). When true, decode would silently stall the KV
+    /// cache at n_ctx-1 while the Swift loop runs away — see hotfix #4.
+    static func kvBudgetExceeds(nPrompt: Int, nLen: Int, nCtx: Int) -> Bool {
+        return nPrompt + nLen > nCtx
+    }
+
+    /// Tokenize `text` and prime the KV cache for generation.
+    ///
+    /// Returns `true` on success, `false` on a fatal bail-out (over-budget
+    /// prompt or decode failure). On bail-out `is_done` is set so the caller's
+    /// `while !ctx.is_done` loop exits immediately, and `last_error` carries the
+    /// reason for `get_last_error()`. See hotfix #4 (Fix B1).
+    @discardableResult
+    func completion_init(text: String) -> Bool {
         dprint("attempting to complete \"\(text)\"")
 
+        last_error = nil
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
@@ -208,13 +235,21 @@ actor LlamaContext {
         llama_batch_free(batch)
         batch = llama_batch_init(Int32(needed), 0, 1)
 
-        let n_ctx = llama_n_ctx(context)
-        let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
+        let n_ctx = Int(llama_n_ctx(context))
+        let n_prompt = tokens_list.count
+        // KV cache must hold the prompt plus every token we intend to generate.
+        let n_kv_req = n_prompt + Int(n_len)
 
         dprint("\n n_len = \(n_len), n_ctx = \(n_ctx), n_kv_req = \(n_kv_req)")
 
-        if n_kv_req > n_ctx {
-            print("error: n_kv_req > n_ctx, the required KV cache size is not big enough")
+        // Fix B1: bail BEFORE decode when the prompt + n_len won't fit. Otherwise
+        // llama.cpp silently caps the KV cache at n_ctx-1 while n_cur runs away,
+        // producing the "inconsistent sequence positions" runaway from UAT Q5.
+        if LlamaContext.kvBudgetExceeds(nPrompt: n_prompt, nLen: Int(n_len), nCtx: n_ctx) {
+            last_error = "prompt + n_len (\(n_kv_req)) exceeds n_ctx (\(n_ctx))"
+            print("⚠️ [LlamaContext] \(last_error!) — aborting completion_init")
+            is_done = true
+            return false
         }
 
         for id in tokens_list {
@@ -230,11 +265,15 @@ actor LlamaContext {
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
         if llama_decode(context, batch) != 0 {
-            print("llama_decode() failed")
+            last_error = "llama_decode failed during completion_init"
+            print("❌ [LlamaContext] \(last_error!)")
+            is_done = true
+            return false
         }
 
         n_cur = batch.n_tokens
         is_done = false // 追加: 推論開始時にis_doneをリセット
+        return true
     }
 
     func completion_loop() -> String {
@@ -246,7 +285,9 @@ actor LlamaContext {
         dprint("[DEBUG] new_token_id:", new_token_id)
         dprint("[DEBUG] is_eog:", llama_vocab_is_eog(vocab, new_token_id), "n_cur:", n_cur, "n_len:", n_len)
 
-        if llama_vocab_is_eog(vocab, new_token_id) || n_cur == n_len {
+        // Fix B3: `>=` (not `==`) so the loop still terminates if n_cur ever
+        // drifts past n_len; equality alone leaves EOG as the only exit.
+        if llama_vocab_is_eog(vocab, new_token_id) || n_cur >= n_len {
             dprint("[DEBUG] EOG or max length reached. Returning:", String(cString: temporary_invalid_cchars + [0]))
             is_done = true
             // 直前のトークンがflushされていない場合は返す
@@ -284,8 +325,15 @@ actor LlamaContext {
         n_decode += 1
         n_cur    += 1
 
+        // Fix B2: a decode failure must STOP the loop. Previously this only
+        // printed, so the caller never observed the failure and kept calling
+        // completion_loop() with an ever-incrementing n_cur out of sync with the
+        // KV cache — the ~910k-iteration runaway from UAT Q5.
         if llama_decode(context, batch) != 0 {
-            print("failed to evaluate llama!")
+            last_error = "llama_decode failed in completion_loop at n_cur=\(n_cur)"
+            print("❌ [LlamaContext] \(last_error!)")
+            is_done = true
+            return ""
         }
 
         return new_token_str
