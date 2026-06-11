@@ -5,6 +5,14 @@
 //   validates the manifest against the current embedder, and returns parsed
 //   chunks with embeddings. Throws a structured error on every malformation —
 //   no silent fallback (§4), no v0.x CSV path (anti-goal).
+//
+//   v1.2 two-file split (ADR-0011 §5): the pipeline writes chunks.json as a FLAT
+//   ARRAY OF CHUNK TEXT (`["First chunk…", "Second chunk…", …]`) — NOT an array of
+//   objects. All per-chunk metadata lives in citations.jsonl, one record per line
+//   keyed by `chunk_index`, aligned with the embeddings.npy row order. We decode
+//   chunks.json as `[String]`, then assemble `[Chunk]` in memory by joining each
+//   text with `embeddings[i]` and `citations[i]`. The app is a CONSUMER of v1.2
+//   packs; it never emits the object shape.
 // License: MIT License
 
 import Foundation
@@ -42,20 +50,8 @@ struct RAGpackReader {
         // 2. Validate schema + embedder identity (throws on every violation).
         try manifest.validate(againstCurrentEmbedder: embedder)
 
-        // 3. chunks.json → [Chunk] (embeddings filled from the .npy in step 5).
-        let chunksURL = unzippedDir.appendingPathComponent(manifest.files.chunks)
-        guard fm.fileExists(atPath: chunksURL.path) else {
-            throw RAGpackImportError.chunksMissing
-        }
-        var chunks: [Chunk]
-        do {
-            let data = try Data(contentsOf: chunksURL)
-            chunks = try JSONDecoder().decode([Chunk].self, from: data)
-        } catch {
-            throw RAGpackImportError.chunksMalformed(underlying: String(describing: error))
-        }
-
-        // 4. embeddings.npy → (shape, flat)
+        // 3. embeddings.npy → (shape, flat). Read BEFORE chunks because v1.2 chunk
+        //    assembly joins each chunk text with its embedding row by index.
         let embeddingsURL = unzippedDir.appendingPathComponent(manifest.files.embeddings)
         guard fm.fileExists(atPath: embeddingsURL.path) else {
             throw RAGpackImportError.embeddingsMissing
@@ -71,7 +67,7 @@ struct RAGpackReader {
             throw RAGpackImportError.embeddingShapeUnexpected(shape: shape)
         }
 
-        // 5. Reshape flat → [[Float]] of length shape[0], each row shape[1].
+        // 4. Reshape flat → [[Float]] of length shape[0], each row shape[1].
         let rowCount = shape[0]
         let dim = shape[1]
         var embeddings: [[Float]] = []
@@ -81,40 +77,103 @@ struct RAGpackReader {
             embeddings.append(Array(flat[start..<(start + dim)]))
         }
 
-        // 6. Cross-check chunk / embedding counts.
-        guard chunks.count == embeddings.count else {
-            throw RAGpackImportError.chunksEmbeddingsCountMismatch(chunks: chunks.count,
-                                                                  embeddings: embeddings.count)
+        // 5. chunks.json → [String] (flat array of chunk TEXT, NOT objects), then
+        //    join with embeddings + optional citations.jsonl to build [Chunk].
+        let chunksURL = unzippedDir.appendingPathComponent(manifest.files.chunks)
+        guard fm.fileExists(atPath: chunksURL.path) else {
+            throw RAGpackImportError.chunksMissing
+        }
+        let chunksData: Data
+        do {
+            chunksData = try Data(contentsOf: chunksURL)
+        } catch {
+            throw RAGpackImportError.chunksMalformed(underlying: String(describing: error))
         }
 
-        // Attach each embedding row to its chunk so the returned chunks are fully
-        // formed for the VectorStore (which keys/searches on Chunk.embedding).
-        for i in chunks.indices {
-            chunks[i].embedding = embeddings[i]
-        }
-
-        // 7. citations.jsonl — optional. If present, attach per-chunk metadata by index.
+        // citations.jsonl — optional in v1.2. Read its bytes here; buildChunks parses,
+        // count-checks, and joins them (it used to be a post-attach step).
+        var citationsData: Data? = nil
         if let citationsName = manifest.files.citations {
             let citationsURL = unzippedDir.appendingPathComponent(citationsName)
             if fm.fileExists(atPath: citationsURL.path) {
-                try attachCitations(from: citationsURL, to: &chunks)
+                do {
+                    citationsData = try Data(contentsOf: citationsURL)
+                } catch {
+                    throw RAGpackImportError.citationsMalformed(underlying: String(describing: error))
+                }
             }
         }
 
-        // 8. Done.
+        let chunks = try buildChunks(chunksJSON: chunksData,
+                                     embeddings: embeddings,
+                                     citationsJSONL: citationsData)
+
+        // 6. Done.
         return (chunks, embeddings)
     }
 
-    /// Parses citations.jsonl (one JSON object per line) and attaches the citation
-    /// fields to the matching chunk by `chunk_index`. Errors → `.citationsMalformed`.
-    private static func attachCitations(from url: URL, to chunks: inout [Chunk]) throws {
-        let raw: String
+    /// Assembles the in-memory `[Chunk]` from the v1.2 two-file split (ADR-0011 §5).
+    /// Pure over its inputs (no FileManager / no embedder) so it is the unit-test
+    /// seam for the reader: it owns the `[String]` decode, the chunk↔embedding count
+    /// cross-check, and the citations join.
+    ///
+    /// - Parameters:
+    ///   - chunksJSON: raw bytes of chunks.json — a flat JSON array of chunk text.
+    ///   - embeddings: the reshaped embeddings matrix; `embeddings[i]` is row i.
+    ///   - citationsJSONL: raw bytes of citations.jsonl, or nil if the file is absent
+    ///     (citations are optional in v1.2). Empty content is treated as absent.
+    /// - Returns: `[Chunk]` with `content`/`embedding`/citation fields wired by index.
+    static func buildChunks(chunksJSON: Data,
+                            embeddings: [[Float]],
+                            citationsJSONL: Data?) throws -> [Chunk] {
+        // 1. chunks.json MUST be [String]. An object shape (the pre-v1.2 [Chunk]
+        //    shape) is now a hard error — this locks the §5 contract.
+        let texts: [String]
         do {
-            raw = try String(contentsOf: url, encoding: .utf8)
+            texts = try JSONDecoder().decode([String].self, from: chunksJSON)
         } catch {
-            throw RAGpackImportError.citationsMalformed(underlying: String(describing: error))
+            throw RAGpackImportError.chunksMalformed(
+                underlying: "expected [String], got: \(String(describing: error))")
+        }
+
+        // 2. Cross-check chunk / embedding counts (preserved exactly).
+        guard texts.count == embeddings.count else {
+            throw RAGpackImportError.chunksEmbeddingsCountMismatch(chunks: texts.count,
+                                                                  embeddings: embeddings.count)
+        }
+
+        // 3. citations.jsonl → [chunk_index: CitationRecord]. Optional: a missing or
+        //    empty file is fine. When present and non-empty, its record count must
+        //    equal the chunk count, and every chunk_index must be in range.
+        let citations = try parseCitations(citationsJSONL, chunkCount: texts.count)
+
+        // 4. Build each Chunk by joining text[i] + embeddings[i] + citations[i].
+        var chunks: [Chunk] = []
+        chunks.reserveCapacity(texts.count)
+        for i in texts.indices {
+            let cite = citations[i]
+            chunks.append(Chunk(content: texts[i],
+                                embedding: embeddings[i],
+                                page: cite?.page,
+                                docId: cite?.docId,
+                                charStart: cite?.charStart,
+                                charEnd: cite?.charEnd,
+                                paragraphBoundaries: cite?.paragraphBoundaries))
+        }
+        return chunks
+    }
+
+    /// Parses citations.jsonl (one JSON object per line) into a dict keyed by
+    /// `chunk_index`. Errors → `.citationsMalformed`. Returns an empty dict for a
+    /// nil/empty file. Enforces: record count == chunkCount (when non-empty) and
+    /// every `chunk_index` ∈ `[0, chunkCount)`.
+    private static func parseCitations(_ data: Data?, chunkCount: Int) throws -> [Int: CitationRecord] {
+        guard let data = data, !data.isEmpty else { return [:] }
+        guard let raw = String(data: data, encoding: .utf8) else {
+            throw RAGpackImportError.citationsMalformed(underlying: "citations.jsonl is not valid UTF-8")
         }
         let lines = raw.split(whereSeparator: { $0 == "\n" || $0 == "\r\n" })
+        var byIndex: [Int: CitationRecord] = [:]
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
@@ -128,20 +187,22 @@ struct RAGpackReader {
                 throw RAGpackImportError.citationsMalformed(underlying: String(describing: error))
             }
             let idx = record.chunkIndex
-            guard idx >= 0 && idx < chunks.count else {
+            guard idx >= 0 && idx < chunkCount else {
                 throw RAGpackImportError.citationsMalformed(
-                    underlying: "chunk_index \(idx) out of range (0..<\(chunks.count))")
+                    underlying: "chunk_index \(idx) out of range (0..<\(chunkCount))")
             }
-            if let docId = record.docId { chunks[idx].docId = docId }
-            if let page = record.page { chunks[idx].page = page }
-            if let s = record.charStart { chunks[idx].charStart = s }
-            if let e = record.charEnd { chunks[idx].charEnd = e }
-            if let pb = record.paragraphBoundaries { chunks[idx].paragraphBoundaries = pb }
+            byIndex[idx] = record
         }
+        // If the file carried citations, it must cover every chunk 1:1.
+        if !byIndex.isEmpty && byIndex.count != chunkCount {
+            throw RAGpackImportError.citationsMalformed(
+                underlying: "citation count \(byIndex.count) != chunks count \(chunkCount)")
+        }
+        return byIndex
     }
 
     /// One line of citations.jsonl. Derived from noesisnoema-pipeline's
-    /// `chunk_text_with_offsets` output.
+    /// `chunk_text_with_offsets` output. Any extra keys (e.g. `snippet`) are ignored.
     private struct CitationRecord: Decodable {
         let chunkIndex: Int
         let docId: String?
@@ -216,3 +277,50 @@ enum RAGpackImportError: Error, LocalizedError, Identifiable {
         }
     }
 }
+
+#if DEBUG
+extension RAGpackReader {
+    /// Manual smoke for the v1.2 two-file split (ADR-0011 §5), runnable from a
+    /// debugger or scratch call site while the NoesisNoemaTests Xcode target is
+    /// unwired. Exercises `buildChunks` directly (no FileManager / no embedder):
+    ///   - POSITIVE: chunks.json = ["alpha","beta","gamma"] + 3×768 zero embeddings +
+    ///     citations.jsonl (3 lines, chunk_index 0..2, doc_id "test") → 3 Chunks with
+    ///     content matched and citation fields wired.
+    ///   - NEGATIVE: the OLD object shape [{"text":"alpha"},…] MUST throw .chunksMalformed.
+    static func runChunksSmoke() {
+        let texts = ["alpha", "beta", "gamma"]
+        let embeddings: [[Float]] = (0..<3).map { _ in Array(repeating: Float(0), count: 768) }
+        let chunksJSON = Data("[\"alpha\",\"beta\",\"gamma\"]".utf8)
+        let citationsJSONL = Data("""
+        {"chunk_index": 0, "doc_id": "test", "page": 1, "char_start": 0, "char_end": 5, "snippet": "alpha"}
+        {"chunk_index": 1, "doc_id": "test", "page": 1, "char_start": 5, "char_end": 9}
+        {"chunk_index": 2, "doc_id": "test", "page": 2, "char_start": 9, "char_end": 14}
+        """.utf8)
+
+        // POSITIVE
+        let chunks = try! buildChunks(chunksJSON: chunksJSON,
+                                      embeddings: embeddings,
+                                      citationsJSONL: citationsJSONL)
+        assert(chunks.count == 3, "expected 3 chunks")
+        assert(chunks.map(\.content) == texts, "content must match chunks.json strings")
+        assert(chunks.allSatisfy { $0.docId == "test" }, "doc_id must be joined from citations")
+        assert(chunks[0].charStart == 0 && chunks[0].charEnd == 5, "char offsets must be joined")
+        assert(chunks.allSatisfy { $0.embedding.count == 768 }, "embedding row must be wired")
+
+        // NEGATIVE — old object shape must be rejected.
+        let objectShape = Data("[{\"text\":\"alpha\"},{\"text\":\"beta\"},{\"text\":\"gamma\"}]".utf8)
+        var threw = false
+        do {
+            _ = try buildChunks(chunksJSON: objectShape, embeddings: embeddings, citationsJSONL: nil)
+        } catch RAGpackImportError.chunksMalformed {
+            threw = true
+        } catch {
+            assertionFailure("expected .chunksMalformed, got \(error)")
+        }
+        assert(threw, "object-shape chunks.json MUST throw .chunksMalformed")
+
+        print("[RAGpackReader] chunks smoke PASSED — [String] decode + citations join + "
+              + "object-shape rejection all hold (ADR-0011 §5).")
+    }
+}
+#endif
