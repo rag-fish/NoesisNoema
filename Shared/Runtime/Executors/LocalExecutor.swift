@@ -109,7 +109,27 @@ final class LocalExecutor: Executor {
         }
 
         // Stage 2: Build context from retrieved chunks (current query only).
-        let context = chunks.map { $0.content }.joined(separator: "\n\n")
+        let joinedContext = chunks.map { $0.content }.joined(separator: "\n\n")
+
+        // Guard against llama_decode overflow: the whole prompt
+        // (system + context + question) must decode within the model's context
+        // window, leaving room for the generated answer. Cap the joined context
+        // by a char-based estimate (~3 chars/token for English) so it cannot push
+        // the prompt past n_ctx. Mirrors the per-platform n_ctx/n_len set in
+        // LibLlama.create_context (macOS 4096/1024, iOS 1024/256).
+        #if os(iOS)
+        let nCtx = 1024, nLen = 256
+        #else
+        let nCtx = 4096, nLen = 1024
+        #endif
+        let contextCharCap = max(0, (nCtx - nLen - 200)) * 3
+        let context: String
+        if joinedContext.count > contextCharCap {
+            context = String(joinedContext.prefix(contextCharCap))
+            print("✂️ [LocalExecutor/RAG] context truncated \(joinedContext.count)→\(context.count) chars (cap=\(contextCharCap)) to avoid llama_decode overflow")
+        } else {
+            context = joinedContext
+        }
 
         print("🔎 [LocalExecutor/RAG] context length=\(context.count) chars (chunks joined)")
 
