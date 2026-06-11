@@ -78,6 +78,10 @@ final class LocalExecutor: Executor {
 
         let traceId = UUID()
 
+        print("🔎 [LocalExecutor/RAG] store-state: VectorStore.shared.chunks.count=\(VectorStore.shared.chunks.count)")
+        print("🔎 [LocalExecutor/RAG] query: \"\(query.prefix(120))\"")
+        print("🔎 [LocalExecutor/RAG] topK=\(defaultTopK), useDeepSearch=\(UserDefaults.standard.bool(forKey: Self.deepSearchDefaultsKey))")
+
         // Stage 1: Retrieve relevant chunks (local, off main thread).
         // Both retrieval paths are local-only; DeepSearch is opt-in (heavier).
         // ADR-0009 §4: history is NOT a retrieval input — retrieve on the
@@ -96,8 +100,18 @@ final class LocalExecutor: Executor {
             }
         }.value
 
+        print("🔎 [LocalExecutor/RAG] retrieved chunks.count=\(chunks.count)")
+        if let first = chunks.first {
+            let preview = first.content.prefix(120).replacingOccurrences(of: "\n", with: " ")
+            print("🔎 [LocalExecutor/RAG] chunk[0] preview: \"\(preview)\"")
+        } else {
+            print("🔎 [LocalExecutor/RAG] no chunks retrieved — context will be empty")
+        }
+
         // Stage 2: Build context from retrieved chunks (current query only).
         let context = chunks.map { $0.content }.joined(separator: "\n\n")
+
+        print("🔎 [LocalExecutor/RAG] context length=\(context.count) chars (chunks joined)")
 
         // Stage 3: Generate with the local model.
         // currentLLMModel is MainActor-isolated; hop to read it, then call the
