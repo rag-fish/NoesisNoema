@@ -155,8 +155,8 @@ public func runNoesisCompletion(
                 continue processing
             }
 
-            // detect <|im_end|> but DO NOT discard previous data
-            if let endTag = buffer.range(of: "<|im_end|>") {
+            // detect <|eot_id|> but DO NOT discard previous data
+            if let endTag = buffer.range(of: "<|eot_id|>") {
                 let prefix = String(buffer[..<endTag.lowerBound])
                 if !prefix.isEmpty { acc += prefix }
                 await ctx.request_stop()
@@ -205,15 +205,20 @@ public func runNoesisCompletion(
 
 // MARK: - Helper Functions (from CLI)
 
-/// Build the ChatML prompt for `runNoesisCompletion`.
+/// Build the Llama-3 chat prompt for `runNoesisCompletion`.
+///
+/// The active generator is Llama-3.2-3B-Instruct, which expects the Llama-3
+/// chat template (`<|begin_of_text|>` / `<|start_header_id|>role<|end_header_id|>`
+/// / `<|eot_id|>`). Emitting ChatML (`<|im_start|>`/`<|im_end|>`) here made the
+/// model see unknown tokens and immediately emit EOS — generating a single
+/// token. This now renders the Llama-3 format.
 ///
 /// ADR-0009: prior turns (already filtered/capped by the UI to ≤3 turns
-/// within a 45-minute window) are emitted as additional ChatML turns
-/// BEFORE the current question. The system prompt appears once at the top.
-/// Retrieved `Context` is attached to the CURRENT user turn only — history
-/// turns are reproduced verbatim with no retrieval baggage. Empty history
-/// ⇒ output identical to the prior single-turn build. The chat template
-/// itself (ChatML) is unchanged — that question is parked separately.
+/// within a 45-minute window) are emitted as additional Llama-3 turns
+/// BETWEEN the system prompt and the current question. The system prompt
+/// appears once at the top. Retrieved `Context` is attached to the CURRENT
+/// user turn only — history turns are reproduced verbatim with no retrieval
+/// baggage. Empty history ⇒ output identical to the single-turn build.
 ///
 /// Made `internal` (was `private`) so source-level tests can verify the
 /// rendered prompt without invoking the model.
@@ -237,28 +242,18 @@ func buildPrompt(
         print("⚠️ [buildPrompt] WARNING: No context provided - answering without RAG")
     }
 
+    // Llama-3 template: each prior turn is a user/assistant header pair, both
+    // terminated by <|eot_id|>. The blank line after each header is required.
     var historyTurns = ""
     for turn in history {
-        historyTurns += """
-        <|im_start|>user
-        \(turn.question)
-        <|im_end|>
-        <|im_start|>assistant
-        \(turn.answer)
-        <|im_end|>
-
-        """
+        historyTurns += "<|start_header_id|>user<|end_header_id|>\n\n\(turn.question)<|eot_id|>"
+        historyTurns += "<|start_header_id|>assistant<|end_header_id|>\n\n\(turn.answer)<|eot_id|>"
     }
 
-    let prompt = """
-    <|im_start|>system
-    \(sys)
-    <|im_end|>
-    \(historyTurns)<|im_start|>user
-    \(user)
-    <|im_end|>
-    <|im_start|>assistant
-    """
+    let prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(sys)<|eot_id|>"
+        + historyTurns
+        + "<|start_header_id|>user<|end_header_id|>\n\n\(user)<|eot_id|>"
+        + "<|start_header_id|>assistant<|end_header_id|>\n\n"
     #if DEBUG
     print("🧠 [SESSION-MEM/PROMPT] final prompt length=\(prompt.count) chars")
     print("🧠 [SESSION-MEM/PROMPT] prompt full (first 1500 chars):\n\(String(prompt.prefix(1500)))")
@@ -270,13 +265,8 @@ private func cleanOutput(_ s: String) -> String {
     // Step 1: Remove all <think>...</think> blocks
     var out = s.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
 
-    // Step 2: Remove broken fragments
-    out = out.replacingOccurrences(of: "<\\|im(?:_[a-z]+)?", with: "", options: .regularExpression)
-    out = out.replacingOccurrences(of: "</im[^>]*", with: "", options: .regularExpression)
-    out = out.replacingOccurrences(of: "<im[^>]*", with: "", options: .regularExpression)
-
-    // Step 3: Extract only the last assistant block if present
-    let assistantPattern = "(?s)<\\|im_start\\|>assistant\\s*(.*?)(?:<\\|im_end\\|>|$)"
+    // Step 2: Extract only the last assistant block if present (Llama-3 headers)
+    let assistantPattern = "(?s)<\\|start_header_id\\|>assistant<\\|end_header_id\\|>\\s*(.*?)(?:<\\|eot_id\\|>|$)"
     if let regex = try? NSRegularExpression(pattern: assistantPattern, options: []),
        let matches = regex.matches(in: out, options: [], range: NSRange(out.startIndex..., in: out)) as [NSTextCheckingResult]?,
        !matches.isEmpty {
@@ -287,11 +277,17 @@ private func cleanOutput(_ s: String) -> String {
         }
     }
 
-    // Step 4: Remove any remaining tags
-    out = out.replacingOccurrences(of: "<\\|im_start\\|>[^<]*", with: "", options: .regularExpression)
-    out = out.replacingOccurrences(of: "<\\|im_end\\|>", with: "", options: .regularExpression)
+    // Step 3: Strip Llama-3 special tokens / residue
+    for token in ["<|begin_of_text|>", "<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>"] {
+        out = out.replacingOccurrences(of: token, with: "")
+    }
+    // Leftover header role labels (e.g. a dangling "assistant" / "user")
+    out = out.replacingOccurrences(of: "^(?:system|user|assistant)\\b", with: "", options: [.regularExpression])
+    // Any remaining broken special-token fragments and stray "|>"
+    out = out.replacingOccurrences(of: "<\\|[a-z_]*\\|?>?", with: "", options: .regularExpression)
+    out = out.replacingOccurrences(of: "\\|>", with: "", options: .regularExpression)
 
-    // Step 5: Trim
+    // Step 4: Trim
     return out.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
