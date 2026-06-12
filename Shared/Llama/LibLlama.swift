@@ -296,9 +296,14 @@ actor LlamaContext {
         dprint("[DEBUG] new_token_id:", new_token_id)
         dprint("[DEBUG] is_eog:", llama_vocab_is_eog(vocab, new_token_id), "n_cur:", n_cur, "n_len:", n_len)
 
-        // Fix B3: `>=` (not `==`) so the loop still terminates if n_cur ever
+        // Fix B3: `>=` (not `==`) so the loop still terminates if the counter ever
         // drifts past n_len; equality alone leaves EOG as the only exit.
-        if llama_vocab_is_eog(vocab, new_token_id) || n_cur >= n_len {
+        // n_len bounds GENERATED tokens, so compare against n_decode (starts at 0,
+        // incremented per generated token) — NOT n_cur, which is seeded with the
+        // prompt token count in completion_init and would trip this guard on the
+        // first call for any prompt longer than n_len (e.g. a ~2000-token RAG
+        // prompt with n_len=1024), yielding a single-token/empty completion.
+        if llama_vocab_is_eog(vocab, new_token_id) || n_decode >= n_len {
             dprint("[DEBUG] EOG or max length reached. Returning:", String(cString: temporary_invalid_cchars + [0]))
             is_done = true
             // 直前のトークンがflushされていない場合は返す
