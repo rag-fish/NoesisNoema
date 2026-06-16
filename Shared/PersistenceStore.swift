@@ -41,6 +41,7 @@ final class PersistenceStore {
     private var qaHistoryFileURL: URL { baseDirectory.appendingPathComponent("qaHistory.json") }
     private var ragpackChunksFileURL: URL { baseDirectory.appendingPathComponent("ragpackChunks.json") }
     private var uploadHistoryFileURL: URL { baseDirectory.appendingPathComponent("uploadHistory.json") }
+    private var correctionMeansFileURL: URL { baseDirectory.appendingPathComponent("correctionMeans.json") }
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -140,6 +141,38 @@ final class PersistenceStore {
             return chunks
         } catch {
             NSLog("[PersistenceStore] ❌ Failed to load RAGpack Chunks: %@", error.localizedDescription)
+            return [:]
+        }
+    }
+
+    // MARK: - Correction Means (SMALL - one 768-float direction per corrected pack)
+
+    /// Persists the per-pack mean-centering correction directions
+    /// (`[Chunk.correctionId: meanDirection]`) so the query can be corrected with the
+    /// same direction the document vectors were corrected by, across cold launches.
+    func saveCorrectionMeans(_ means: [String: [Float]]) {
+        let encoder = JSONEncoder()
+        do {
+            let data = try encoder.encode(means)
+            try data.write(to: correctionMeansFileURL, options: [.atomic])
+            NSLog("[PersistenceStore] ✅ Saved Correction Means: %d packs", means.count)
+        } catch {
+            NSLog("[PersistenceStore] ❌ Failed to save Correction Means: %@", error.localizedDescription)
+        }
+    }
+
+    func loadCorrectionMeans() -> [String: [Float]] {
+        guard fileManager.fileExists(atPath: correctionMeansFileURL.path) else {
+            NSLog("[PersistenceStore] ℹ️ No Correction Means file found (first launch)")
+            return [:]
+        }
+        do {
+            let data = try Data(contentsOf: correctionMeansFileURL)
+            let means = try JSONDecoder().decode([String: [Float]].self, from: data)
+            NSLog("[PersistenceStore] ✅ Loaded Correction Means: %d packs", means.count)
+            return means
+        } catch {
+            NSLog("[PersistenceStore] ❌ Failed to load Correction Means: %@", error.localizedDescription)
             return [:]
         }
     }

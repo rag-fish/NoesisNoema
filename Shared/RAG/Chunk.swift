@@ -28,9 +28,17 @@ struct Chunk: Codable, Equatable {
     var charEnd: Int?
     var paragraphBoundaries: [Int]?
 
+    // Mean-centering recovery (EmbeddingCorrection): identifies which pack this
+    // chunk belongs to so the query can be corrected with that pack's stored mean
+    // direction at search time. nil when the chunk's pack was not corrected (e.g. a
+    // healthy `mean_centered` pack, or a legacy chunk imported before this feature).
+    // Optional + defaulted → purely additive; existing encoded chunks keep decoding.
+    var correctionId: String?
+
     enum CodingKeys: String, CodingKey {
         case content, embedding, sourceTitle, sourcePath, page
         case docId, charStart, charEnd, paragraphBoundaries
+        case correctionId
     }
 
     init(content: String,
@@ -41,7 +49,8 @@ struct Chunk: Codable, Equatable {
          docId: String? = nil,
          charStart: Int? = nil,
          charEnd: Int? = nil,
-         paragraphBoundaries: [Int]? = nil) {
+         paragraphBoundaries: [Int]? = nil,
+         correctionId: String? = nil) {
         self.content = content
         self.embedding = embedding
         self.sourceTitle = sourceTitle
@@ -51,6 +60,7 @@ struct Chunk: Codable, Equatable {
         self.charStart = charStart
         self.charEnd = charEnd
         self.paragraphBoundaries = paragraphBoundaries
+        self.correctionId = correctionId
     }
 
     // Custom decoder so a v1.2 chunks.json that carries content (+ optional
@@ -68,5 +78,6 @@ struct Chunk: Codable, Equatable {
         self.charStart = try c.decodeIfPresent(Int.self, forKey: .charStart)
         self.charEnd = try c.decodeIfPresent(Int.self, forKey: .charEnd)
         self.paragraphBoundaries = try c.decodeIfPresent([Int].self, forKey: .paragraphBoundaries)
+        self.correctionId = try c.decodeIfPresent(String.self, forKey: .correctionId)
     }
 }

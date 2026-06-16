@@ -44,6 +44,12 @@ class DocumentManager: ObservableObject {
     /// POTENTIAL LARGE PAYLOAD: RAGpack chunks with embeddings (can be MBs per pack)
     @Published var ragpackChunks: [String: [Chunk]] = [:]
 
+    /// Per-pack mean-centering correction directions, keyed by pack doc name
+    /// (== `Chunk.correctionId`). Mirrors `VectorStore.shared.correctionMeans`;
+    /// owned here for persistence. Only corrected packs (legacy, non-`mean_centered`)
+    /// have an entry.
+    @Published var correctionMeans: [String: [Float]] = [:]
+
     /// ADR-0011 §4 (no silent fallback): the last RAGpack import failure, surfaced
     /// to the user via a SwiftUI alert in the Settings views. Set on a failed
     /// import; cleared on a successful one (and when the user dismisses the alert).
@@ -84,6 +90,9 @@ class DocumentManager: ObservableObject {
         // Load from file storage
         loadHistory()
         loadRAGpackChunks()
+        // Restore per-pack mean-centering directions BEFORE rehydrating the corpus so
+        // the retriever can correct queries for prior-session packs on a cold launch.
+        loadCorrectionMeans()
         // Re-hydrate the in-memory retrieval corpus from persisted chunks. Without
         // this hop, packs imported in a prior session sit in `ragpackChunks` (disk)
         // but never reach `VectorStore.shared`, so the retriever sees an empty store
@@ -112,6 +121,19 @@ class DocumentManager: ObservableObject {
         ragpackChunks = PersistenceStore.shared.loadRAGpackChunks()
     }
 
+    // MARK: - Correction Means (mean-centering recovery)
+
+    func saveCorrectionMeans() {
+        PersistenceStore.shared.saveCorrectionMeans(correctionMeans)
+    }
+
+    /// Loads persisted correction directions and publishes them to the shared
+    /// VectorStore so query-time correction works on a cold launch.
+    func loadCorrectionMeans() {
+        correctionMeans = PersistenceStore.shared.loadCorrectionMeans()
+        VectorStore.shared.correctionMeans = correctionMeans
+    }
+
     /// Copies all persisted RAGpack chunks into `VectorStore.shared` so the retriever
     /// sees prior-session packs on a cold launch. Call once, after `loadRAGpackChunks()`.
     ///
@@ -130,6 +152,11 @@ class DocumentManager: ObservableObject {
         uploadHistory.removeAll { $0.filename == name }
         VectorStore.shared.chunks.removeAll { chunk in
             chunksToDelete.contains(where: { $0.content == chunk.content && $0.embedding == chunk.embedding })
+        }
+        // Drop this pack's correction direction (keep registry/disk in lockstep).
+        if correctionMeans.removeValue(forKey: name) != nil {
+            VectorStore.shared.correctionMeans.removeValue(forKey: name)
+            saveCorrectionMeans()
         }
         saveHistory()
         saveRAGpackChunks()
@@ -208,15 +235,20 @@ class DocumentManager: ObservableObject {
         }
 
         // 2. Read + validate the v1.2 pack. Throws RAGpackImportError; let it propagate.
-        let (chunks, _) = try RAGpackReader.readPack(at: tempDir, embedder: self.embedder)
+        //    `correctionMean` is the mean-centering direction removed from this pack's
+        //    document vectors (nil when the pack is already `mean_centered`).
+        let (chunks, _, correctionMean) = try RAGpackReader.readPack(at: tempDir, embedder: self.embedder)
 
-        // 3. Title the chunks and add the unique ones to the VectorStore.
+        // 3. Title the chunks and add the unique ones to the VectorStore. Tag each
+        //    chunk with the pack's correctionId so the query is corrected with this
+        //    pack's mean direction at search time (only when a correction was applied).
         let baseName = fileURL.deletingPathExtension().lastPathComponent
         let timestamp = Date()
         let docName = "\(baseName)_\(Int(timestamp.timeIntervalSince1970))"
         let titledChunks = chunks.map { ch -> Chunk in
             var c = ch
             if c.sourceTitle == nil { c.sourceTitle = docName }
+            if correctionMean != nil { c.correctionId = docName }
             return c
         }
         let metadata: [String: Any] = [
@@ -233,6 +265,13 @@ class DocumentManager: ObservableObject {
             self.llmragFiles.append(ragFile)
             VectorStore.shared.chunks.append(contentsOf: uniqueChunks)
             self.ragpackChunks[docName] = uniqueChunks
+            // Register + persist this pack's correction direction so query-time
+            // correction works now and after a cold launch.
+            if let correctionMean = correctionMean {
+                self.correctionMeans[docName] = correctionMean
+                VectorStore.shared.correctionMeans[docName] = correctionMean
+                self.saveCorrectionMeans()
+            }
             self.uploadHistory.append(UploadHistory(filename: docName, timestamp: timestamp, chunkCount: uniqueChunks.count))
             self.saveHistory()
             self.saveRAGpackChunks()

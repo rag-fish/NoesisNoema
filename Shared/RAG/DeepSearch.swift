@@ -71,9 +71,12 @@ struct DeepSearch {
             }
         }
         if pool.isEmpty { return [] }
-        // Final rerank with MMR using original query as anchor
+        // Final rerank with MMR using original query as anchor. Correct the query
+        // per-pack (mean-centering recovery) so relevance is computed in the same
+        // space as the already-corrected document vectors.
         let qEmb = store.embeddingModel.embed(text: query)
-        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: pool, k: config.topK, lambda: config.mmrLambda, trace: config.trace)
+        let corrector = QueryCorrector(rawQuery: qEmb, means: store.correctionMeans)
+        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: pool, k: config.topK, lambda: config.mmrLambda, corrector: corrector, trace: config.trace)
         return ranked
     }
 

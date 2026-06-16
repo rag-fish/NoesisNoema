@@ -60,6 +60,13 @@ struct RAGpackManifest: Codable {
         let l2Normalized: Bool
         let runtime: String?
 
+        // Mean-centering gate (EmbeddingCorrection). Optional; absent/false means the
+        // pack carries the legacy document-side embedding bias and the app should
+        // recover it at import by removing the common direction. A pipeline that has
+        // already mean-centered its document vectors sets this true so the app does
+        // NOT double-correct a healthy pack. Informational — never fails validation.
+        let meanCentered: Bool?
+
         enum CodingKeys: String, CodingKey {
             case embeddingModel = "embedding_model"
             case embeddingDimension = "embedding_dimension"
@@ -68,6 +75,7 @@ struct RAGpackManifest: Codable {
             case pooling
             case l2Normalized = "l2_normalized"
             case runtime
+            case meanCentered = "mean_centered"
         }
     }
 

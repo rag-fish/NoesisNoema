@@ -26,12 +26,15 @@ struct BanditRetriever {
         let ps = choice.arm.params
         let results = base.retrieve(query: query, k: ps.topK, lambda: ps.mmrLambda, trace: trace)
         if ps.minScore <= 0 { return results }
-        // Filter by minScore using cosine similarity to the original query
+        // Filter by minScore using cosine similarity to the original query. Apply the
+        // same per-pack mean-centering correction as retrieval so the threshold is
+        // compared against meaningful (corrected-space) cosines.
         let q = store.embeddingModel.embed(text: query)
+        let corrector = QueryCorrector(rawQuery: q, means: store.correctionMeans)
         var filtered: [Chunk] = []
         filtered.reserveCapacity(results.count)
         for c in results {
-            let sim = cosine(q, c.embedding)
+            let sim = cosine(corrector.query(for: c.correctionId), c.embedding)
             if sim >= ps.minScore { filtered.append(c) }
         }
         return filtered

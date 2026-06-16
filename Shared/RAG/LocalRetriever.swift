@@ -73,9 +73,13 @@ final class LocalRetriever {
         if trace { print("[Retriever] Candidates after hybrid+dedupe: \(candidateList.count) (from \(N) docs)") }
         if candidateList.isEmpty { return [] }
 
-        // Final rerank with MMR
+        // Final rerank with MMR. Build a per-pack query corrector so the relevance
+        // term compares each candidate against the query corrected with that pack's
+        // mean direction (mean-centering recovery); pass-through when no packs were
+        // corrected.
         let qEmb = embedder.embed(text: query)
-        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: candidateList, k: effectiveK, lambda: L, trace: trace)
+        let corrector = QueryCorrector(rawQuery: qEmb, means: store.correctionMeans)
+        let ranked = MMR.rerank(queryEmbedding: qEmb, candidates: candidateList, k: effectiveK, lambda: L, corrector: corrector, trace: trace)
         return ranked
     }
 
