@@ -25,11 +25,16 @@ struct RAGpackReader {
     ///     embeddings.npy, and optionally citations.jsonl.
     ///   - embedder: the app's current `EmbeddingModel` — used to validate the
     ///     embedder fingerprint and dimension (ADR-0011 §3).
-    /// - Returns: `chunks` (each carrying its embedding and any citation metadata)
-    ///   and the parallel `embeddings` matrix.
+    /// - Returns: `chunks` (each carrying its embedding and any citation metadata),
+    ///   the parallel `embeddings` matrix, and `correctionMean` — the L2-normalized
+    ///   common direction removed from the document vectors (nil when no correction
+    ///   was applied, i.e. the pack is already `mean_centered`). The caller stores
+    ///   `correctionMean` per pack so the query can be corrected with the SAME
+    ///   direction at search time (EmbeddingCorrection / mean-centering recovery).
     static func readPack(at unzippedDir: URL,
                          embedder: EmbeddingModel) throws -> (chunks: [Chunk],
-                                                              embeddings: [[Float]]) {
+                                                              embeddings: [[Float]],
+                                                              correctionMean: [Float]?) {
         let fm = FileManager.default
 
         // 1. manifest.json → RAGpackManifest
@@ -77,6 +82,30 @@ struct RAGpackReader {
             embeddings.append(Array(flat[start..<(start + dim)]))
         }
 
+        // 4b. Mean-centering recovery (EmbeddingCorrection). Legacy packs ship
+        //     document vectors collapsed onto a shared direction (a pipeline-side
+        //     embedding bias) that destroys retrieval discrimination. Unless the pack
+        //     declares itself already `mean_centered`, remove that common direction
+        //     from every document vector here and return the direction so the query
+        //     can be corrected identically at search time. No-op for healthy packs.
+        let alreadyCentered = manifest.embedder.meanCentered ?? false
+        let preNorm = EmbeddingCorrection.meanVectorNorm(of: embeddings)
+        let correctionMean: [Float]?
+        if alreadyCentered {
+            correctionMean = nil
+            SystemLog().logEvent(event: String(
+                format: "[RAGpackReader] mean-centering SKIPPED (manifest mean_centered=true); rows=%d dim=%d preMeanNorm=%.3f",
+                rowCount, dim, preNorm))
+        } else {
+            let (corrected, meanDir) = EmbeddingCorrection.apply(to: embeddings, alreadyMeanCentered: false)
+            embeddings = corrected
+            correctionMean = meanDir
+            let postNorm = EmbeddingCorrection.meanVectorNorm(of: embeddings)
+            SystemLog().logEvent(event: String(
+                format: "[RAGpackReader] mean-centering APPLIED=%@ rows=%d dim=%d preMeanNorm=%.3f postMeanNorm=%.3f",
+                meanDir == nil ? "false(no-direction)" : "true", rowCount, dim, preNorm, postNorm))
+        }
+
         // 5. chunks.json → [String] (flat array of chunk TEXT, NOT objects), then
         //    join with embeddings + optional citations.jsonl to build [Chunk].
         let chunksURL = unzippedDir.appendingPathComponent(manifest.files.chunks)
@@ -108,8 +137,9 @@ struct RAGpackReader {
                                      embeddings: embeddings,
                                      citationsJSONL: citationsData)
 
-        // 6. Done.
-        return (chunks, embeddings)
+        // 6. Done. `embeddings` (and the chunk embeddings built from them) are
+        //    already mean-centered when `correctionMean != nil`.
+        return (chunks, embeddings, correctionMean)
     }
 
     /// Assembles the in-memory `[Chunk]` from the v1.2 two-file split (ADR-0011 §5).

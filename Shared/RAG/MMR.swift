@@ -13,9 +13,14 @@ struct MMR {
     ///   - candidates: candidate chunks
     ///   - k: number of results to select
     ///   - lambda: trade-off between relevance (to query) and diversity (away from selected)
+    ///   - corrector: optional per-pack query corrector (mean-centering recovery). When
+    ///     provided, the relevance term compares each candidate against the query
+    ///     corrected with that candidate's pack mean direction. Diversity (chunk↔chunk)
+    ///     is unaffected — document vectors are already corrected at import. nil ⇒ the
+    ///     raw query is used for every candidate (pre-feature behavior).
     ///   - trace: print decision logs
     /// - Returns: top-k chunks in selected order
-    static func rerank(queryEmbedding: [Float], candidates: [Chunk], k: Int, lambda: Float = 0.7, trace: Bool = false) -> [Chunk] {
+    static func rerank(queryEmbedding: [Float], candidates: [Chunk], k: Int, lambda: Float = 0.7, corrector: QueryCorrector? = nil, trace: Bool = false) -> [Chunk] {
         guard !candidates.isEmpty else { return [] }
         let k = min(max(k, 1), candidates.count)
         var selected: [Chunk] = []
@@ -25,7 +30,8 @@ struct MMR {
             var bestIdx = 0
             var bestScore: Float = -Float.greatestFiniteMagnitude
             for (i, cand) in remaining.enumerated() {
-                let relevance = cosine(queryEmbedding, cand.embedding)
+                let q = corrector?.query(for: cand.correctionId) ?? queryEmbedding
+                let relevance = cosine(q, cand.embedding)
                 var diversity: Float = 0
                 if !selected.isEmpty {
                     var maxSim: Float = -Float.greatestFiniteMagnitude

@@ -18,6 +18,14 @@ class VectorStore {
     var embeddingModel: EmbeddingModel
     var isEmbedded: Bool
 
+    /// Per-pack mean-centering correction directions, keyed by `Chunk.correctionId`
+    /// (the pack's doc name). Populated at import and rehydrated on cold launch. Each
+    /// value is the L2-normalized common direction removed from that pack's document
+    /// vectors; the query is corrected with the SAME direction before similarity so
+    /// query and (already-corrected) document vectors live in the same space.
+    /// Empty registry → retrieval behaves exactly as before this feature.
+    var correctionMeans: [String: [Float]] = [:]
+
     // PERFORMANCE: Cache for chunk lookup by hash
     private var chunkCache: [String: [Chunk]] = [:]
     private let cacheQueue = DispatchQueue(label: "com.noesis.vectorstore.cache", attributes: .concurrent)
@@ -105,11 +113,15 @@ class VectorStore {
         // 長さが一致しない場合は安全フォールバックとして先頭から返す
         let dim = queryEmbedding.count
         guard dim > 0 else { return [] }
+        // Mean-centering recovery: correct the query with each chunk's pack mean
+        // direction before similarity. With an empty registry this is a pass-through.
+        let corrector = QueryCorrector(rawQuery: queryEmbedding, means: correctionMeans)
         var scored: [(Chunk, Float)] = []
         scored.reserveCapacity(chunks.count)
         for c in chunks {
             if c.embedding.count == dim {
-                let s = cosineSimilarity(a: queryEmbedding, b: c.embedding)
+                let q = corrector.query(for: c.correctionId)
+                let s = cosineSimilarity(a: q, b: c.embedding)
                 scored.append((c, s))
             }
         }
