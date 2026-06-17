@@ -28,9 +28,15 @@ enum NctxConfig {
     /// The four levels the harness measures. Picker is constrained to these.
     static let allowedValues: [Int32] = [1024, 2048, 4096, 8192]
 
-    /// Shipping default for the on-device generator (matches the historical
-    /// `LibLlama.create_context` iOS value). Returned verbatim in Release.
-    static let deviceDefault: Int32 = 1024
+    /// Shipping default for the on-device generator. Raised 1024 → 4096 on the
+    /// strength of the PR #116 4-level on-device harness (iPhone 17 Pro Max):
+    /// memory is a non-constraint (peak 794 MB at 4096 vs a ~4.5 GB safe line)
+    /// and latency plateaus from 2048 up (n_ctx is container size; real prompts
+    /// are only ~1.4–1.8k tokens, so a larger window adds ~no compute). 1024 was
+    /// the only level that overflowed a 5-turn conversation. 4096 carries zero
+    /// latency/memory penalty vs 2048 but leaves ~3840-token prompt headroom to
+    /// grow RAG context later. Returned verbatim in Release.
+    static let deviceDefault: Int32 = 4096
 
     /// UserDefaults key backing the DEBUG override.
     static let defaultsKey = "debug.nctx.deviceOverride"
