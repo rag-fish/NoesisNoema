@@ -128,7 +128,11 @@ actor LlamaContext {
 
         var ctx_params = llama_context_default_params()
         #if os(iOS)
-        ctx_params.n_ctx = 1024 // Lightweight for iOS
+        // Lightweight for iOS. DEBUG: the n_ctx footprint+latency harness can
+        // sweep this across {1024,2048,4096,8192} via NctxConfig; Release is the
+        // unchanged 1024 default. Each generation builds a fresh context (see
+        // runNoesisCompletion), so the new KV cache is allocated on next load.
+        ctx_params.n_ctx = UInt32(NctxConfig.deviceNCtx)
         #else
         ctx_params.n_ctx = 4096 // macOS: room for Deep Search + history + retrieved chunks
         #endif
@@ -147,6 +151,13 @@ actor LlamaContext {
             print("Could not load context!")
             throw LlamaError.couldNotInitializeContext
         }
+
+        // Log-confirm the reload allocated the requested KV cache: the effective
+        // llama-context n_ctx must match what we asked for (n_ctx footprint
+        // harness depends on this confirmation).
+        let effectiveNCtx = llama_n_ctx(context)
+        print("ℹ️ [LlamaContext] effective n_ctx = \(effectiveNCtx) (requested \(ctx_params.n_ctx))")
+        SystemLog().logEvent(event: "[LlamaContext] context created: effective n_ctx=\(effectiveNCtx), requested=\(ctx_params.n_ctx), n_batch=\(ctx_params.n_batch)")
 
         #if os(iOS)
         return LlamaContext(model: model, context: context, initialNLen: 256) // Reduced token limit for iOS
@@ -206,6 +217,18 @@ actor LlamaContext {
 
     func get_n_tokens() -> Int32 {
         return batch.n_tokens;
+    }
+
+    /// Effective KV-cache context size of this llama_context. Used by the n_ctx
+    /// footprint harness to confirm the selection took effect.
+    func n_ctx() -> Int32 {
+        return Int32(llama_n_ctx(context))
+    }
+
+    /// Current absolute KV position (`n_cur`). Right after `completion_init`
+    /// this equals the prompt token count — the harness reads it then.
+    func current_n_cur() -> Int32 {
+        return n_cur
     }
 
     /// Reason the last completion_init/completion_loop bailed out, or nil.

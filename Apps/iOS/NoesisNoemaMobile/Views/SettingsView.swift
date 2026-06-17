@@ -37,6 +37,16 @@ struct SettingsView: View {
     // Debug: present the MinimalClientView (EPIC1 vertical-slice) screen.
     @State private var showMinimalClient: Bool = false
 
+    #if DEBUG
+    // n_ctx footprint + latency harness (DEBUG only). Selection drives the
+    // device generator's KV-cache size on the next generation (NctxConfig);
+    // the harness runs a fixed 5-question Spinoza RAG battery and reports
+    // peak phys_footprint + per-question latency.
+    @State private var selectedNCtx: Int32 = NctxConfig.deviceNCtx
+    @StateObject private var nctxHarness = NctxHarnessRunner()
+    @State private var showNctxResult: Bool = false
+    #endif
+
     // Data: confirmation gate for the destructive "Clear History" action.
     @State private var showClearConfirm: Bool = false
 
@@ -54,6 +64,9 @@ struct SettingsView: View {
                 retrievalSection
                 dataSection
                 advancedSection
+                #if DEBUG
+                nctxHarnessSection
+                #endif
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -309,6 +322,90 @@ struct SettingsView: View {
             #endif
         }
     }
+
+    // MARK: - n_ctx Footprint + Latency Harness (DEBUG only)
+    #if DEBUG
+    @ViewBuilder
+    private var nctxHarnessSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("n_ctx Harness (Debug)")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            // Generator context-window picker. Changing it re-allocates the KV
+            // cache on the next generation (the device builds a fresh context
+            // per question), so no manual reload is needed.
+            Picker("Generator n_ctx", selection: $selectedNCtx) {
+                ForEach(NctxConfig.allowedValues, id: \.self) { v in
+                    Text("\(v)").tag(v)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedNCtx) { newValue in
+                NctxConfig.setDeviceNCtx(newValue)
+            }
+
+            Text("Effective on the NEXT generation. Run once per level (1024 / 2048 / 4096 / 8192); only n_ctx varies. Measure peak memory in Instruments alongside.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Button {
+                nctxHarness.run()
+            } label: {
+                HStack(spacing: 8) {
+                    if nctxHarness.isRunning {
+                        ProgressView().scaleEffect(0.8)
+                        Text(nctxHarness.progressText)
+                    } else {
+                        Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                        Text("Run 5-Question Harness")
+                    }
+                }
+                .font(.system(size: 15))
+            }
+            .buttonStyle(.bordered)
+            .disabled(nctxHarness.isRunning)
+
+            if let path = nctxHarness.lastArtifactPath {
+                Text("JSON: \((path as NSString).lastPathComponent)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            if nctxHarness.resultText != nil {
+                Button {
+                    showNctxResult = true
+                } label: {
+                    Label("View Results Table", systemImage: "tablecells")
+                        .font(.system(size: 15))
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Text("Runs the fixed Spinoza/Ethics battery through the real on-device RAG path, samples phys_footprint every ~150ms, and records prefill / decode / total per question. Writes a JSON artifact to the app Documents folder and the table to SystemLog. Debug builds only.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .sheet(isPresented: $showNctxResult) {
+            NavigationView {
+                ScrollView([.horizontal, .vertical]) {
+                    Text(nctxHarness.resultText ?? "")
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding()
+                }
+                .navigationTitle("n_ctx \(selectedNCtx)")
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showNctxResult = false }
+                    }
+                }
+            }
+        }
+    }
+    #endif
 
     // MARK: - Data Section
     @ViewBuilder

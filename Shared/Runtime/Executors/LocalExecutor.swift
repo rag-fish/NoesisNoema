@@ -117,8 +117,13 @@ final class LocalExecutor: Executor {
         // by a char-based estimate (~3 chars/token for English) so it cannot push
         // the prompt past n_ctx. Mirrors the per-platform n_ctx/n_len set in
         // LibLlama.create_context (macOS 4096/1024, iOS 1024/256).
+        // Derive the prompt budget at runtime from the effective n_ctx instead
+        // of a hardcoded ceiling. On iOS n_ctx is DEBUG-switchable via the n_ctx
+        // harness (NctxConfig); Release stays at the 1024 default. The budget is
+        // n_ctx − n_len − headroom, so a larger n_ctx admits proportionally more
+        // retrieved context rather than truncating to the old 1024-based cap.
         #if os(iOS)
-        let nCtx = 1024, nLen = 256
+        let nCtx = Int(NctxConfig.deviceNCtx), nLen = 256
         #else
         let nCtx = 4096, nLen = 1024
         #endif
