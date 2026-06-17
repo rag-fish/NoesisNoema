@@ -75,6 +75,15 @@ public func runNoesisCompletion(
     print("✅ [NoesisCompletion] LlamaContext created successfully in \(String(format: "%.2f", ctxTime*1000))ms")
     SystemLog().logEvent(event: String(format: "[PERF] Context creation: %.2f ms", ctxTime*1000))
 
+    #if DEBUG
+    // n_ctx footprint harness: record effective n_ctx + "both models loaded"
+    // footprint now that the generator KV cache is allocated (embedder is
+    // already resident from the retrieval that ran before this call). Inert
+    // unless the harness armed the probe.
+    let _harnessEffectiveNCtx = await ctx.n_ctx()
+    NctxHarnessProbe.shared.noteContextCreated(effectiveNCtx: Int(_harnessEffectiveNCtx))
+    #endif
+
     // Step 3: Configure sampling (matches CLI)
     print("🎛️  [NoesisCompletion] Configuring sampling...")
     await ctx.set_verbose(params.verbose)
@@ -92,12 +101,27 @@ public func runNoesisCompletion(
     if !initOK {
         let err = await ctx.get_last_error() ?? "unknown init error"
         print("⚠️ [NoesisCompletion] completion_init bailed: \(err)")
+        #if DEBUG
+        // n_ctx harness: record the over-budget bail so the table shows where a
+        // level overflows. promptTokens unknown here (init aborted pre-decode).
+        NctxHarnessProbe.shared.recordGeneration(NctxLatencySample(
+            promptEvalMs: Date().timeIntervalSince(tokenizeStart) * 1000,
+            decodeMs: 0, totalMs: Date().timeIntervalSince(perfStart) * 1000,
+            genTokens: 0, promptTokens: 0, bailed: true))
+        #endif
         // Over-budget prompt (or decode failure) — skip the generation loop
         // entirely and return a user-visible message instead of hanging.
         return "The question exceeded the model's context window. " +
                "Try a shorter question or clear chat history."
     }
     let tokenizeTime = Date().timeIntervalSince(tokenizeStart)
+    #if DEBUG
+    // Prefill / time-to-first-token proxy = completion_init duration (the single
+    // decode over the whole prompt). n_cur now equals the prompt token count.
+    let _harnessPromptTokens = Int(await ctx.current_n_cur())
+    let _harnessPromptEvalMs = tokenizeTime * 1000
+    let _harnessDecodeStart = Date()
+    #endif
     print("✅ [NoesisCompletion] AFTER completion_init() - Prompt tokenized in \(String(format: "%.2f", tokenizeTime*1000))ms")
     SystemLog().logEvent(event: String(format: "[PERF] Tokenization: %.2f ms", tokenizeTime*1000))
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -171,6 +195,12 @@ public func runNoesisCompletion(
         }
     }
 
+    #if DEBUG
+    // n_ctx harness: decode wall-clock = generation loop only (prefill already
+    // captured as promptEvalMs; cleanup below is excluded).
+    let _harnessDecodeMs = Date().timeIntervalSince(_harnessDecodeStart) * 1000
+    #endif
+
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("✅ [NoesisCompletion] EXITED TOKEN LOOP")
     print("   Loop iterations: \(loopIterations)")
@@ -193,6 +223,18 @@ public func runNoesisCompletion(
     let cleanTime = Date().timeIntervalSince(cleanStart)
 
     let totalTime = Date().timeIntervalSince(perfStart)
+
+    #if DEBUG
+    // n_ctx harness: record this question's latency. decodeMs is the generation
+    // loop only (prefill excluded); tok/s is derived from it in the report.
+    NctxHarnessProbe.shared.recordGeneration(NctxLatencySample(
+        promptEvalMs: _harnessPromptEvalMs,
+        decodeMs: _harnessDecodeMs,
+        totalMs: totalTime * 1000,
+        genTokens: tokenCount,
+        promptTokens: _harnessPromptTokens,
+        bailed: false))
+    #endif
 
     print("✅ [NoesisCompletion] Final answer: \(finalAnswer.count) chars")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
