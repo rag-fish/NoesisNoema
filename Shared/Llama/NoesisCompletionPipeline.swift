@@ -57,15 +57,10 @@ public func runNoesisCompletion(
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     SystemLog().logEvent(event: "[NoesisCompletion] Starting pipeline: q=\(question.count)chars ctx=\(context?.count ?? 0)chars")
 
-    // Step 1: Build prompt (matches CLI logic)
-    let promptStart = Date()
-    let prompt = buildPrompt(question: question, context: context, history: history)
-    let promptTime = Date().timeIntervalSince(promptStart)
-    print("📝 [NoesisCompletion] Prompt built: \(prompt.count) chars in \(String(format: "%.2f", promptTime*1000))ms")
-    SystemLog().logEvent(event: String(format: "[PERF] Prompt build: %.2f ms", promptTime*1000))
-
-    // RAG diagnostic: Show prompt preview (as requested in issue)
-    print("[RAG] prompt preview:", String(prompt.prefix(200)))
+    // Step 1: Prompt assembly is DEFERRED to after context creation. The
+    // token-budget manager (Step 3.5) needs the model tokenizer to size RAG
+    // context and chat history against the real KV budget (n_ctx − n_len)
+    // rather than a char estimate.
 
     // Step 2: Create LlamaContext (fresh, like CLI does)
     print("🔧 [NoesisCompletion] Creating LlamaContext...")
@@ -90,6 +85,36 @@ public func runNoesisCompletion(
     await ctx.configure_sampling(temp: params.temp, top_k: params.topK, top_p: params.topP, seed: params.seed)
     await ctx.set_n_len(params.nLen)
     print("✅ [NoesisCompletion] Sampling configured")
+
+    // Step 3.5: Token-budget manager — the SINGLE accounting point for prompt
+    // assembly. BOTH on-device generation paths converge here:
+    //   • ModelManager.generateAsyncAnswer → LLMModel.generateAsync → here
+    //   • HybridExecutionCoordinator → LocalExecutor → LLMModel.generateAsync → here
+    // It allocates n_ctx − n_len across the question (always whole), RAG context
+    // (trimmed only if needed), and chat history (newest-first), so a multi-turn
+    // conversation can never overflow the KV cache — instead of rejecting an
+    // over-budget prompt, we trim history (then RAG) to fit. completion_init's
+    // PR #111 reserve guard remains as the last-resort backstop.
+    let promptStart = Date()
+    let budgeted = await assembleBudgetedPrompt(
+        question: question,
+        context: context,
+        history: history,
+        ctx: ctx,
+        nLen: Int(params.nLen)
+    )
+    let promptTime = Date().timeIntervalSince(promptStart)
+    guard budgeted.fits else {
+        // Only reachable when the question itself + generation reserve cannot
+        // fit n_ctx (impossible at n_ctx=4096 for any real question). Surface a
+        // clear error instead of hanging — no history/RAG trim can rescue this.
+        SystemLog().logEvent(event: "[NoesisCompletion] budget: question + n_len reserve exceeds n_ctx — cannot answer")
+        return "The question is too long for the model's context window. Try a shorter question."
+    }
+    let prompt = budgeted.prompt
+    print("📝 [NoesisCompletion] Budgeted prompt built: \(prompt.count) chars in \(String(format: "%.2f", promptTime*1000))ms")
+    print("[RAG] prompt preview:", String(prompt.prefix(200)))
+    SystemLog().logEvent(event: String(format: "[PERF] Prompt build (budgeted): %.2f ms", promptTime*1000))
 
     // Step 4: Initialize completion (tokenize prompt)
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -285,11 +310,11 @@ func buildPrompt(
     }
 
     // Llama-3 template: each prior turn is a user/assistant header pair, both
-    // terminated by <|eot_id|>. The blank line after each header is required.
+    // terminated by <|eot_id|>. Rendered via `renderHistoryTurn` so the
+    // token-budget manager counts each turn against the EXACT bytes emitted here.
     var historyTurns = ""
     for turn in history {
-        historyTurns += "<|start_header_id|>user<|end_header_id|>\n\n\(turn.question)<|eot_id|>"
-        historyTurns += "<|start_header_id|>assistant<|end_header_id|>\n\n\(turn.answer)<|eot_id|>"
+        historyTurns += renderHistoryTurn(turn)
     }
 
     let prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n\(sys)<|eot_id|>"
@@ -301,6 +326,158 @@ func buildPrompt(
     print("🧠 [SESSION-MEM/PROMPT] prompt full (first 1500 chars):\n\(String(prompt.prefix(1500)))")
     #endif
     return prompt
+}
+
+/// Render one prior turn as the Llama-3 user/assistant header pair, exactly as
+/// `buildPrompt` concatenates it. Shared so the token-budget manager counts the
+/// SAME bytes that get decoded.
+func renderHistoryTurn(_ turn: ConversationTurn) -> String {
+    return "<|start_header_id|>user<|end_header_id|>\n\n\(turn.question)<|eot_id|>"
+        + "<|start_header_id|>assistant<|end_header_id|>\n\n\(turn.answer)<|eot_id|>"
+}
+
+/// Result of token-budget prompt assembly.
+struct BudgetedPrompt {
+    let prompt: String
+    /// False ⇒ even question + generation reserve cannot fit n_ctx; caller errors.
+    let fits: Bool
+}
+
+/// Assemble the generation prompt within the KV budget (n_ctx − n_len).
+///
+/// This is the token-budget MANAGER and the single owner of prompt assembly for
+/// the on-device pipeline. It tokenizes with the model's real tokenizer (via
+/// `LlamaContext.token_count`) and allocates the budget in priority order —
+/// question (whole) → RAG (trim if needed) → history (newest-first) — using the
+/// pure `ContextBudget.allocate` seam. An assemble-measure-adjust safety pass
+/// absorbs tokenizer boundary effects so completion_init's KV guard never trips.
+func assembleBudgetedPrompt(
+    question: String,
+    context: String?,
+    history: [ConversationTurn],
+    ctx: LlamaContext,
+    nLen: Int
+) async -> BudgetedPrompt {
+    let nCtx = Int(await ctx.n_ctx())
+
+    // Mandatory skeleton: system + current question turn (no context) + header.
+    let mandatoryRender = buildPrompt(question: question, context: nil, history: [])
+    let mandatoryTokens = await ctx.token_count(mandatoryRender)
+
+    // RAG cost = (render with full context) − mandatory skeleton.
+    let hasRag = !((context?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ?? true)
+    let ragTokens: Int
+    if hasRag {
+        let ragRender = buildPrompt(question: question, context: context, history: [])
+        ragTokens = max(0, await ctx.token_count(ragRender) - mandatoryTokens)
+    } else {
+        ragTokens = 0
+    }
+
+    // Per-turn history token cost, NEWEST FIRST.
+    let newestFirst = Array(history.reversed())
+    var historyTokensNewestFirst: [Int] = []
+    historyTokensNewestFirst.reserveCapacity(newestFirst.count)
+    for turn in newestFirst {
+        historyTokensNewestFirst.append(await ctx.token_count(renderHistoryTurn(turn)))
+    }
+
+    let plan = ContextBudget.allocate(
+        nCtx: nCtx,
+        nLen: nLen,
+        mandatoryTokens: mandatoryTokens,
+        ragTokens: ragTokens,
+        historyTurnTokensNewestFirst: historyTokensNewestFirst
+    )
+
+    guard plan.mandatoryFits else {
+        return BudgetedPrompt(prompt: mandatoryRender, fits: false)
+    }
+
+    // Trim RAG context to its granted token budget when it didn't all fit.
+    var finalContext = context
+    if hasRag && plan.ragTrimmed {
+        finalContext = await truncateContextToTokens(
+            context ?? "",
+            grantedTokens: plan.ragGrantedTokens,
+            question: question,
+            mandatoryTokens: mandatoryTokens,
+            ctx: ctx
+        )
+    }
+
+    // Keep the newest N history turns, restored to chronological order.
+    var keptHistory = Array(Array(newestFirst.prefix(plan.keptHistoryCount)).reversed())
+
+    var prompt = buildPrompt(question: question, context: finalContext, history: keptHistory)
+    let budget = plan.promptBudget
+
+    // Safety net for tokenizer boundary effects (component counts are not
+    // perfectly additive): drop oldest kept turns, then shrink RAG, until the
+    // measured prompt fits. Guarantees nPrompt ≤ n_ctx − n_len.
+    var promptTokens = await ctx.token_count(prompt)
+    while promptTokens > budget && !keptHistory.isEmpty {
+        keptHistory.removeFirst() // drop oldest kept turn
+        prompt = buildPrompt(question: question, context: finalContext, history: keptHistory)
+        promptTokens = await ctx.token_count(prompt)
+    }
+    if promptTokens > budget && hasRag {
+        let overflow = promptTokens - budget
+        let target = max(0, plan.ragGrantedTokens - overflow - 8) // 8-token margin
+        finalContext = await truncateContextToTokens(
+            context ?? "",
+            grantedTokens: target,
+            question: question,
+            mandatoryTokens: mandatoryTokens,
+            ctx: ctx
+        )
+        prompt = buildPrompt(question: question, context: finalContext, history: keptHistory)
+        promptTokens = await ctx.token_count(prompt)
+    }
+
+    SystemLog().logEvent(event:
+        "[NoesisCompletion] budget: n_ctx=\(nCtx) reserve(n_len)=\(nLen) promptBudget=\(budget) | "
+        + "question+system mandatory=\(mandatoryTokens)tk | "
+        + "RAG=\(plan.ragGrantedTokens)/\(plan.ragRequestedTokens)tk\(plan.ragTrimmed ? " (trimmed)" : "") | "
+        + "history kept=\(keptHistory.count)/\(history.count) dropped=\(history.count - keptHistory.count) | "
+        + "final prompt=\(promptTokens)tk (fits=\(promptTokens <= budget))")
+
+    return BudgetedPrompt(prompt: prompt, fits: true)
+}
+
+/// Binary-search the longest character prefix of `context` whose RAG token cost
+/// (render-with-context minus mandatory skeleton) fits `grantedTokens`. Uses the
+/// same `buildPrompt` rendering the model decodes, so the count is exact.
+func truncateContextToTokens(
+    _ context: String,
+    grantedTokens: Int,
+    question: String,
+    mandatoryTokens: Int,
+    ctx: LlamaContext
+) async -> String {
+    if grantedTokens <= 0 || context.isEmpty { return "" }
+
+    func ragCost(_ candidate: String) async -> Int {
+        if candidate.isEmpty { return 0 }
+        let render = buildPrompt(question: question, context: candidate, history: [])
+        return max(0, await ctx.token_count(render) - mandatoryTokens)
+    }
+
+    if await ragCost(context) <= grantedTokens { return context }
+
+    let chars = Array(context)
+    var lo = 0, hi = chars.count, best = 0
+    while lo <= hi {
+        let mid = (lo + hi) / 2
+        let candidate = String(chars[0..<mid])
+        if await ragCost(candidate) <= grantedTokens {
+            best = mid
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    return String(chars[0..<best])
 }
 
 private func cleanOutput(_ s: String) -> String {

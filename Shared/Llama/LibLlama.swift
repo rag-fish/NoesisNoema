@@ -231,6 +231,16 @@ actor LlamaContext {
         return n_cur
     }
 
+    /// Count the tokens `text` produces under the SAME tokenizer the prompt is
+    /// decoded with (parse_special=true, so Llama-3 control tokens map to single
+    /// IDs). The token-budget manager uses this to size RAG context and history
+    /// against the real KV budget instead of a char estimate. `add_bos=false`
+    /// because the assembled prompt already begins with the literal
+    /// `<|begin_of_text|>` (see completion_init).
+    func token_count(_ text: String, add_bos: Bool = false) -> Int {
+        return tokenize(text: text, add_bos: add_bos).count
+    }
+
     /// Reason the last completion_init/completion_loop bailed out, or nil.
     func get_last_error() -> String? {
         return last_error
