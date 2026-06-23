@@ -99,6 +99,9 @@ class DocumentManager: ObservableObject {
         // on every cold launch (P0: RAG only worked in the same session as import).
         populateVectorStoreFromPersistedChunks()
         loadQAHistory()
+        #if DEBUG
+        logCorpusDiagnostics(context: "cold-launch")
+        #endif
     }
 
     // MARK: - Upload History (SMALL - moved to file for consistency)
@@ -160,6 +163,36 @@ class DocumentManager: ObservableObject {
         }
         saveHistory()
         saveRAGpackChunks()
+    }
+
+    // MARK: - Corpus Diagnostics
+
+    /// Per-pack chunk summary, sorted by pack name. Suitable for display and
+    /// for passing to the n_ctx harness report without touching the VectorStore.
+    /// Returns an empty array when no packs have been imported.
+    var packChunkSummary: [(name: String, count: Int)] {
+        ragpackChunks.map { (name: $0.key, count: $0.value.count) }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// Emits a concise corpus breakdown to SystemLog (one line per pack + one
+    /// summary line). Call after cold-launch rehydration and after each import
+    /// so that logs always reflect the current state.
+    ///
+    /// Example output (SystemLog):
+    ///   [Corpus] packs=3 total=1251
+    ///   [Corpus]   spinoza_ethics_1749000001  417 chunks
+    ///   [Corpus]   kant_critique_1748000002   417 chunks
+    ///   [Corpus]   test_pack_1747000003       417 chunks
+    func logCorpusDiagnostics(context: String = "") {
+        let summary = packChunkSummary
+        let total = VectorStore.shared.chunks.count
+        let tag = context.isEmpty ? "" : " [\(context)]"
+        let log = SystemLog()
+        log.logEvent(event: "[Corpus]\(tag) packs=\(summary.count) total=\(total)")
+        for entry in summary {
+            log.logEvent(event: "[Corpus]   \(entry.name)  \(entry.count) chunks")
+        }
     }
 
     /// Imports a document from a .zip RAGpack file.
@@ -276,6 +309,7 @@ class DocumentManager: ObservableObject {
             self.saveHistory()
             self.saveRAGpackChunks()
             print("Imported RAGpack v1.2 document: \(docName) (\(uniqueChunks.count) unique chunks)")
+            self.logCorpusDiagnostics(context: "post-import")
         }
     }
 

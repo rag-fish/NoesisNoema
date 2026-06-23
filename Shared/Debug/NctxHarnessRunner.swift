@@ -50,7 +50,12 @@ final class NctxHarnessRunner: ObservableObject {
 
     // MARK: - Run
 
-    func run() {
+    /// Run the harness with the current `NctxConfig` selection.
+    /// - Parameter packSummary: per-pack chunk breakdown from the owning
+    ///   `DocumentManager`. Pass `documentManager.packChunkSummary` from the
+    ///   SettingsView so the JSON artifact records the full corpus breakdown
+    ///   alongside the latency data. Defaults to empty when not provided.
+    func run(packSummary: [(name: String, count: Int)] = []) {
         guard !isRunning else { return }
         isRunning = true
         resultText = nil
@@ -60,7 +65,7 @@ final class NctxHarnessRunner: ObservableObject {
         let selectedNCtx = NctxConfig.deviceNCtx
 
         Task { @MainActor in
-            let report = await self.execute(selectedNCtx: selectedNCtx)
+            let report = await self.execute(selectedNCtx: selectedNCtx, packSummary: packSummary)
             self.resultText = report.renderTable()
             self.lastArtifactPath = report.writeJSON()
             SystemLog().logEvent(event: "[NctxHarness] RUN COMPLETE\n" + report.renderTable())
@@ -69,7 +74,7 @@ final class NctxHarnessRunner: ObservableObject {
         }
     }
 
-    private func execute(selectedNCtx: Int32) async -> NctxHarnessReport {
+    private func execute(selectedNCtx: Int32, packSummary: [(name: String, count: Int)]) async -> NctxHarnessReport {
         let sampler = MemorySampler()
         let probe = NctxHarnessProbe.shared
 
@@ -122,6 +127,7 @@ final class NctxHarnessRunner: ObservableObject {
             preset: preset,
             embedderName: embedderName,
             chunkCount: chunkCount,
+            packSummary: packSummary,
             baselineBytes: baselineBytes,
             loadedPeakBytes: loadedPeakBytes,
             peakGenBytes: sampler.peakBytes,

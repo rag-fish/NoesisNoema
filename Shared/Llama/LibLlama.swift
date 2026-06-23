@@ -128,10 +128,11 @@ actor LlamaContext {
 
         var ctx_params = llama_context_default_params()
         #if os(iOS)
-        // Lightweight for iOS. DEBUG: the n_ctx footprint+latency harness can
-        // sweep this across {1024,2048,4096,8192} via NctxConfig; Release is the
-        // unchanged 1024 default. Each generation builds a fresh context (see
-        // runNoesisCompletion), so the new KV cache is allocated on next load.
+        // iOS: DEBUG allows the n_ctx harness to sweep {1024,2048,4096,8192} via
+        // NctxConfig (UserDefaults override). Release always returns
+        // NctxConfig.deviceDefault (currently 4096, raised from 1024 in PR #116).
+        // Each generation builds a fresh LlamaContext (see runNoesisCompletion),
+        // so the new KV cache is allocated on the next generation automatically.
         ctx_params.n_ctx = UInt32(NctxConfig.deviceNCtx)
         #else
         ctx_params.n_ctx = 4096 // macOS: room for Deep Search + history + retrieved chunks

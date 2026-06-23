@@ -115,13 +115,13 @@ final class LocalExecutor: Executor {
         // (system + context + question) must decode within the model's context
         // window, leaving room for the generated answer. Cap the joined context
         // by a char-based estimate (~3 chars/token for English) so it cannot push
-        // the prompt past n_ctx. Mirrors the per-platform n_ctx/n_len set in
-        // LibLlama.create_context (macOS 4096/1024, iOS 1024/256).
-        // Derive the prompt budget at runtime from the effective n_ctx instead
-        // of a hardcoded ceiling. On iOS n_ctx is DEBUG-switchable via the n_ctx
-        // harness (NctxConfig); Release stays at the 1024 default. The budget is
-        // n_ctx − n_len − headroom, so a larger n_ctx admits proportionally more
-        // retrieved context rather than truncating to the old 1024-based cap.
+        // the prompt past n_ctx. Per-platform n_ctx/n_len:
+        //   macOS: 4096/1024 (hardcoded literal in LibLlama.create_context)
+        //   iOS:   NctxConfig.deviceNCtx / 256
+        //          Release = NctxConfig.deviceDefault (currently 4096, PR #116)
+        //          Debug   = UserDefaults override, else deviceDefault
+        // The budget is n_ctx − n_len − headroom, so a larger n_ctx admits
+        // proportionally more retrieved context.
         #if os(iOS)
         let nCtx = Int(NctxConfig.deviceNCtx), nLen = 256
         #else
