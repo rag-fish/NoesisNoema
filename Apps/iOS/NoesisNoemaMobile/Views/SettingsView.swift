@@ -61,6 +61,7 @@ struct SettingsView: View {
                 presetSection
                 runtimeSection
                 ragDocumentSection
+                ragpackListSection
                 retrievalSection
                 dataSection
                 advancedSection
@@ -283,6 +284,65 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - RAGpack List Section
+
+    /// Diagnostics: lists every imported pack with its persisted chunk count and
+    /// the aggregate VectorStore total. Supports individual pack deletion.
+    @ViewBuilder
+    private var ragpackListSection: some View {
+        let summary = documentManager.packChunkSummary
+        let totalChunks = VectorStore.shared.chunks.count
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Imported RAGpacks")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(totalChunks) chunks total")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if summary.isEmpty {
+                Text("No RAGpacks imported yet.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(summary, id: \.name) { entry in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.name)
+                                    .font(.system(size: 13))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text("\(entry.count) chunks")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button(role: .destructive) {
+                                documentManager.deleteRAGpack(named: entry.name)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 14))
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        .padding(.vertical, 8)
+                        Divider()
+                    }
+                }
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            Text("Total reflects all chunks loaded from all packs into the retrieval corpus.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
     // MARK: - Advanced Section
     @ViewBuilder
     private var advancedSection: some View {
@@ -350,7 +410,7 @@ struct SettingsView: View {
                 .foregroundColor(.secondary)
 
             Button {
-                nctxHarness.run()
+                nctxHarness.run(packSummary: documentManager.packChunkSummary)
             } label: {
                 HStack(spacing: 8) {
                     if nctxHarness.isRunning {

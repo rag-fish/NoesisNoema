@@ -21,7 +21,12 @@ struct NctxHarnessReport {
     let modelFile: String
     let preset: String
     let embedderName: String
+    /// Total chunks in VectorStore at harness start (aggregate across all packs).
     let chunkCount: Int
+    /// Per-pack breakdown: (name, chunkCount) pairs, sorted by name.
+    /// Populated by the SettingsView caller from DocumentManager.packChunkSummary.
+    /// Empty when the harness is invoked without a DocumentManager reference.
+    let packSummary: [(name: String, count: Int)]
 
     let baselineBytes: UInt64
     let loadedPeakBytes: UInt64
@@ -59,7 +64,15 @@ struct NctxHarnessReport {
         out += " n_ctx FOOTPRINT + LATENCY HARNESS\n"
         out += "════════════════════════════════════════════════════════════\n"
         out += " model:    \(modelName)  [\(modelFile)]\n"
-        out += " embedder: \(embedderName)   chunks: \(chunkCount)   preset: \(preset)\n"
+        out += " embedder: \(embedderName)   preset: \(preset)\n"
+        out += " corpus:   \(chunkCount) total chunks across \(packSummary.count) pack(s)\n"
+        if !packSummary.isEmpty {
+            for entry in packSummary {
+                out += "   \(entry.name)  \(entry.count) chunks\n"
+            }
+        } else {
+            out += "   (pack breakdown not available — pass documentManager.packChunkSummary to run())\n"
+        }
         out += " n_ctx requested: \(selectedNCtx)   effective: \(effectiveNCtx)\n"
         out += " questions: \(samples.count)   answered: \(answered.count)   bailed(over-budget): \(bailedCount)\n"
         out += "────────────────────────────────────────────────────────────\n"
@@ -99,6 +112,10 @@ struct NctxHarnessReport {
             let tokensPerSecond: Double
             let bailed: Bool
         }
+        struct PackEntry: Encodable {
+            let name: String
+            let chunkCount: Int
+        }
         let schema = "nctx-harness/v1"
         let selectedNCtx: Int
         let effectiveNCtx: Int
@@ -106,7 +123,10 @@ struct NctxHarnessReport {
         let modelFile: String
         let preset: String
         let embedderName: String
+        /// Aggregate chunk count across all imported packs.
         let chunkCount: Int
+        /// Per-pack breakdown. Empty when the harness ran without a DocumentManager reference.
+        let packBreakdown: [PackEntry]
         let baselineMB: Double
         let loadedMB: Double
         let peakGenMB: Double
@@ -132,6 +152,7 @@ struct NctxHarnessReport {
                 bailed: s.bailed
             )
         }
+        let breakdown = packSummary.map { DTO.PackEntry(name: $0.name, chunkCount: $0.count) }
         return DTO(
             selectedNCtx: selectedNCtx,
             effectiveNCtx: effectiveNCtx,
@@ -140,6 +161,7 @@ struct NctxHarnessReport {
             preset: preset,
             embedderName: embedderName,
             chunkCount: chunkCount,
+            packBreakdown: breakdown,
             baselineMB: baselineMB,
             loadedMB: loadedMB,
             peakGenMB: peakGenMB,

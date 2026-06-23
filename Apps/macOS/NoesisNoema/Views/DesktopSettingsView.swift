@@ -230,6 +230,19 @@ struct DesktopSettingsView: View {
                 Label("Manage RAGpacks", systemImage: "shippingbox")
             }
 
+            // Corpus diagnostics: always-visible summary so the total chunk count
+            // is readable without opening the manager sheet.
+            let packCount = documentManager.packChunkSummary.count
+            let totalChunks = VectorStore.shared.chunks.count
+            HStack {
+                Text("Corpus")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(packCount) pack\(packCount == 1 ? "" : "s") · \(totalChunks) chunks total")
+                    .foregroundStyle(.secondary)
+                    .font(.system(.body, design: .monospaced))
+            }
+
             Button(role: .destructive) {
                 showClearConfirm = true
             } label: {
