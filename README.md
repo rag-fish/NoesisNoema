@@ -244,6 +244,76 @@ Importer safeguards:
 
 ---
 
+## noema-agent Connection Seam (Issue #120)
+
+NoesisNoema includes an optional, feature-flagged seam for consulting a locally running [noema-agent](https://github.com/rag-fish/noema-agent) instance via Route Contract v0.
+
+**Default behavior is unchanged.** The flag defaults to `false`; local RAG operates exactly as before with zero added latency or network calls.
+
+### Feature Flag
+
+| Property | Type | Default | Location |
+|---|---|---|---|
+| `enableRemoteRouting` | `Bool` | `false` | `AppSettings.shared` |
+| `agentBaseURL` | `String` | `"http://localhost:8080"` | `AppSettings.shared` |
+
+### Route Contract v0 — POST /v1/route
+
+**Request**
+```json
+{
+  "query": "<user query text>",
+  "session_id": "<UUID string>"
+}
+```
+
+**Response**
+```json
+{
+  "route": "local_echo"
+}
+```
+
+Known `route` values:
+- `"local_echo"` — agent confirms local execution; app continues normally
+- Any other value — logged as unsupported; app falls back to local execution
+
+Sensitive payload fields (query content) are **never logged**.
+
+### Behavior When Enabled
+
+1. User submits a query.
+2. `HybridExecutionCoordinator` calls `POST /v1/route` on the local noema-agent.
+3. The route decision is logged (`🔀 [AGENT-ROUTE]`) and (in DEBUG builds) displayed in `MinimalClientView`.
+4. **Regardless of the route returned**, local RAG executes as normal.
+5. If the network call fails for any reason, execution continues silently — the user is never blocked.
+
+### Expected Startup Sequence
+
+```
+# 1. Start noema-agent (default port 8080)
+noema-agent serve
+
+# 2. Build and run NoesisNoema (macOS or iOS Simulator)
+# 3. In AppSettings or via code, set:
+AppSettings.shared.enableRemoteRouting = true
+AppSettings.shared.agentBaseURL = "http://localhost:8080"
+
+# 4. Submit a query — watch for log output:
+🔀 [AGENT-ROUTE] route=local_echo; source=agent; continuing local execution
+```
+
+### What Is Not Yet Implemented
+
+- Remote inference execution
+- Policy engine routing
+- Tool routing or model routing
+- Authentication
+- Retry framework
+- Streaming from agent
+
+---
+
 ## Ecosystem & Related Projects 🌍
 
 - [RAGfish](https://github.com/raskolnikoff/RAGfish): Core RAGpack specification and toolkit 📚

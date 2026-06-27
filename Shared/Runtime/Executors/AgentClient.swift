@@ -19,7 +19,7 @@ import Foundation
 /// Protocol definition only.
 /// Concrete implementation in Networking/AgentClient.swift
 protocol AgentClient {
-    /// Query the remote agent
+    /// Query the remote agent (existing v1/query endpoint).
     ///
     /// - Parameters:
     ///   - query: The user's query text
@@ -30,4 +30,19 @@ protocol AgentClient {
         query: String,
         sessionId: UUID
     ) async throws -> String
+
+    /// Consult the agent for a route decision (Route Contract v0, POST /v1/route).
+    ///
+    /// This is the connection seam for Issue #120. The caller must decide what
+    /// to do with the result; this method is pure I/O — no routing logic.
+    ///
+    /// - Parameters:
+    ///   - query: The user's query text
+    ///   - sessionId: Session identifier for context
+    /// - Returns: AgentRouteDecision containing the route string
+    /// - Throws: Network errors, HTTP errors, JSON decoding errors
+    func requestRoute(
+        query: String,
+        sessionId: UUID
+    ) async throws -> AgentRouteDecision
 }

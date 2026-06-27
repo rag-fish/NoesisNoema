@@ -3,6 +3,7 @@
 // Created: 2026-03-08
 // Updated: 2026-05-15 — unified onto Router.swift + PolicyEngine.swift (Issue #70)
 // Updated: 2026-05-15 — human override mechanism (Issue #69)
+// Updated: 2026-06-27 — optional noema-agent route consultation seam (Issue #120)
 // License: MIT License
 
 import Foundation
@@ -138,6 +139,16 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             duration: routingDuration,
             decisionReason: routingDecision.reason
         )
+
+        // Step 5.5: Optional agent route consultation (Issue #120).
+        //
+        // When enableRemoteRouting is true, consult noema-agent POST /v1/route
+        // and log the decision. The result is advisory only — execution always
+        // proceeds via local RAG regardless of what the agent returns.
+        // Errors are swallowed here so a network failure NEVER blocks the user.
+        if AppSettings.shared.enableRemoteRouting {
+            await consultAgentRoute(query: request.query, sessionId: request.sessionId)
+        }
 
         // Step 6: Select executor.
         let executor: Executor = routingDecision.routeTarget == .local
@@ -316,6 +327,51 @@ final class HybridExecutionCoordinator: ExecutionCoordinating {
             debugMode: false,
             overrideMode: overrideMode
         )
+    }
+
+    // MARK: - Agent Route Consultation (Issue #120)
+
+    /// Consult noema-agent for a route decision via POST /v1/route.
+    ///
+    /// Advisory only — execution always falls through to local RAG.
+    /// Errors are caught and logged so the user is never blocked.
+    ///
+    /// Logging contract (never logs query content):
+    ///   - route selected
+    ///   - source (agent / fallback)
+    ///   - fallback reason (when applicable)
+    private func consultAgentRoute(query: String, sessionId: UUID) async {
+        guard ConnectivityGuard.canPerformRemoteCall() else {
+            print("🔀 [AGENT-ROUTE] skipped: app is in offline mode; source=local; fallback=offline-mode")
+            #if DEBUG
+            Task { @MainActor in DebugRouteState.shared.update(route: "skipped", source: "offline") }
+            #endif
+            return
+        }
+
+        let baseURL = AppSettings.shared.agentBaseURL
+        let client = HTTPAgentClient(baseURL: baseURL)
+
+        do {
+            let decision = try await client.requestRoute(query: query, sessionId: sessionId)
+            let route = decision.route
+
+            if decision.isLocalEcho {
+                print("🔀 [AGENT-ROUTE] route=\(route); source=agent; continuing local execution")
+            } else {
+                print("🔀 [AGENT-ROUTE] route=\(route) is unsupported; source=agent; fallback=local (remote inference not yet wired)")
+            }
+
+            #if DEBUG
+            Task { @MainActor in DebugRouteState.shared.update(route: route, source: "agent") }
+            #endif
+
+        } catch {
+            print("🔀 [AGENT-ROUTE] route consultation failed; source=local; fallback=network-error: \(error.localizedDescription)")
+            #if DEBUG
+            Task { @MainActor in DebugRouteState.shared.update(route: "error", source: "local-fallback") }
+            #endif
+        }
     }
 
     // MARK: - Privacy Enforcement (ADR-0008 Decision 4 / execution-flow.md Step 4.5)
