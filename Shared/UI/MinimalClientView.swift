@@ -53,6 +53,9 @@ class MinimalClientViewModel: ObservableObject {
 /// Cross-platform SwiftUI view with explicit user control
 struct MinimalClientView: View {
     @StateObject private var viewModel: MinimalClientViewModel
+    #if DEBUG
+    @ObservedObject private var debugRoute = DebugRouteState.shared
+    #endif
 
     init(executionCoordinator: ExecutionCoordinating) {
         _viewModel = StateObject(wrappedValue: MinimalClientViewModel(
@@ -65,6 +68,21 @@ struct MinimalClientView: View {
             Text("Minimal Client Interface")
                 .font(.title)
                 .padding(.top)
+
+            #if DEBUG
+            if !debugRoute.lastRoute.isEmpty {
+                HStack(spacing: 6) {
+                    Text("Agent route:")
+                        .foregroundColor(.secondary)
+                    Text(debugRoute.lastRoute)
+                        .fontWeight(.medium)
+                    Text("(\(debugRoute.lastRouteSource))")
+                        .foregroundColor(.secondary)
+                }
+                .font(.caption)
+                .padding(.horizontal)
+            }
+            #endif
 
             // Text input for prompt
             #if os(macOS)
